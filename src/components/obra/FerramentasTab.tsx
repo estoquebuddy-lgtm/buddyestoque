@@ -27,18 +27,24 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [retirarOpen, setRetirarOpen] = useState(false);
   const [retirarPessoaId, setRetirarPessoaId] = useState('');
 
-  const { data: ferramentas = [], isLoading } = useQuery({
-    queryKey: ['ferramentas', obraId],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('ferramentas').select('*, pessoas:responsavel_id(nome)').eq('obra_id', obraId).order('nome');
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const { data: pessoas = [] } = useQuery({
     queryKey: ['pessoas', obraId],
     queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome'); return data || []; },
+  });
+
+  const { data: ferramentas = [], isLoading } = useQuery({
+    queryKey: ['ferramentas', obraId, pessoas],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('ferramentas').select('*').eq('obra_id', obraId).order('nome');
+      if (error) throw error;
+      // Manual join: enrich each ferramenta with the pessoa name
+      const pessoasMap = new Map(pessoas.map((p: any) => [p.id, p.nome]));
+      return (data || []).map((f: any) => ({
+        ...f,
+        pessoas: f.responsavel_id ? { nome: pessoasMap.get(f.responsavel_id) || null } : null,
+      }));
+    },
+    enabled: !!obraId,
   });
 
   useEffect(() => {
