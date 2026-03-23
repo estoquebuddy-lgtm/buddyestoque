@@ -13,8 +13,20 @@ const iconMap = {
   pessoa: User,
 };
 
+const bgMap = {
+  produto: 'bg-primary/10',
+  ferramenta: 'bg-warning/10',
+  pessoa: 'bg-info/10',
+};
+
+const iconColorMap = {
+  produto: 'text-primary',
+  ferramenta: 'text-warning',
+  pessoa: 'text-info',
+};
+
 export default function ImageThumbnail({ src, alt, type = 'produto', size = 'sm' }: ImageThumbnailProps) {
-  const sizeClass = size === 'sm' ? 'h-10 w-10' : 'h-14 w-14';
+  const sizeClass = size === 'sm' ? 'h-12 w-12' : 'h-14 w-14';
   const iconSize = size === 'sm' ? 'h-5 w-5' : 'h-7 w-7';
   const Icon = iconMap[type];
 
@@ -23,14 +35,15 @@ export default function ImageThumbnail({ src, alt, type = 'produto', size = 'sm'
       <img
         src={src}
         alt={alt}
-        className={`${sizeClass} rounded-lg object-cover shrink-0 bg-muted`}
+        loading="lazy"
+        className={`${sizeClass} rounded-xl object-cover shrink-0 bg-muted`}
       />
     );
   }
 
   return (
-    <div className={`${sizeClass} rounded-lg bg-muted flex items-center justify-center shrink-0`}>
-      <Icon className={`${iconSize} text-muted-foreground`} />
+    <div className={`${sizeClass} rounded-xl ${bgMap[type]} flex items-center justify-center shrink-0`}>
+      <Icon className={`${iconSize} ${iconColorMap[type]}`} />
     </div>
   );
 }

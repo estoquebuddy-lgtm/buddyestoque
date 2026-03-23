@@ -1,21 +1,22 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AlertTriangle, ArrowUpFromLine, Wrench } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { AlertTriangle, ArrowUpFromLine, Wrench, Package, TrendingDown } from 'lucide-react';
+import { motion } from 'framer-motion';
+import SkeletonList from '@/components/SkeletonList';
 
 export default function DashboardTab({ obraId }: { obraId: string }) {
-  const { data: lowStock = [] } = useQuery({
-    queryKey: ['low-stock', obraId],
+  const { data: produtos = [], isLoading: loadingProdutos } = useQuery({
+    queryKey: ['produtos', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('produtos')
-        .select('*')
-        .eq('obra_id', obraId)
-        .filter('estoque_atual', 'lte', 'estoque_minimo' as any);
-      // Manual filter since we can't do column comparison easily
-      return (data || []).filter((p: any) => Number(p.estoque_atual) <= Number(p.estoque_minimo));
+      const { data } = await supabase.from('produtos').select('*').eq('obra_id', obraId).order('nome');
+      return data || [];
     },
   });
+
+  const lowStock = produtos.filter((p: any) => Number(p.estoque_atual) <= Number(p.estoque_minimo));
+  const zeroStock = produtos.filter((p: any) => Number(p.estoque_atual) <= 0);
+  const totalProdutos = produtos.length;
 
   const { data: todaySaidas = [] } = useQuery({
     queryKey: ['today-saidas', obraId],
@@ -42,73 +43,99 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
     },
   });
 
-  return (
-    <div className="space-y-4 animate-fade-in">
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2 text-warning">
-            <AlertTriangle className="h-4 w-4" /> Estoque Baixo
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {lowStock.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Todos os produtos estão com estoque adequado ✓</p>
-          ) : (
-            <ul className="space-y-2">
-              {lowStock.map((p: any) => (
-                <li key={p.id} className="flex justify-between text-sm">
-                  <span>{p.nome}</span>
-                  <span className="text-destructive font-medium">{Number(p.estoque_atual)} {p.unidade}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+  if (loadingProdutos) return <SkeletonList count={3} />;
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <ArrowUpFromLine className="h-4 w-4 text-primary" /> Saídas de Hoje
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+  const cards = [
+    { label: 'Total Produtos', value: totalProdutos, icon: Package, color: 'text-primary', bg: 'bg-primary/10' },
+    { label: 'Estoque Baixo', value: lowStock.length, icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10' },
+    { label: 'Sem Estoque', value: zeroStock.length, icon: TrendingDown, color: 'text-destructive', bg: 'bg-destructive/10' },
+    { label: 'Ferramentas em Uso', value: ferramentasEmUso.length, icon: Wrench, color: 'text-info', bg: 'bg-info/10' },
+  ];
+
+  return (
+    <div className="space-y-5 animate-fade-in">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-2 gap-3">
+        {cards.map((c, i) => (
+          <motion.div key={c.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+            <Card className="border-none shadow-sm">
+              <CardContent className="p-4 flex items-center gap-3">
+                <div className={`h-10 w-10 rounded-xl ${c.bg} flex items-center justify-center shrink-0`}>
+                  <c.icon className={`h-5 w-5 ${c.color}`} />
+                </div>
+                <div>
+                  <p className="text-2xl font-display font-bold">{c.value}</p>
+                  <p className="text-xs text-muted-foreground">{c.label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Low Stock Alert */}
+      {lowStock.length > 0 && (
+        <Card className="border-warning/30 shadow-sm">
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold flex items-center gap-2 text-warning mb-3">
+              <AlertTriangle className="h-4 w-4" /> Produtos com Estoque Baixo
+            </h3>
+            <div className="space-y-2">
+              {lowStock.slice(0, 5).map((p: any) => (
+                <div key={p.id} className="flex justify-between items-center text-sm">
+                  <span className="truncate">{p.nome}</span>
+                  <span className={`font-semibold px-2 py-0.5 rounded-full text-xs ${Number(p.estoque_atual) <= 0 ? 'bg-destructive/10 text-destructive' : 'bg-warning/10 text-warning'}`}>
+                    {Number(p.estoque_atual)} {p.unidade}
+                  </span>
+                </div>
+              ))}
+              {lowStock.length > 5 && (
+                <p className="text-xs text-muted-foreground text-center">+{lowStock.length - 5} itens</p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Today's Exits */}
+      <Card className="shadow-sm">
+        <CardContent className="p-4">
+          <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+            <ArrowUpFromLine className="h-4 w-4 text-primary" /> Saídas de Hoje ({todaySaidas.length})
+          </h3>
           {todaySaidas.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma saída registrada hoje</p>
           ) : (
-            <ul className="space-y-2">
+            <div className="space-y-2">
               {todaySaidas.map((s: any) => (
-                <li key={s.id} className="flex justify-between text-sm">
-                  <span>{s.produtos?.nome}</span>
-                  <span className="font-medium">{Number(s.quantidade)}</span>
-                </li>
+                <div key={s.id} className="flex justify-between items-center text-sm">
+                  <span className="truncate">{s.produtos?.nome}</span>
+                  <span className="font-semibold text-destructive">-{Number(s.quantidade)}</span>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-accent" /> Ferramentas em Uso
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {ferramentasEmUso.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nenhuma ferramenta em uso</p>
-          ) : (
-            <ul className="space-y-2">
+      {/* Tools in Use */}
+      {ferramentasEmUso.length > 0 && (
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-3">
+              <Wrench className="h-4 w-4 text-info" /> Ferramentas em Uso
+            </h3>
+            <div className="space-y-2">
               {ferramentasEmUso.map((f: any) => (
-                <li key={f.id} className="flex justify-between text-sm">
-                  <span>{f.nome}</span>
-                  <span className="text-muted-foreground">{f.pessoas?.nome || '—'}</span>
-                </li>
+                <div key={f.id} className="flex justify-between items-center text-sm">
+                  <span className="truncate">{f.nome}</span>
+                  <span className="text-xs text-muted-foreground">{f.pessoas?.nome || '—'}</span>
+                </div>
               ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
