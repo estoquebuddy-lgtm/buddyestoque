@@ -15,6 +15,7 @@ import SkeletonList from '@/components/SkeletonList';
 
 export default function Obras() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useProfile();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
