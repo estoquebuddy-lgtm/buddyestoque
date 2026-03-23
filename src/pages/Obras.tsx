@@ -44,9 +44,16 @@ export default function Obras() {
             </div>
             <h1 className="text-lg font-display font-bold tracking-tight">ESTOQUE BUDDY</h1>
           </div>
-          <Button variant="ghost" size="sm" onClick={signOut} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
-            <LogOut className="h-4 w-4 mr-1" /> Sair
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button variant="ghost" size="sm" onClick={() => navigate('/admin/usuarios')} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
+                <Shield className="h-4 w-4 mr-1" /> Usuários
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={signOut} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
+              <LogOut className="h-4 w-4 mr-1" /> Sair
+            </Button>
+          </div>
         </div>
       </header>
 
