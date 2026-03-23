@@ -14,7 +14,289 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      entradas: {
+        Row: {
+          created_at: string
+          data: string
+          fornecedor: string | null
+          id: string
+          nota_fiscal_url: string | null
+          obra_id: string
+          observacao: string | null
+          produto_id: string
+          quantidade: number
+          valor_unitario: number | null
+        }
+        Insert: {
+          created_at?: string
+          data?: string
+          fornecedor?: string | null
+          id?: string
+          nota_fiscal_url?: string | null
+          obra_id: string
+          observacao?: string | null
+          produto_id: string
+          quantidade: number
+          valor_unitario?: number | null
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          fornecedor?: string | null
+          id?: string
+          nota_fiscal_url?: string | null
+          obra_id?: string
+          observacao?: string | null
+          produto_id?: string
+          quantidade?: number
+          valor_unitario?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "entradas_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entradas_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ferramentas: {
+        Row: {
+          codigo: string | null
+          created_at: string
+          data_devolucao: string | null
+          data_retirada: string | null
+          estado: string
+          foto_url: string | null
+          id: string
+          nome: string
+          obra_id: string
+          observacoes: string | null
+          responsavel_id: string | null
+        }
+        Insert: {
+          codigo?: string | null
+          created_at?: string
+          data_devolucao?: string | null
+          data_retirada?: string | null
+          estado?: string
+          foto_url?: string | null
+          id?: string
+          nome: string
+          obra_id: string
+          observacoes?: string | null
+          responsavel_id?: string | null
+        }
+        Update: {
+          codigo?: string | null
+          created_at?: string
+          data_devolucao?: string | null
+          data_retirada?: string | null
+          estado?: string
+          foto_url?: string | null
+          id?: string
+          nome?: string
+          obra_id?: string
+          observacoes?: string | null
+          responsavel_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ferramentas_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      obras: {
+        Row: {
+          created_at: string
+          endereco: string | null
+          id: string
+          nome: string
+          responsavel: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          endereco?: string | null
+          id?: string
+          nome: string
+          responsavel?: string | null
+          status?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          endereco?: string | null
+          id?: string
+          nome?: string
+          responsavel?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pessoas: {
+        Row: {
+          created_at: string
+          foto_url: string | null
+          funcao: string | null
+          id: string
+          nome: string
+          obra_id: string
+          telefone: string | null
+        }
+        Insert: {
+          created_at?: string
+          foto_url?: string | null
+          funcao?: string | null
+          id?: string
+          nome: string
+          obra_id: string
+          telefone?: string | null
+        }
+        Update: {
+          created_at?: string
+          foto_url?: string | null
+          funcao?: string | null
+          id?: string
+          nome?: string
+          obra_id?: string
+          telefone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pessoas_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      produtos: {
+        Row: {
+          categoria: string | null
+          created_at: string
+          custo_unitario: number | null
+          estoque_atual: number
+          estoque_minimo: number
+          fornecedor: string | null
+          foto_url: string | null
+          id: string
+          localizacao: string | null
+          nome: string
+          obra_id: string
+          observacoes: string | null
+          unidade: string
+        }
+        Insert: {
+          categoria?: string | null
+          created_at?: string
+          custo_unitario?: number | null
+          estoque_atual?: number
+          estoque_minimo?: number
+          fornecedor?: string | null
+          foto_url?: string | null
+          id?: string
+          localizacao?: string | null
+          nome: string
+          obra_id: string
+          observacoes?: string | null
+          unidade?: string
+        }
+        Update: {
+          categoria?: string | null
+          created_at?: string
+          custo_unitario?: number | null
+          estoque_atual?: number
+          estoque_minimo?: number
+          fornecedor?: string | null
+          foto_url?: string | null
+          id?: string
+          localizacao?: string | null
+          nome?: string
+          obra_id?: string
+          observacoes?: string | null
+          unidade?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "produtos_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saidas: {
+        Row: {
+          created_at: string
+          data: string
+          id: string
+          obra_id: string
+          observacao: string | null
+          pessoa_id: string | null
+          produto_id: string
+          quantidade: number
+        }
+        Insert: {
+          created_at?: string
+          data?: string
+          id?: string
+          obra_id: string
+          observacao?: string | null
+          pessoa_id?: string | null
+          produto_id: string
+          quantidade: number
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          id?: string
+          obra_id?: string
+          observacao?: string | null
+          pessoa_id?: string | null
+          produto_id?: string
+          quantidade?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saidas_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saidas_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saidas_produto_id_fkey"
+            columns: ["produto_id"]
+            isOneToOne: false
+            referencedRelation: "produtos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
