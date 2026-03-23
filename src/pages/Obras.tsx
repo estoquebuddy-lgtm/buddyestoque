@@ -23,35 +23,23 @@ export default function Obras() {
 
   const { data: obras = [], isLoading } = useQuery({
     queryKey: ['obras'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('obras').select('*').order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: async () => { const { data, error } = await supabase.from('obras').select('*').order('created_at', { ascending: false }); if (error) throw error; return data; },
   });
 
   const createObra = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase.from('obras').insert({ nome, endereco, responsavel, user_id: user!.id });
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['obras'] });
-      setOpen(false);
-      setNome('');
-      setEndereco('');
-      setResponsavel('');
-      toast.success('Obra criada!');
-    },
+    mutationFn: async () => { const { error } = await supabase.from('obras').insert({ nome, endereco, responsavel, user_id: user!.id }); if (error) throw error; },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['obras'] }); setOpen(false); setNome(''); setEndereco(''); setResponsavel(''); toast.success('Obra criada!'); },
     onError: (e: any) => toast.error(e.message),
   });
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="bg-primary text-primary-foreground px-4 py-4 sticky top-0 z-10">
-        <div className="flex items-center justify-between max-w-2xl mx-auto">
-          <div className="flex items-center gap-2">
-            <Package className="h-6 w-6" />
+      <header className="bg-primary text-primary-foreground px-4 py-4 sticky top-0 z-10 shadow-sm">
+        <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-primary-foreground/10 flex items-center justify-center">
+              <Package className="h-5 w-5" />
+            </div>
             <h1 className="text-lg font-display font-bold tracking-tight">ESTOQUE BUDDY</h1>
           </div>
           <Button variant="ghost" size="sm" onClick={signOut} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
@@ -60,12 +48,12 @@ export default function Obras() {
         </div>
       </header>
 
-      <main className="container max-w-2xl py-6 px-4 space-y-6">
+      <main className="max-w-4xl mx-auto py-8 px-4 space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-display font-semibold">Minhas Obras</h2>
+          <h2 className="text-2xl font-display font-bold">Minhas Obras</h2>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button size="sm"><Plus className="h-4 w-4 mr-1" /> Nova Obra</Button>
+              <Button><Plus className="h-4 w-4 mr-1.5" /> Nova Obra</Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader><DialogTitle>Nova Obra</DialogTitle></DialogHeader>
@@ -73,48 +61,33 @@ export default function Obras() {
                 <Input placeholder="Nome da obra *" value={nome} onChange={e => setNome(e.target.value)} required className="h-12" />
                 <Input placeholder="Endereço" value={endereco} onChange={e => setEndereco(e.target.value)} className="h-12" />
                 <Input placeholder="Responsável" value={responsavel} onChange={e => setResponsavel(e.target.value)} className="h-12" />
-                <Button type="submit" className="w-full h-12 text-base" disabled={createObra.isPending}>
-                  {createObra.isPending ? 'Criando...' : 'Criar Obra'}
-                </Button>
+                <Button type="submit" className="w-full h-12 text-base" disabled={createObra.isPending}>{createObra.isPending ? 'Criando...' : 'Criar Obra'}</Button>
               </form>
             </DialogContent>
           </Dialog>
         </div>
 
-        {isLoading ? (
-          <SkeletonList count={3} />
-        ) : obras.length === 0 ? (
-          <Card className="text-center py-16 shadow-sm border-none">
+        {isLoading ? <SkeletonList count={3} /> : obras.length === 0 ? (
+          <Card className="text-center py-20 border-none shadow-sm">
             <CardContent>
-              <Building2 className="h-16 w-16 mx-auto text-muted-foreground/30 mb-4" />
-              <p className="text-muted-foreground text-lg">Nenhuma obra cadastrada</p>
-              <p className="text-muted-foreground text-sm mt-1">Crie sua primeira obra para começar</p>
+              <Building2 className="h-16 w-16 mx-auto text-muted-foreground/20 mb-4" />
+              <p className="text-lg text-muted-foreground">Nenhuma obra cadastrada</p>
+              <p className="text-sm text-muted-foreground mt-1">Crie sua primeira obra para começar</p>
             </CardContent>
           </Card>
         ) : (
           <div className="grid gap-3">
             {obras.map((obra: any, i: number) => (
               <motion.div key={obra.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                <Card
-                  className="cursor-pointer shadow-sm border-none hover:shadow-md transition-all active:scale-[0.99]"
-                  onClick={() => navigate(`/obra/${obra.id}`)}
-                >
-                  <CardContent className="p-4 flex items-center gap-4">
+                <Card className="cursor-pointer border-none shadow-sm hover:shadow-md transition-all active:scale-[0.995]" onClick={() => navigate(`/obra/${obra.id}`)}>
+                  <CardContent className="p-5 flex items-center gap-4">
                     <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 shrink-0">
                       <Building2 className="h-6 w-6 text-primary" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold truncate">{obra.nome}</p>
-                      {obra.endereco && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
-                          <MapPin className="h-3 w-3 shrink-0" /> {obra.endereco}
-                        </p>
-                      )}
-                      {obra.responsavel && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <User className="h-3 w-3 shrink-0" /> {obra.responsavel}
-                        </p>
-                      )}
+                      <p className="font-semibold text-base truncate">{obra.nome}</p>
+                      {obra.endereco && <p className="text-sm text-muted-foreground flex items-center gap-1 truncate"><MapPin className="h-3 w-3 shrink-0" /> {obra.endereco}</p>}
+                      {obra.responsavel && <p className="text-sm text-muted-foreground flex items-center gap-1"><User className="h-3 w-3 shrink-0" /> {obra.responsavel}</p>}
                     </div>
                     <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
                   </CardContent>
