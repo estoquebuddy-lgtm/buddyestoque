@@ -13,6 +13,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -22,7 +23,7 @@ export default function Login() {
     if (error) {
       toast.error(error.message);
     } else if (isSignUp) {
-      toast.success('Conta criada! Verifique seu e-mail para confirmar.');
+      setConfirmationSent(true);
     }
   };
 
