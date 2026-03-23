@@ -1,19 +1,21 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Package, Plus, LogOut, Building2, MapPin, User, ChevronRight } from 'lucide-react';
+import { Package, Plus, LogOut, Building2, MapPin, User, ChevronRight, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import SkeletonList from '@/components/SkeletonList';
 
 export default function Obras() {
   const { user, signOut } = useAuth();
+  const { isAdmin } = useProfile();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -42,9 +44,16 @@ export default function Obras() {
             </div>
             <h1 className="text-lg font-display font-bold tracking-tight">ESTOQUE BUDDY</h1>
           </div>
-          <Button variant="ghost" size="sm" onClick={signOut} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
-            <LogOut className="h-4 w-4 mr-1" /> Sair
-          </Button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <Button variant="ghost" size="sm" onClick={() => navigate('/admin/usuarios')} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
+                <Shield className="h-4 w-4 mr-1" /> Usuários
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={signOut} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
+              <LogOut className="h-4 w-4 mr-1" /> Sair
+            </Button>
+          </div>
         </div>
       </header>
 
