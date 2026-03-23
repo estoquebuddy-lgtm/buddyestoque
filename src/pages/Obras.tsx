@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Package, Plus, LogOut, Building2, MapPin, User, ChevronRight } from 'lucide-react';
+import { Package, Plus, LogOut, Building2, MapPin, User, ChevronRight, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import SkeletonList from '@/components/SkeletonList';
