@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Package, LogIn, UserPlus } from 'lucide-react';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Package, LogIn, UserPlus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 
 export default function Login() {
   const { signIn, signUp } = useAuth();
@@ -27,51 +28,57 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md animate-fade-in">
-        <CardHeader className="text-center space-y-4">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary">
-            <Package className="h-8 w-8 text-primary-foreground" />
-          </div>
-          <div>
-            <CardTitle className="text-2xl font-display">ESTOQUE BUDDY</CardTitle>
-            <CardDescription className="mt-1">
-              {isSignUp ? 'Crie sua conta para começar' : 'Faça login para acessar suas obras'}
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <Input
-              type="email"
-              placeholder="E-mail"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              required
-            />
-            <Input
-              type="password"
-              placeholder="Senha"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              required
-              minLength={6}
-            />
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Aguarde...' : isSignUp ? (
-                <><UserPlus className="mr-2 h-4 w-4" /> Criar Conta</>
-              ) : (
-                <><LogIn className="mr-2 h-4 w-4" /> Entrar</>
-              )}
-            </Button>
-          </form>
-          <button
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {isSignUp ? 'Já tem conta? Faça login' : 'Não tem conta? Cadastre-se'}
-          </button>
-        </CardContent>
-      </Card>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+        <Card className="shadow-xl border-none">
+          <CardHeader className="text-center space-y-4 pb-2">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-lg">
+              <Package className="h-8 w-8 text-primary-foreground" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-display font-bold tracking-tight">ESTOQUE BUDDY</h1>
+              <p className="text-sm text-muted-foreground mt-1">
+                {isSignUp ? 'Crie sua conta para começar' : 'Controle de estoque inteligente'}
+              </p>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <Input
+                type="email"
+                placeholder="E-mail"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                className="h-12"
+              />
+              <Input
+                type="password"
+                placeholder="Senha"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                required
+                minLength={6}
+                className="h-12"
+              />
+              <Button type="submit" className="w-full h-12 text-base" disabled={loading}>
+                {loading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : isSignUp ? (
+                  <><UserPlus className="mr-2 h-5 w-5" /> Criar Conta</>
+                ) : (
+                  <><LogIn className="mr-2 h-5 w-5" /> Entrar</>
+                )}
+              </Button>
+            </form>
+            <button
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isSignUp ? 'Já tem conta? Faça login' : 'Não tem conta? Cadastre-se'}
+            </button>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }
