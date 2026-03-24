@@ -445,7 +445,38 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground ml-1">Unidade</label>
-                    <Input placeholder="ex: un, kg, m" value={newProduct.unidade} onChange={e => setNewProduct(p => ({ ...p, unidade: e.target.value }))} className="h-10" />
+                    <div className="flex gap-2">
+                      <Select 
+                        value={['un', 'kg', 'L', 'm', 'm²', 'm³', 'cx', 'pc', 'sc'].includes(newProduct.unidade) ? newProduct.unidade : 'Outro'} 
+                        onValueChange={v => setNewProduct(p => ({ ...p, unidade: v === 'Outro' ? '' : v }))}
+                      >
+                        <SelectTrigger className="h-10 flex-1">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="un">Unidade (un)</SelectItem>
+                          <SelectItem value="kg">Quilograma (kg)</SelectItem>
+                          <SelectItem value="L">Litro (L)</SelectItem>
+                          <SelectItem value="m">Metro (m)</SelectItem>
+                          <SelectItem value="m²">Metro Quadrado (m²)</SelectItem>
+                          <SelectItem value="m³">Metro Cúbico (m³)</SelectItem>
+                          <SelectItem value="cx">Caixa (cx)</SelectItem>
+                          <SelectItem value="pc">Pacote (pc)</SelectItem>
+                          <SelectItem value="sc">Saco (sc)</SelectItem>
+                          <SelectItem value="Outro">Outro...</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      {!['un', 'kg', 'L', 'm', 'm²', 'm³', 'cx', 'pc', 'sc'].includes(newProduct.unidade) && (
+                        <Input 
+                          placeholder="Qual?" 
+                          value={newProduct.unidade} 
+                          onChange={e => setNewProduct(p => ({ ...p, unidade: e.target.value }))} 
+                          className="h-10 w-24 shrink-0" 
+                          required
+                          autoFocus
+                        />
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground ml-1">Categoria</label>

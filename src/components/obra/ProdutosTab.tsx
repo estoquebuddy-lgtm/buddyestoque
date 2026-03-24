@@ -388,7 +388,38 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground ml-1">Unidade de Medida</label>
-                <Input placeholder="Ex: un, kg, m, sc" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))} className="h-12" />
+                <div className="flex gap-2">
+                  <Select 
+                    value={['un', 'kg', 'L', 'm', 'm²', 'm³', 'cx', 'pc', 'sc'].includes(form.unidade) ? form.unidade : 'Outro'} 
+                    onValueChange={v => setForm(f => ({ ...f, unidade: v === 'Outro' ? '' : v }))}
+                  >
+                    <SelectTrigger className="h-12 flex-1">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="un">Unidade (un)</SelectItem>
+                      <SelectItem value="kg">Quilograma (kg)</SelectItem>
+                      <SelectItem value="L">Litro (L)</SelectItem>
+                      <SelectItem value="m">Metro (m)</SelectItem>
+                      <SelectItem value="m²">Metro Quadrado (m²)</SelectItem>
+                      <SelectItem value="m³">Metro Cúbico (m³)</SelectItem>
+                      <SelectItem value="cx">Caixa (cx)</SelectItem>
+                      <SelectItem value="pc">Pacote (pc)</SelectItem>
+                      <SelectItem value="sc">Saco (sc)</SelectItem>
+                      <SelectItem value="Outro">Outro...</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {!['un', 'kg', 'L', 'm', 'm²', 'm³', 'cx', 'pc', 'sc'].includes(form.unidade) && (
+                    <Input 
+                      placeholder="Qual?" 
+                      value={form.unidade} 
+                      onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))} 
+                      className="h-12 w-24 shrink-0" 
+                      required
+                      autoFocus
+                    />
+                  )}
+                </div>
               </div>
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground ml-1">Estoque Mínimo</label>

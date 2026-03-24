@@ -9,6 +9,8 @@ import {
   FileBarChart,
   ArrowLeft,
   ChevronLeft,
+  FileCode2,
+  ListTodo
 } from 'lucide-react';
 import {
   Sidebar,
@@ -32,6 +34,8 @@ const menuItems = [
   { value: 'saidas', label: 'Saídas', icon: ArrowUpFromLine },
   { value: 'ferramentas', label: 'Ferramentas', icon: Wrench },
   { value: 'relatorio-ferramentas', label: 'Relatórios', icon: FileBarChart },
+  { value: 'xml', label: 'Compras XML', icon: FileCode2 },
+  { value: 'atividades', label: 'Atividades', icon: ListTodo },
   { value: 'pessoas', label: 'Equipe', icon: Users },
 ];
 
