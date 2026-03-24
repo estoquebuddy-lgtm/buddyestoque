@@ -75,6 +75,31 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
     },
   });
 
+  const { data: importacoes = [] } = useQuery({
+    queryKey: ['importacoes-xml', obraId],
+    queryFn: async () => {
+      const { data } = await supabase.from('importacoes_xml' as any).select('*').eq('obra_id', obraId).order('data', { ascending: false });
+      return data || [];
+    },
+  });
+
+  // Group imports by month
+  const resumoMensal = (() => {
+    const map = new Map<string, { label: string; totalItens: number; totalXmls: number; sortKey: string }>();
+    (importacoes as any[]).forEach((imp: any) => {
+      const date = new Date(imp.data);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = format(date, 'MMMM yyyy', { locale: ptBR });
+      if (!map.has(key)) {
+        map.set(key, { label, totalItens: 0, totalXmls: 0, sortKey: key });
+      }
+      const entry = map.get(key)!;
+      entry.totalItens += Number(imp.total_itens) || 0;
+      entry.totalXmls += 1;
+    });
+    return Array.from(map.values()).sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+  })();
+
   if (loadingProdutos) {
     return (
       <div className="space-y-6">
