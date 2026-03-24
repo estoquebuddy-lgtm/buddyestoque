@@ -60,7 +60,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome').eq('obra_id', obraId).order('nome'); return data || []; } });
+  const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome, unidade, categoria, estoque_atual, estoque_minimo').eq('obra_id', obraId).order('nome'); return data || []; } });
   const { data: entradas = [], isLoading } = useQuery({ queryKey: ['entradas', obraId], queryFn: async () => { const { data } = await supabase.from('entradas').select('*, produtos(nome)').eq('obra_id', obraId).order('data', { ascending: false }); return data || []; } });
 
   useEffect(() => {
@@ -266,16 +266,28 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
                 {/* Selected product badge */}
                 {(form.produto_id || isNewProduct) && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium ${isNewProduct ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'}`}>
-                      {isNewProduct ? <Plus className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
-                      {isNewProduct ? `Novo: ${newProduct.nome}` : selectedProductName}
+                  <div className="mt-2 flex items-center justify-between p-3 rounded-lg border bg-muted/30">
+                    <div className="flex items-center gap-3">
+                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${isNewProduct ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'}`}>
+                        {isNewProduct ? <Plus className="h-5 w-5" /> : <Package className="h-5 w-5" />}
+                      </div>
+                      <div>
+                        <p className="font-medium text-sm text-foreground">
+                          {isNewProduct ? `Novo: ${newProduct.nome}` : selectedProductName}
+                        </p>
+                        {!isNewProduct && produtos.find((p: any) => p.id === form.produto_id) && (
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Estoque atual: {produtos.find((p: any) => p.id === form.produto_id)?.estoque_atual || 0} {produtos.find((p: any) => p.id === form.produto_id)?.unidade} | 
+                            Mínimo: {produtos.find((p: any) => p.id === form.produto_id)?.estoque_minimo || 0}
+                          </p>
+                        )}
+                      </div>
                     </div>
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-7 text-xs text-muted-foreground"
+                      className="text-xs text-muted-foreground"
                       onClick={() => {
                         setIsNewProduct(false);
                         setNewProduct(emptyNewProduct);
@@ -295,11 +307,16 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                       <button
                         key={p.id}
                         type="button"
-                        className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors flex items-center gap-2 text-sm"
+                        className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors flex items-center gap-3 text-sm"
                         onClick={() => handleSelectProduct(p.id, p.nome)}
                       >
-                        <Package className="h-4 w-4 text-muted-foreground shrink-0" />
-                        {p.nome}
+                        <Package className="h-5 w-5 text-muted-foreground shrink-0" />
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium truncate">{p.nome} {p.categoria && <span className="text-muted-foreground font-normal ml-1">• {p.categoria}</span>}</span>
+                          <span className="text-xs text-muted-foreground truncate">
+                            Estoque atual: {p.estoque_atual || 0} {p.unidade} | Mínimo: {p.estoque_minimo || 0}
+                          </span>
+                        </div>
                       </button>
                     ))}
                     <button
