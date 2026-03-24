@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowDownToLine, Pencil, Trash2, FileText, Eye, Plus, Search, Package } from 'lucide-react';
+import { ArrowDownToLine, Pencil, Trash2, FileText, Eye, Plus, Search, Package, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
