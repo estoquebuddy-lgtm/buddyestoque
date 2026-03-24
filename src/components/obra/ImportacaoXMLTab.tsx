@@ -11,8 +11,12 @@ import { ptBR } from 'date-fns/locale';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
+import GerarLivroFiscalDialog from '@/components/obra/GerarLivroFiscalDialog';
+import { useState } from 'react';
 
 export default function ImportacaoXMLTab({ obraId }: { obraId: string }) {
+  const [fiscalOpen, setFiscalOpen] = useState(false);
+
   const { data: importacoes = [], isLoading } = useQuery({
     queryKey: ['importacoes-xml', obraId],
     queryFn: async () => {
@@ -109,11 +113,14 @@ export default function ImportacaoXMLTab({ obraId }: { obraId: string }) {
           <h1 className="text-xl lg:text-2xl font-display font-bold">Compras em XML</h1>
         </div>
         <div className="flex gap-2">
+          <Button size="sm" onClick={() => setFiscalOpen(true)} className="h-9 bg-primary hover:bg-primary/90 text-primary-foreground">
+            <FileText className="h-4 w-4 mr-1.5" /> Gerar Livro Fiscal (PDF)
+          </Button>
           <Button variant="outline" size="sm" onClick={exportPDF} className="h-9">
-            <FileText className="h-4 w-4 mr-1.5 text-destructive" /> PDF
+            <FileText className="h-4 w-4 mr-1.5 text-destructive" /> Relatório PDF
           </Button>
           <Button variant="outline" size="sm" onClick={exportTXT} className="h-9">
-            <FileDown className="h-4 w-4 mr-1.5 text-muted-foreground" /> TXT
+            <FileDown className="h-4 w-4 mr-1.5 text-muted-foreground" /> Relatório TXT
           </Button>
         </div>
       </div>
@@ -171,6 +178,8 @@ export default function ImportacaoXMLTab({ obraId }: { obraId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      <GerarLivroFiscalDialog open={fiscalOpen} onOpenChange={setFiscalOpen} />
     </div>
   );
 }
