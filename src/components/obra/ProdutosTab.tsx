@@ -267,7 +267,16 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                         <ImageThumbnail src={p.foto_url} alt={p.nome} type="produto" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm truncate">{p.nome}</p>
-                          {p.localizacao && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{p.localizacao}</p>}
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {p.localizacao ? (
+                              <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/50 text-[10px] text-muted-foreground font-medium border border-border/50">
+                                <MapPin className="h-2.5 w-2.5 opacity-70" />
+                                {p.localizacao}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground/40 italic">Sem localização</span>
+                            )}
+                          </div>
                         </div>
                         <div className="text-right flex flex-col items-end gap-1">
                           <span className="text-lg font-display font-bold">{Number(p.estoque_atual)}</span>

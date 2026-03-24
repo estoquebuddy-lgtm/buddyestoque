@@ -316,26 +316,24 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             ) : (
               // When creating, show searchable combo with "new product" option
               <div className="relative">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    ref={productInputRef}
-                    placeholder="Buscar ou cadastrar produto..."
-                    value={isNewProduct ? newProduct.nome : productSearch}
-                    onChange={e => {
-                      if (isNewProduct) {
-                        setNewProduct(p => ({ ...p, nome: e.target.value }));
-                      } else {
+                {(!form.produto_id && !isNewProduct) && (
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      ref={productInputRef}
+                      placeholder="Buscar ou cadastrar produto..."
+                      value={productSearch}
+                      onChange={e => {
                         setProductSearch(e.target.value);
                         setForm(f => ({ ...f, produto_id: '' }));
                         setShowProductList(true);
-                      }
-                    }}
-                    onFocus={() => { if (!isNewProduct) setShowProductList(true); }}
-                    className="h-12 pl-10"
-                    autoComplete="off"
-                  />
-                </div>
+                      }}
+                      onFocus={() => setShowProductList(true)}
+                      className="h-12 pl-10"
+                      autoComplete="off"
+                    />
+                  </div>
+                )}
 
                 {/* Selected product badge */}
                 {(form.produto_id || isNewProduct) && (
@@ -346,7 +344,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                       </div>
                       <div>
                         <p className="font-medium text-sm text-foreground">
-                          {isNewProduct ? `Novo: ${newProduct.nome}` : selectedProductName}
+                          {isNewProduct ? (newProduct.nome ? `Novo: ${newProduct.nome}` : 'Novo Produto') : selectedProductName}
                         </p>
                         {!isNewProduct && produtos.find((p: any) => p.id === form.produto_id) && (
                           <p className="text-xs text-muted-foreground mt-0.5">
@@ -407,10 +405,22 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
             {/* Extra fields when creating a new product */}
             {isNewProduct && !editingId && (
-              <div className="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/10 mb-4">
+              <div className="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/10 mb-4 cursor-default">
                 <div className="flex items-center gap-2 border-b border-primary/10 pb-2">
                   <Package className="h-4 w-4 text-primary" />
                   <p className="text-sm font-semibold text-primary">Dados do novo produto</p>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground ml-1">Nome do Produto *</label>
+                  <Input 
+                    placeholder="Ex: Cimento CP II 50kg" 
+                    value={newProduct.nome} 
+                    onChange={e => setNewProduct(p => ({ ...p, nome: e.target.value }))} 
+                    className="h-10" 
+                    required 
+                    autoComplete="off"
+                  />
                 </div>
                 
                 <div>
