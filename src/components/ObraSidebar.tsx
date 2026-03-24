@@ -31,6 +31,7 @@ const menuItems = [
   { value: 'entradas', label: 'Entradas', icon: ArrowDownToLine },
   { value: 'saidas', label: 'Saídas', icon: ArrowUpFromLine },
   { value: 'ferramentas', label: 'Ferramentas', icon: Wrench },
+  { value: 'relatorio-ferramentas', label: 'Relatórios', icon: FileBarChart },
   { value: 'pessoas', label: 'Equipe', icon: Users },
 ];
 

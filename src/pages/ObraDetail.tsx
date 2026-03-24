@@ -7,6 +7,7 @@ import ObraSidebar from '@/components/ObraSidebar';
 import DashboardTab from '@/components/obra/DashboardTab';
 import ProdutosTab from '@/components/obra/ProdutosTab';
 import FerramentasTab from '@/components/obra/FerramentasTab';
+import RelatorioFerramentasTab from '@/components/obra/RelatorioFerramentasTab';
 import EntradasTab from '@/components/obra/EntradasTab';
 import SaidasTab from '@/components/obra/SaidasTab';
 import PessoasTab from '@/components/obra/PessoasTab';
@@ -57,6 +58,7 @@ export default function ObraDetail() {
             {activeTab === 'dashboard' && <DashboardTab obraId={id!} />}
             {activeTab === 'produtos' && <ProdutosTab obraId={id!} />}
             {activeTab === 'ferramentas' && <FerramentasTab obraId={id!} />}
+            {activeTab === 'relatorio-ferramentas' && <RelatorioFerramentasTab obraId={id!} />}
             {activeTab === 'entradas' && <EntradasTab obraId={id!} />}
             {activeTab === 'saidas' && <SaidasTab obraId={id!} />}
             {activeTab === 'pessoas' && <PessoasTab obraId={id!} />}

@@ -35,8 +35,22 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
   const { data: ferramentasEmUso = [] } = useQuery({
     queryKey: ['ferramentas-uso', obraId],
     queryFn: async () => {
-      const { data } = await supabase.from('ferramentas').select('*, pessoas:responsavel_id(nome)').eq('obra_id', obraId).eq('estado', 'em_uso');
-      return data || [];
+      const { data: ferramentasData, error } = await supabase.from('ferramentas').select('*').eq('obra_id', obraId).eq('estado', 'em_uso');
+      
+      if (error) {
+        console.error('Error fetching ferramentas:', error);
+        return [];
+      }
+      
+      if (!ferramentasData || ferramentasData.length === 0) return [];
+      
+      const { data: pessoasData } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId);
+      const pessoasMap = new Map((pessoasData || []).map((p: any) => [p.id, p.nome]));
+      
+      return ferramentasData.map((f: any) => ({
+        ...f,
+        pessoas: f.responsavel_id ? { nome: pessoasMap.get(f.responsavel_id) || null } : null,
+      }));
     },
   });
 
