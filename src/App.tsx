@@ -11,6 +11,7 @@ import ObraDetail from "./pages/ObraDetail";
 import AdminUsers from "./pages/AdminUsers";
 import PendingApproval from "./pages/PendingApproval";
 import NotFound from "./pages/NotFound";
+import UpdatePassword from "./pages/UpdatePassword";
 
 const queryClient = new QueryClient();
 
@@ -65,6 +66,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<Navigate to="/obras" replace />} />
       <Route path="/login" element={<AuthRoute><Login /></AuthRoute>} />
+      <Route path="/update-password" element={<UpdatePassword />} />
       <Route path="/pendente" element={<ApprovedCheck><PendingApproval /></ApprovedCheck>} />
       <Route path="/obras" element={<ProtectedRoute><Obras /></ProtectedRoute>} />
       <Route path="/obra/:id" element={<ProtectedRoute><ObraDetail /></ProtectedRoute>} />
