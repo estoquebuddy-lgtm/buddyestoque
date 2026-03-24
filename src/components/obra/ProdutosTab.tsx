@@ -20,6 +20,7 @@ import { FileDown, FileSpreadsheet, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const CONSTRUCAO_CATEGORIES = [
   'Hidráulica',
@@ -55,6 +56,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const [quickEntrada, setQuickEntrada] = useState<any>(null);
   const [quickSaida, setQuickSaida] = useState<any>(null);
   const [quickQtd, setQuickQtd] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   useEffect(() => {
     if (fabOpen) { setEditingId(null); setForm(emptyForm); setDialogOpen(true); onFabClose?.(); }
@@ -117,6 +120,35 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDeleteId(null); toast.success('Produto excluído!'); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const bulkRemove = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const selectedProds = produtos.filter((p: any) => selectedIds.includes(p.id));
+      
+      const { error } = await supabase.from('produtos').delete().in('id', selectedIds);
+      if (error) throw error;
+
+      // Log each deletion
+      const logs = selectedProds.map(p => ({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EXCLUIR_MASSA',
+        entidade: 'PRODUTO',
+        detalhes: `Exclusão em massa: ${p.nome}`
+      }));
+      await supabase.from('logs_atividades' as any).insert(logs);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
+      setSelectedIds([]);
+      setBulkDeleteOpen(false);
+      toast.success('Produtos excluídos com sucesso!');
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -226,6 +258,12 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }}
       >
         <div className="flex gap-2">
+          {selectedIds.length > 0 && (
+            <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)} className="h-9 animate-in fade-in zoom-in duration-200">
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Excluir ({selectedIds.length})
+            </Button>
+          )}
           <Button variant="outline" size="sm" onClick={handleExportPDF} className="h-9">
             <FileText className="h-4 w-4 mr-1.5 text-destructive" />
             PDF
@@ -262,8 +300,16 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                 </AccordionTrigger>
                 <AccordionContent className="pt-2 space-y-2 pb-4">
                   {productsInCat.map((p: any) => (
-                    <Card key={p.id} className="border-none shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.995]" onClick={() => setSelectedProduct(p)}>
+                    <Card key={p.id} className={`border-none shadow-sm hover:shadow-md transition-all cursor-pointer active:scale-[0.995] ${selectedIds.includes(p.id) ? 'ring-2 ring-primary ring-offset-2' : ''}`} onClick={() => setSelectedProduct(p)}>
                       <CardContent className="p-4 flex items-center gap-4">
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <Checkbox 
+                            checked={selectedIds.includes(p.id)} 
+                            onCheckedChange={(checked) => {
+                              setSelectedIds(prev => checked ? [...prev, p.id] : prev.filter(id => id !== p.id));
+                            }} 
+                          />
+                        </div>
                         <ImageThumbnail src={p.foto_url} alt={p.nome} type="produto" />
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-sm truncate">{p.nome}</p>
@@ -453,6 +499,15 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       </Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Produto" description="Tem certeza? Isso removerá permanentemente o produto." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
+      
+      <ConfirmDialog 
+        open={bulkDeleteOpen} 
+        onOpenChange={setBulkDeleteOpen} 
+        title="Excluir Produtos Selecionados" 
+        description={`Tem certeza que deseja excluir ${selectedIds.length} produtos permanentemente? Esta ação não pode ser desfeita.`} 
+        onConfirm={() => bulkRemove.mutate()} 
+        loading={bulkRemove.isPending} 
+      />
     </div>
   );
 }
