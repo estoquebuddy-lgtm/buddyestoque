@@ -4,14 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { FileUp, Download, FileText } from 'lucide-react';
-import jsPDF from 'jsPDF';
+import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useEffect } from 'react';
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  initialRows?: FiscalRow[];
 }
 
 interface FiscalRow {
@@ -30,9 +32,16 @@ interface FiscalRow {
   bCalculo: number;
 }
 
-export default function GerarLivroFiscalDialog({ open, onOpenChange }: Props) {
+export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows = [] }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState<FiscalRow[]>([]);
+  const [rows, setRows] = useState<FiscalRow[]>(initialRows);
+
+  // Update rows when initialRows changes (when modal opens)
+  useEffect(() => {
+    if (open) {
+      setRows(initialRows);
+    }
+  }, [open, initialRows]);
   
   // Header Meta Data
   const [empresa, setEmpresa] = useState('CASANA');

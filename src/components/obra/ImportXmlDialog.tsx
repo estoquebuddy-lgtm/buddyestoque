@@ -11,18 +11,44 @@ interface XmlItem {
   quantidade: number;
 }
 
+interface NfMetadata {
+  nNF: string;
+  serie: string;
+  dhEmi: string;
+  fornecedor: string;
+  cnpj: string;
+  uf: string;
+  vNF: number;
+}
+
 interface Props {
   obraId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
 
-function parseNFeXml(xmlText: string): XmlItem[] {
+function parseNFeXml(xmlText: string): { items: XmlItem[], meta: NfMetadata | null } {
   const parser = new DOMParser();
   const doc = parser.parseFromString(xmlText, 'text/xml');
   const items: XmlItem[] = [];
 
-  // Try NFe det elements
+  // Metadata (C100 equivalent)
+  const ide = doc.getElementsByTagName('ide')[0];
+  const nNF = ide?.getElementsByTagName('nNF')[0]?.textContent?.trim() || '';
+  const serie = ide?.getElementsByTagName('serie')[0]?.textContent?.trim() || '1';
+  const dhEmi = ide?.getElementsByTagName('dhEmi')[0]?.textContent || ide?.getElementsByTagName('dEmi')[0]?.textContent || '';
+
+  const emit = doc.getElementsByTagName('emit')[0];
+  const fornecedor = emit?.getElementsByTagName('xNome')[0]?.textContent?.trim() || '';
+  const cnpj = emit?.getElementsByTagName('CNPJ')[0]?.textContent?.trim() || '';
+  const uf = emit?.getElementsByTagName('UF')[0]?.textContent?.trim() || '';
+
+  const total = doc.getElementsByTagName('ICMSTot')[0];
+  const vNF = parseFloat(total?.getElementsByTagName('vNF')[0]?.textContent || '0');
+
+  const meta: NfMetadata = { nNF, serie, dhEmi, fornecedor, cnpj, uf, vNF };
+
+  // Items (C170 equivalent)
   const dets = doc.getElementsByTagName('det');
   for (let i = 0; i < dets.length; i++) {
     const det = dets[i];
@@ -40,13 +66,14 @@ function parseNFeXml(xmlText: string): XmlItem[] {
     }
   }
 
-  return items.filter(i => i.quantidade > 0);
+  return { items: items.filter(i => i.quantidade > 0), meta };
 }
 
 export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<XmlItem[]>([]);
+  const [meta, setMeta] = useState<NfMetadata | null>(null);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'upload' | 'review'>('upload');
 
@@ -64,12 +91,13 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string;
-      const parsed = parseNFeXml(text);
-      if (parsed.length === 0) {
+      const { items: parsedItems, meta: parsedMeta } = parseNFeXml(text);
+      if (parsedItems.length === 0) {
         toast.error('Nenhum item encontrado no XML');
         return;
       }
-      setItems(parsed);
+      setItems(parsedItems);
+      setMeta(parsedMeta);
       setStep('review');
     };
     reader.readAsText(file);
@@ -141,11 +169,23 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
         });
       }
 
-      // Save XML import record
-      await supabase.from('importacoes_xml' as any).insert({
+      // Save XML import record with metadata
+      const { error: xmlErr } = await supabase.from('importacoes_xml' as any).insert({
         obra_id: obraId,
         total_itens: items.length,
+        fornecedor_nome: meta?.fornecedor,
+        nf_numero: meta?.nNF,
+        serie: meta?.serie,
+        data_emissao: meta?.dhEmi || null,
+        cnpj_emitente: meta?.cnpj,
+        uf_emitente: meta?.uf,
+        valor_total: meta?.vNF,
+        cfop: (items.length > 0) ? '1556' : null // Mock or first item CFOP if we had it
       });
+
+      if (xmlErr) {
+        console.error("Error saving XML record:", xmlErr);
+      }
 
       queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
