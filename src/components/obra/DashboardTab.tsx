@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, ArrowUpFromLine, Wrench, Package, TrendingDown, DollarSign } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, TrendingDown, DollarSign } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { motion } from 'framer-motion';
 import { SkeletonCards } from '@/components/SkeletonList';
@@ -28,6 +28,15 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
     queryFn: async () => {
       const today = new Date().toISOString().split('T')[0];
       const { data } = await supabase.from('saidas').select('*, produtos(nome)').eq('obra_id', obraId).gte('data', today);
+      return data || [];
+    },
+  });
+
+  const { data: todayEntradas = [] } = useQuery({
+    queryKey: ['today-entradas', obraId],
+    queryFn: async () => {
+      const today = new Date().toISOString().split('T')[0];
+      const { data } = await supabase.from('entradas').select('*, produtos(nome)').eq('obra_id', obraId).gte('data', today);
       return data || [];
     },
   });
@@ -155,28 +164,53 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
         </Card>
       </div>
 
-      {/* Today's Exits */}
-      <Card className="border-none shadow-sm">
-        <CardContent className="p-5">
-          <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
-            <ArrowUpFromLine className="h-4 w-4 text-destructive" />
-            Saídas de Hoje
-            <Badge variant="secondary" className="ml-auto">{todaySaidas.length}</Badge>
-          </h3>
-          {todaySaidas.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma saída registrada hoje</p>
-          ) : (
-            <div className="divide-y divide-border">
-              {todaySaidas.map((s: any) => (
-                <div key={s.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                  <span className="text-sm truncate">{s.produtos?.nome}</span>
-                  <span className="text-sm font-bold text-destructive">-{Number(s.quantidade)}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <div className="grid lg:grid-cols-2 gap-6">
+        {/* Today's Entries */}
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-5">
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+              <ArrowDownToLine className="h-4 w-4 text-success" />
+              Entradas de Hoje
+              <Badge variant="secondary" className="ml-auto bg-success/10 text-success hover:bg-success/20 border-none">{todayEntradas.length}</Badge>
+            </h3>
+            {todayEntradas.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma entrada registrada hoje</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {todayEntradas.slice(0, 8).map((e: any) => (
+                  <div key={e.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                    <span className="text-sm truncate">{e.produtos?.nome}</span>
+                    <span className="text-sm font-bold text-success">+{Number(e.quantidade)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Today's Exits */}
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-5">
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+              <ArrowUpFromLine className="h-4 w-4 text-destructive" />
+              Saídas de Hoje
+              <Badge variant="secondary" className="ml-auto bg-destructive/10 text-destructive hover:bg-destructive/20 border-none">{todaySaidas.length}</Badge>
+            </h3>
+            {todaySaidas.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma saída registrada hoje</p>
+            ) : (
+              <div className="divide-y divide-border">
+                {todaySaidas.slice(0, 8).map((s: any) => (
+                  <div key={s.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                    <span className="text-sm truncate">{s.produtos?.nome}</span>
+                    <span className="text-sm font-bold text-destructive">-{Number(s.quantidade)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
