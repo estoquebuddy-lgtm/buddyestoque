@@ -6,12 +6,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowDownToLine, Pencil, Trash2, FileText, Eye, Plus, Search, Package } from 'lucide-react';
+import { ArrowDownToLine, Pencil, Trash2, FileText, Eye, Plus, Search, Package, FileUp } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SkeletonList from '@/components/SkeletonList';
 import ImageUpload from '@/components/ImageUpload';
+import ImportXmlDialog from '@/components/obra/ImportXmlDialog';
 
 interface Props { obraId: string; fabOpen?: boolean; onFabClose?: () => void; }
 const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '' };
@@ -40,6 +41,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewNota, setViewNota] = useState<string | null>(null);
+  const [xmlOpen, setXmlOpen] = useState(false);
 
   // New product inline state
   const [isNewProduct, setIsNewProduct] = useState(false);
@@ -236,14 +238,21 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     <div className="space-y-4 animate-fade-in">
       <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
         <div className="text-white">
-          <PageHeader 
-            title="Entradas" 
-            search={search} 
-            onSearchChange={setSearch} 
-            searchPlaceholder="Buscar entrada..." 
-            actionLabel="Entrada" 
-            onAction={resetDialog}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex-1">
+              <PageHeader 
+                title="Entradas" 
+                search={search} 
+                onSearchChange={setSearch} 
+                searchPlaceholder="Buscar entrada..." 
+                actionLabel="Entrada" 
+                onAction={resetDialog}
+              />
+            </div>
+            <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 hover:text-white shrink-0" onClick={() => setXmlOpen(true)}>
+              <FileUp className="h-4 w-4 mr-1" /> Importar XML
+            </Button>
+          </div>
         </div>
         <div className="flex gap-4 mt-6">
            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
@@ -487,6 +496,8 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       </Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Entrada" description="A quantidade será subtraída do estoque automaticamente." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
+
+      <ImportXmlDialog obraId={obraId} open={xmlOpen} onOpenChange={setXmlOpen} />
     </div>
   );
 }
