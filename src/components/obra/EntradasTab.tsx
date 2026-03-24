@@ -496,6 +496,8 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       </Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Entrada" description="A quantidade será subtraída do estoque automaticamente." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
+
+      <ImportXmlDialog obraId={obraId} open={xmlOpen} onOpenChange={setXmlOpen} />
     </div>
   );
 }
