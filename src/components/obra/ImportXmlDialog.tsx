@@ -11,6 +11,15 @@ interface XmlItem {
   quantidade: number;
 }
 
+interface FiscalLine {
+  cfop: string;
+  vBC: number;
+  pICMS: number;
+  vICMS: number;
+  cst: string;
+  codigoA: string;
+}
+
 interface NfMetadata {
   nNF: string;
   serie: string;
@@ -19,6 +28,7 @@ interface NfMetadata {
   cnpj: string;
   uf: string;
   vNF: number;
+  lines: FiscalLine[];
 }
 
 interface Props {
@@ -46,27 +56,62 @@ function parseNFeXml(xmlText: string): { items: XmlItem[], meta: NfMetadata | nu
   const total = doc.getElementsByTagName('ICMSTot')[0];
   const vNF = parseFloat(total?.getElementsByTagName('vNF')[0]?.textContent || '0');
 
-  const meta: NfMetadata = { nNF, serie, dhEmi, fornecedor, cnpj, uf, vNF };
+  // Multi-line analysis (C170 equivalent)
+  const fiscalLinesMap = new Map<string, FiscalLine>();
 
-  // Items (C170 equivalent)
   const dets = doc.getElementsByTagName('det');
   for (let i = 0; i < dets.length; i++) {
     const det = dets[i];
     const prod = det.getElementsByTagName('prod')[0];
-    if (!prod) continue;
+    const imposto = det.getElementsByTagName('imposto')[0];
+    const icms = imposto?.getElementsByTagName('ICMS')[0];
+    
+    // Extract CST/CSOSN and ICMS values
+    let cst = '00';
+    let vBC = 0;
+    let pICMS = 0;
+    let vICMS = 0;
 
-    const xProd = prod.getElementsByTagName('xProd')[0]?.textContent?.trim();
-    const qCom = prod.getElementsByTagName('qCom')[0]?.textContent?.trim();
-
-    if (xProd && qCom) {
-      items.push({
-        nome: xProd,
-        quantidade: parseFloat(qCom) || 0,
-      });
+    if (icms) {
+      const icmsNode = icms.children[0]; // e.g., ICMS00, ICMS40, ICMSSN101
+      if (icmsNode) {
+        cst = icmsNode.getElementsByTagName('CST')[0]?.textContent || 
+              icmsNode.getElementsByTagName('CSOSN')[0]?.textContent || '00';
+        vBC = parseFloat(icmsNode.getElementsByTagName('vBC')[0]?.textContent || '0');
+        pICMS = parseFloat(icmsNode.getElementsByTagName('pICMS')[0]?.textContent || '0');
+        vICMS = parseFloat(icmsNode.getElementsByTagName('vICMS')[0]?.textContent || '0');
+      }
     }
+
+    const xProd = prod?.getElementsByTagName('xProd')[0]?.textContent?.trim();
+    const qCom = parseFloat(prod?.getElementsByTagName('qCom')[0]?.textContent || '0');
+    const cfop = prod?.getElementsByTagName('CFOP')[0]?.textContent?.trim() || '1556';
+    const vProd = parseFloat(prod?.getElementsByTagName('vProd')[0]?.textContent || '0');
+
+    if (xProd && qCom > 0) {
+      items.push({ nome: xProd, quantidade: qCom });
+    }
+
+    // Determine fiscal code (1: credit, 2: exempt, 3: other)
+    // Simplified: if there is vICMS, it's 1. Otherwise 3.
+    const codigoA = vICMS > 0 ? '1' : '3';
+    
+    const key = `${cfop}-${codigoA}-${vICMS > 0 ? pICMS : 0}`;
+    if (!fiscalLinesMap.has(key)) {
+      fiscalLinesMap.set(key, { cfop, vBC: 0, pICMS, vICMS: 0, cst, codigoA });
+    }
+    
+    const line = fiscalLinesMap.get(key)!;
+    line.vBC += (codigoA === '1' ? vBC : vProd); // If no credit, base is the product value
+    line.vICMS += vICMS;
   }
 
-  return { items: items.filter(i => i.quantidade > 0), meta };
+  const meta: NfMetadata = { 
+    nNF, serie, dhEmi, fornecedor, cnpj, uf, vNF, 
+    lines: Array.from(fiscalLinesMap.values()) 
+  };
+
+  return { items, meta };
 }
 
 export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
@@ -180,7 +225,8 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
         cnpj_emitente: meta?.cnpj,
         uf_emitente: meta?.uf,
         valor_total: meta?.vNF,
-        cfop: (items.length > 0) ? '1556' : null // Mock or first item CFOP if we had it
+        cfop: meta?.lines[0]?.cfop || '1556',
+        linhas_fiscais: meta?.lines || []
       });
 
       if (xmlErr) {

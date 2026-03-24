@@ -30,6 +30,9 @@ interface FiscalRow {
   imposto: string;
   codigoA: string;
   bCalculo: number;
+  pICMS?: number;
+  vICMS?: number;
+  linhas_fiscais?: any[];
 }
 
 export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows = [] }: Props) {
@@ -72,33 +75,68 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
 
         const nNF = doc.getElementsByTagName('nNF')[0]?.textContent?.trim() || '-';
         const serie = doc.getElementsByTagName('serie')[0]?.textContent?.trim() || '1';
-        const dhEmi = formatFiscalDate(doc.getElementsByTagName('dhEmi')[0]?.textContent || '');
+        const dhEmiRaw = doc.getElementsByTagName('dhEmi')[0]?.textContent || doc.getElementsByTagName('dEmi')[0]?.textContent || '';
+        const dhEmi = formatFiscalDate(dhEmiRaw);
         
         const emit = doc.getElementsByTagName('emit')[0];
         const cnpjRaw = emit?.getElementsByTagName('CNPJ')[0]?.textContent?.trim() || '-';
         const uf = emit?.getElementsByTagName('UF')[0]?.textContent?.trim() || '-';
         
         const vNF = Number(doc.getElementsByTagName('ICMSTot')[0]?.getElementsByTagName('vNF')[0]?.textContent || '0');
-        const cfop = doc.getElementsByTagName('det')[0]?.getElementsByTagName('CFOP')[0]?.textContent?.trim() || '-';
 
         const cnpj = cnpjRaw.length === 14 
           ? cnpjRaw.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5")
           : cnpjRaw;
 
+        // Grouping logic (same as ImportXmlDialog)
+        const fiscalLinesMap = new Map<string, any>();
+        const dets = doc.getElementsByTagName('det');
+        
+        for (let i = 0; i < dets.length; i++) {
+          const det = dets[i];
+          const prod = det.getElementsByTagName('prod')[0];
+          const imposto = det.getElementsByTagName('imposto')[0];
+          const icms = imposto?.getElementsByTagName('ICMS')[0];
+          
+          let vBC = 0, pICMS = 0, vICMS = 0;
+          if (icms) {
+            const icmsNode = icms.children[0];
+            if (icmsNode) {
+              vBC = parseFloat(icmsNode.getElementsByTagName('vBC')[0]?.textContent || '0');
+              pICMS = parseFloat(icmsNode.getElementsByTagName('pICMS')[0]?.textContent || '0');
+              vICMS = parseFloat(icmsNode.getElementsByTagName('vICMS')[0]?.textContent || '0');
+            }
+          }
+
+          const cfop = prod?.getElementsByTagName('CFOP')[0]?.textContent?.trim() || '1556';
+          const vProd = parseFloat(prod?.getElementsByTagName('vProd')[0]?.textContent || '0');
+          const codigoA = vICMS > 0 ? '1' : '3';
+          
+          const key = `${cfop}-${codigoA}-${vICMS > 0 ? pICMS : 0}`;
+          if (!fiscalLinesMap.has(key)) {
+            fiscalLinesMap.set(key, { cfop, vBC: 0, pICMS, vICMS: 0, codigoA });
+          }
+          
+          const line = fiscalLinesMap.get(key)!;
+          line.vBC += (codigoA === '1' ? vBC : vProd);
+          line.vICMS += vICMS;
+        }
+
         newRows.push({
           filename: file.name,
           dataEntrada: todayStr,
-          especie: '', // Geralmente vazio em NF-e
+          especie: '', 
           nNF,
           serie: (serie.length > 0 ? serie + '/' : ''),
           dataDoc: dhEmi,
           cnpjEmit: cnpj,
           uf,
           vNF,
-          cfop,
+          cfop: Array.from(fiscalLinesMap.values())[0]?.cfop || '1556',
           imposto: 'ICMS',
           codigoA: '3',
-          bCalculo: vNF // Conforme imagem, o valor contábil repete na base de cálculo se o código for 3
+          bCalculo: vNF,
+          linhas_fiscais: Array.from(fiscalLinesMap.values())
         });
 
       } catch (err) {
@@ -106,7 +144,6 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
       }
     }
     
-    // Sort by entry date (newest first)
     setRows(prev => [...prev, ...newRows].sort((a,b) => b.dataEntrada.localeCompare(a.dataEntrada)));
     if (fileRef.current) fileRef.current.value = '';
   };
@@ -172,23 +209,51 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
 
     const formatCurr = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-    const tableRows = rows.map(r => [
-      r.dataEntrada,
-      r.especie,
-      r.nNF,
-      r.serie,
-      r.dataDoc,
-      r.cnpjEmit,
-      r.uf,
-      formatCurr(r.vNF),
-      r.cfop,
-      r.imposto,
-      r.codigoA,
-      formatCurr(r.bCalculo),
-      '',
-      '',
-      ''
-    ]);
+    const tableRows: any[] = [];
+    
+    rows.forEach(r => {
+      if (r.linhas_fiscais && r.linhas_fiscais.length > 0) {
+        // One row per fiscal line
+        r.linhas_fiscais.forEach((line, idx) => {
+          tableRows.push([
+            idx === 0 ? r.dataEntrada : '', // Only show data on first line
+            idx === 0 ? r.especie : '',
+            idx === 0 ? r.nNF : '',
+            idx === 0 ? r.serie : '',
+            idx === 0 ? r.dataDoc : '',
+            idx === 0 ? r.cnpjEmit : '',
+            idx === 0 ? r.uf : '',
+            idx === 0 ? formatCurr(r.vNF) : '',
+            line.cfop || r.cfop,
+            r.imposto,
+            line.codigoA || '3',
+            formatCurr(line.vBC || 0),
+            line.vICMS > 0 ? (line.pICMS ? line.pICMS.toLocaleString('pt-BR') : '') : '',
+            line.vICMS > 0 ? formatCurr(line.vICMS) : '',
+            ''
+          ]);
+        });
+      } else {
+        // Fallback or old data without lines
+        tableRows.push([
+          r.dataEntrada,
+          r.especie,
+          r.nNF,
+          r.serie,
+          r.dataDoc,
+          r.cnpjEmit,
+          r.uf,
+          formatCurr(r.vNF),
+          r.cfop,
+          r.imposto,
+          r.codigoA,
+          formatCurr(r.bCalculo),
+          r.pICMS ? r.pICMS.toLocaleString('pt-BR') : '',
+          r.vICMS ? formatCurr(r.vICMS) : '',
+          ''
+        ]);
+      }
+    });
 
     autoTable(doc, {
       startY: 43,

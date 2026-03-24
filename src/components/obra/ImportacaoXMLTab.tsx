@@ -71,7 +71,8 @@ export default function ImportacaoXMLTab({ obraId }: { obraId: string }) {
           cfop: imp.cfop || '1556',
           imposto: 'ICMS',
           codigoA: '3',
-          bCalculo: Number(imp.valor_total) || 0
+          bCalculo: Number(imp.valor_total) || 0,
+          linhas_fiscais: imp.linhas_fiscais || []
         };
       });
 
