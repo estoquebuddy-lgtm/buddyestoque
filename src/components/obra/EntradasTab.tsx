@@ -15,7 +15,7 @@ import ImageUpload from '@/components/ImageUpload';
 
 interface Props { obraId: string; fabOpen?: boolean; onFabClose?: () => void; }
 const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '' };
-const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '' };
+const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '', foto_url: '' };
 
 export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const queryClient = useQueryClient();
@@ -94,6 +94,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             nome: newProduct.nome.trim(),
             unidade: newProduct.unidade || 'un',
             categoria: newProduct.categoria || null,
+            foto_url: newProduct.foto_url || null,
             estoque_minimo: Number(newProduct.estoque_minimo) || 0,
             estoque_atual: 0,
           })
@@ -334,9 +335,20 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
             {/* Extra fields when creating a new product */}
             {isNewProduct && !editingId && (
-              <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/10">
-                <p className="text-xs font-medium text-primary">Dados do novo produto</p>
-                <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-4 p-4 bg-primary/5 rounded-lg border border-primary/10 mb-4">
+                <div className="flex items-center gap-2 border-b border-primary/10 pb-2">
+                  <Package className="h-4 w-4 text-primary" />
+                  <p className="text-sm font-semibold text-primary">Dados do novo produto</p>
+                </div>
+                
+                <div>
+                  <label className="text-xs text-muted-foreground ml-1">Foto do Produto (opcional)</label>
+                  <div className="mt-1">
+                    <ImageUpload bucket="produtos" currentUrl={newProduct.foto_url} onUpload={url => setNewProduct(p => ({ ...p, foto_url: url }))} />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground ml-1">Unidade</label>
                     <Input placeholder="ex: un, kg, m" value={newProduct.unidade} onChange={e => setNewProduct(p => ({ ...p, unidade: e.target.value }))} className="h-10" />
@@ -347,16 +359,31 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                   </div>
                   <div className="space-y-1 col-span-2">
                     <label className="text-xs text-muted-foreground ml-1">Estoque Mínimo</label>
-                    <Input placeholder="Defina um alerta de estoque baixo (ex: 5)" type="number" min="0" value={newProduct.estoque_minimo} onChange={e => setNewProduct(p => ({ ...p, estoque_minimo: e.target.value }))} className="h-10" />
+                    <Input placeholder="Alerta de estoque baixo (ex: 5)" type="number" min="0" value={newProduct.estoque_minimo} onChange={e => setNewProduct(p => ({ ...p, estoque_minimo: e.target.value }))} className="h-10" />
                   </div>
                 </div>
               </div>
             )}
 
-            <Input placeholder="Quantidade *" type="number" value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))} required className="h-12" />
-            <Input placeholder="Valor unitário" type="number" step="0.01" value={form.valor_unitario} onChange={e => setForm(f => ({ ...f, valor_unitario: e.target.value }))} className="h-12" />
-            <Input placeholder="Fornecedor" value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} className="h-12" />
-            <Input placeholder="Observação" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} className="h-12" />
+            <div className="space-y-1 mt-4">
+              <label className="text-xs text-muted-foreground ml-1">Quantidade da Entrada *</label>
+              <Input placeholder="Ao menos 1" type="number" value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))} required className="h-12" />
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Valor Total (opcional)</label>
+              <Input placeholder="R$" type="number" step="0.01" value={form.valor_unitario} onChange={e => setForm(f => ({ ...f, valor_unitario: e.target.value }))} className="h-12" />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Fornecedor (opcional)</label>
+              <Input placeholder="De onde veio?" value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} className="h-12" />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Observação (opcional)</label>
+              <Input placeholder="Qualquer descrição extra" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} className="h-12" />
+            </div>
             <div>
               <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1"><FileText className="h-4 w-4" /> Nota Fiscal (opcional)</p>
               <ImageUpload bucket="notas_fiscais" currentUrl={form.nota_fiscal_url} onUpload={url => setForm(f => ({ ...f, nota_fiscal_url: url }))} accept="image/*,.pdf" label="Nota" />
