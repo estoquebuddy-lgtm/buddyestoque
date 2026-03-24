@@ -249,7 +249,12 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 onAction={resetDialog}
               />
             </div>
-            <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 hover:text-white shrink-0" onClick={() => setXmlOpen(true)}>
+          </div>
+          <div className="flex flex-col gap-2 shrink-0">
+            <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0" onClick={resetDialog}>
+              <ArrowDownToLine className="h-4 w-4 mr-1" /> Entrada
+            </Button>
+            <Button size="sm" className="bg-info hover:bg-info/90 text-white shrink-0" onClick={() => setXmlOpen(true)}>
               <FileUp className="h-4 w-4 mr-1" /> Importar XML
             </Button>
           </div>
