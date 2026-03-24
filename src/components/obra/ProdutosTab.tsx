@@ -204,19 +204,54 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? 'Editar Produto' : 'Novo Produto'}</DialogTitle></DialogHeader>
-          <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="space-y-3">
-            <ImageUpload bucket="produtos" currentUrl={form.foto_url} onUpload={url => setForm(f => ({ ...f, foto_url: url }))} />
-            <Input placeholder="Nome *" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} required className="h-12" />
-            <Input placeholder="Categoria" value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} className="h-12" />
-            <div className="grid grid-cols-2 gap-3">
-              <Input placeholder="Unidade" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))} className="h-12" />
-              <Input placeholder="Estoque mínimo" type="number" value={form.estoque_minimo} onChange={e => setForm(f => ({ ...f, estoque_minimo: e.target.value }))} className="h-12" />
+          <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="space-y-4 pt-2">
+            <div>
+              <label className="text-xs text-muted-foreground ml-1">Foto do Produto</label>
+              <ImageUpload bucket="produtos" currentUrl={form.foto_url} onUpload={url => setForm(f => ({ ...f, foto_url: url }))} />
             </div>
-            <Input placeholder="Custo unitário" type="number" step="0.01" value={form.custo_unitario} onChange={e => setForm(f => ({ ...f, custo_unitario: e.target.value }))} className="h-12" />
-            <Input placeholder="Fornecedor" value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} className="h-12" />
-            <Input placeholder="Localização" value={form.localizacao} onChange={e => setForm(f => ({ ...f, localizacao: e.target.value }))} className="h-12" />
-            <Input placeholder="Observações" value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} className="h-12" />
-            <Button type="submit" className="w-full h-12" disabled={save.isPending}>{save.isPending ? 'Salvando...' : 'Salvar'}</Button>
+            
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Nome do Produto *</label>
+              <Input placeholder="Ex: Cimento CP II 50kg" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} required className="h-12" />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Categoria</label>
+              <Input placeholder="Ex: Hidráulica, Elétrica, Estrutural..." value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} className="h-12" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground ml-1">Unidade de Medida</label>
+                <Input placeholder="Ex: un, kg, m, sc" value={form.unidade} onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))} className="h-12" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground ml-1">Estoque Mínimo</label>
+                <Input placeholder="Alerta de falta (ex: 5)" type="number" min="0" value={form.estoque_minimo} onChange={e => setForm(f => ({ ...f, estoque_minimo: e.target.value }))} className="h-12" />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Custo Unitário Padrão</label>
+              <Input placeholder="R$" type="number" step="0.01" value={form.custo_unitario} onChange={e => setForm(f => ({ ...f, custo_unitario: e.target.value }))} className="h-12" />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Fornecedor Principal (Opcional)</label>
+              <Input placeholder="Ex: Loja do Zé, Leroy Merlin" value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} className="h-12" />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Localização no Estoque (Opcional)</label>
+              <Input placeholder="Ex: Prateleira 3, Galpão A" value={form.localizacao} onChange={e => setForm(f => ({ ...f, localizacao: e.target.value }))} className="h-12" />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Observações Gerais</label>
+              <Input placeholder="Qualquer descrição extra" value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} className="h-12" />
+            </div>
+
+            <Button type="submit" className="w-full h-12 mt-2" disabled={save.isPending}>{save.isPending ? 'Salvando...' : 'Salvar Produto'}</Button>
           </form>
         </DialogContent>
       </Dialog>
