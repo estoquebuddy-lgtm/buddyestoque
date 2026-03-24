@@ -51,6 +51,7 @@ export default function Obras() {
                 <Shield className="h-4 w-4 mr-1" /> Usuários
               </Button>
             )}
+            <AlterarSenhaDialog />
             <Button variant="ghost" size="sm" onClick={signOut} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
               <LogOut className="h-4 w-4 mr-1" /> Sair
             </Button>
