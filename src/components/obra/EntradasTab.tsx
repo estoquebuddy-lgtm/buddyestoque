@@ -41,6 +41,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewNota, setViewNota] = useState<string | null>(null);
+  const [xmlOpen, setXmlOpen] = useState(false);
 
   // New product inline state
   const [isNewProduct, setIsNewProduct] = useState(false);
