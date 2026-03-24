@@ -280,6 +280,33 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
         </Card>
       </div>
 
+      {/* Resumo Mensal de Compras (XML) */}
+      <Card className="border-none shadow-sm">
+        <CardContent className="p-5">
+          <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+            <FileText className="h-4 w-4 text-info" />
+            Resumo Mensal de Compras (XML)
+          </h3>
+          {resumoMensal.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma importação de XML registrada</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {resumoMensal.map((m) => (
+                <div key={m.sortKey} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                  <div>
+                    <p className="text-sm font-medium capitalize">{m.label}</p>
+                    <p className="text-xs text-muted-foreground">{m.totalXmls} XML(s) importado(s)</p>
+                  </div>
+                  <Badge variant="secondary" className="bg-info/10 text-info border-info/20">
+                    {m.totalItens} itens
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Activity Logs */}
       <div className="grid grid-cols-1 gap-6">
         <Card className="border-none shadow-sm">
