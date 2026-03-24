@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Package, Plus, LogOut, Building2, MapPin, User, ChevronRight, Shield } from 'lucide-react';
+import AlterarSenhaDialog from '@/components/AlterarSenhaDialog';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import SkeletonList from '@/components/SkeletonList';
@@ -50,6 +51,7 @@ export default function Obras() {
                 <Shield className="h-4 w-4 mr-1" /> Usuários
               </Button>
             )}
+            <AlterarSenhaDialog />
             <Button variant="ghost" size="sm" onClick={signOut} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
               <LogOut className="h-4 w-4 mr-1" /> Sair
             </Button>

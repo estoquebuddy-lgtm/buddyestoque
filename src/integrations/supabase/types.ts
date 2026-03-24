@@ -118,6 +118,96 @@ export type Database = {
           },
         ]
       }
+      historico_ferramentas: {
+        Row: {
+          data: string
+          ferramenta_id: string
+          id: string
+          obra_id: string
+          pessoa_id: string | null
+          tipo: string
+        }
+        Insert: {
+          data?: string
+          ferramenta_id: string
+          id?: string
+          obra_id: string
+          pessoa_id?: string | null
+          tipo: string
+        }
+        Update: {
+          data?: string
+          ferramenta_id?: string
+          id?: string
+          obra_id?: string
+          pessoa_id?: string | null
+          tipo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "historico_ferramentas_ferramenta_id_fkey"
+            columns: ["ferramenta_id"]
+            isOneToOne: false
+            referencedRelation: "ferramentas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_ferramentas_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "historico_ferramentas_pessoa_id_fkey"
+            columns: ["pessoa_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      logs_atividades: {
+        Row: {
+          acao: string
+          data: string
+          detalhes: string | null
+          entidade: string
+          id: string
+          obra_id: string | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          acao: string
+          data?: string
+          detalhes?: string | null
+          entidade: string
+          id?: string
+          obra_id?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          acao?: string
+          data?: string
+          detalhes?: string | null
+          entidade?: string
+          id?: string
+          obra_id?: string | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "logs_atividades_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       obras: {
         Row: {
           created_at: string
