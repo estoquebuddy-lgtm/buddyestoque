@@ -40,17 +40,46 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const save = useMutation({
     mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       const payload = { obra_id: obraId, produto_id: form.produto_id, quantidade: Number(form.quantidade), pessoa_id: form.pessoa_id || null, observacao: form.observacao || null };
-      if (editingId) { const { error } = await supabase.from('saidas').update(payload).eq('id', editingId); if (error) throw error; }
-      else { const { error } = await supabase.from('saidas').insert(payload); if (error) throw error; }
+      
+      let res;
+      if (editingId) { res = await supabase.from('saidas').update(payload).eq('id', editingId); }
+      else { res = await supabase.from('saidas').insert(payload); }
+      if (res.error) throw res.error;
+
+      const prod = produtos.find((p: any) => p.id === form.produto_id);
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: editingId ? 'EDITAR' : 'SAIDA',
+        entidade: 'ESTOQUE',
+        detalhes: editingId 
+          ? `Editou saída de: ${prod?.nome}` 
+          : `Registrou saída de ${form.quantidade} ${prod?.unidade || ''} de ${prod?.nome}`
+      });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['saidas', obraId] }); queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); setDialogOpen(false); setEditingId(null); setForm(emptyForm); toast.success(editingId ? 'Saída atualizada!' : 'Saída registrada!'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['saidas', obraId] }); queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDialogOpen(false); setEditingId(null); setForm(emptyForm); toast.success(editingId ? 'Saída atualizada!' : 'Saída registrada!'); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from('saidas').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['saidas', obraId] }); queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); setDeleteId(null); toast.success('Saída excluída! Estoque devolvido.'); },
+    mutationFn: async (id: string) => { 
+      const { data: { user } } = await supabase.auth.getUser();
+      const s = saidas.find((x: any) => x.id === id);
+      const { error } = await supabase.from('saidas').delete().eq('id', id); if (error) throw error; 
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EXCLUIR',
+        entidade: 'ESTOQUE',
+        detalhes: `Excluiu saída de: ${s?.produtos?.nome || id}`
+      });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['saidas', obraId] }); queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDeleteId(null); toast.success('Saída excluída! Estoque devolvido.'); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -60,24 +89,54 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <PageHeader title="Saídas" search={search} onSearchChange={setSearch} searchPlaceholder="Buscar saída..." actionLabel="Saída" onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }} />
+      <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
+        <div className="text-white">
+          <PageHeader 
+            title="Saídas" 
+            search={search} 
+            onSearchChange={setSearch} 
+            searchPlaceholder="Buscar saída..." 
+            actionLabel="Saída" 
+            onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }}
+          />
+        </div>
+        <div className="flex gap-4 mt-6">
+           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
+              <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Total Saídas</p>
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-display font-bold text-white leading-none">{saidas.length}</span>
+                <span className="text-xs text-white/40 mb-1">registros</span>
+              </div>
+           </div>
+           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
+              <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Volume Total</p>
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-display font-bold text-destructive leading-none">{saidas.reduce((acc: number, s: any) => acc + Number(s.quantidade), 0)}</span>
+                <span className="text-xs text-white/40 mb-1">unidades</span>
+              </div>
+           </div>
+        </div>
+      </div>
 
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
         <p className="text-center py-16 text-muted-foreground">{search ? 'Nenhuma saída encontrada' : 'Nenhuma saída registrada'}</p>
       ) : (
         <div className="space-y-2">
           {filtered.map((s: any) => (
-            <Card key={s.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
+            <Card key={s.id} className="border-destructive/10 border shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
               <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
-                  <ArrowUpFromLine className="h-5 w-5 text-destructive" />
+                <div className="h-12 w-12 rounded-xl bg-destructive flex items-center justify-center shrink-0 shadow-sm">
+                  <ArrowUpFromLine className="h-5 w-5 text-white" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm truncate">{s.produtos?.nome}</p>
-                  <p className="text-xs text-muted-foreground">{s.pessoas?.nome && `${s.pessoas.nome} • `}{new Date(s.data).toLocaleDateString('pt-BR')}</p>
+                  <p className="text-xs text-muted-foreground font-medium">{s.pessoas?.nome && `${s.pessoas.nome} • `}{new Date(s.data).toLocaleDateString('pt-BR')}</p>
                 </div>
-                <span className="text-lg font-display font-bold text-destructive">-{Number(s.quantidade)}</span>
-                <div className="flex gap-1">
+                <div className="text-right flex flex-col items-end">
+                   <span className="text-lg font-display font-bold text-destructive">-{Number(s.quantidade)}</span>
+                   <span className="text-[10px] text-muted-foreground uppercase">{s.produtos?.unidade || 'un'}</span>
+                </div>
+                <div className="flex gap-1 ml-2">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(s)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(s.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
                 </div>

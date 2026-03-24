@@ -17,6 +17,21 @@ interface Props { obraId: string; fabOpen?: boolean; onFabClose?: () => void; }
 const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '' };
 const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '', foto_url: '' };
 
+const CONSTRUCAO_CATEGORIES = [
+  'Hidráulica',
+  'Elétrica',
+  'Esgoto',
+  'Estrutural',
+  'Alvenaria',
+  'Acabamento',
+  'Pintura',
+  'Ferramentas',
+  'Segurança (EPI)',
+  'Marcenaria',
+  'Serralheria',
+  'OUTROS'
+];
+
 export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -82,6 +97,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const save = useMutation({
     mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       let produtoId = form.produto_id;
 
       // If it's a new product, create it first
@@ -102,9 +118,19 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           .single();
         if (prodError) throw prodError;
         produtoId = newProd.id;
+        
+        await supabase.from('logs_atividades' as any).insert({
+          obra_id: obraId,
+          user_id: user?.id,
+          user_email: user?.email,
+          acao: 'CADASTRAR',
+          entidade: 'PRODUTO',
+          detalhes: `Cadastrou o produto: ${newProduct.nome.trim()}`
+        });
       }
 
       if (!produtoId) throw new Error('Selecione ou cadastre um produto');
+      const prod = produtos.find((p: any) => p.id === produtoId) || { nome: newProduct.nome };
 
       const payload = {
         obra_id: obraId,
@@ -116,37 +142,53 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         nota_fiscal_url: form.nota_fiscal_url || null,
       };
 
-      if (editingId) {
-        const { error } = await supabase.from('entradas').update(payload).eq('id', editingId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('entradas').insert(payload);
-        if (error) throw error;
-      }
+      let res;
+      if (editingId) { res = await supabase.from('entradas').update(payload).eq('id', editingId); }
+      else { res = await supabase.from('entradas').insert(payload); }
+      if (res.error) throw res.error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: editingId ? 'EDITAR' : 'ENTRADA',
+        entidade: 'ESTOQUE',
+        detalhes: editingId 
+          ? `Editou entrada de: ${prod?.nome}` 
+          : `Registrou entrada de ${form.quantidade} ${prod?.unidade || ''} de ${prod?.nome}`
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
       setDialogOpen(false);
       setEditingId(null);
       setForm(emptyForm);
       setIsNewProduct(false);
       setNewProduct(emptyNewProduct);
       setProductSearch('');
-      toast.success(
-        isNewProduct
-          ? 'Produto cadastrado e entrada registrada!'
-          : editingId
-            ? 'Entrada atualizada!'
-            : 'Entrada registrada!'
-      );
+      toast.success(isNewProduct ? 'Produto cadastrado e entrada registrada!' : editingId ? 'Entrada atualizada!' : 'Entrada registrada!');
     },
     onError: (e: any) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from('entradas').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['entradas', obraId] }); queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); setDeleteId(null); toast.success('Entrada excluída! Estoque ajustado.'); },
+    mutationFn: async (id: string) => { 
+      const { data: { user } } = await supabase.auth.getUser();
+      const ent = entradas.find((e: any) => e.id === id);
+      const { error } = await supabase.from('entradas').delete().eq('id', id); if (error) throw error; 
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EXCLUIR',
+        entidade: 'ESTOQUE',
+        detalhes: `Excluiu entrada de: ${ent?.produtos?.nome || id}`
+      });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['entradas', obraId] }); queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDeleteId(null); toast.success('Entrada excluída! Estoque ajustado.'); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -192,24 +234,54 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <PageHeader title="Entradas" search={search} onSearchChange={setSearch} searchPlaceholder="Buscar entrada..." actionLabel="Entrada" onAction={resetDialog} />
+      <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
+        <div className="text-white">
+          <PageHeader 
+            title="Entradas" 
+            search={search} 
+            onSearchChange={setSearch} 
+            searchPlaceholder="Buscar entrada..." 
+            actionLabel="Entrada" 
+            onAction={resetDialog}
+          />
+        </div>
+        <div className="flex gap-4 mt-6">
+           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
+              <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Total Entradas</p>
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-display font-bold text-white leading-none">{entradas.length}</span>
+                <span className="text-xs text-white/30 mb-1">registros</span>
+              </div>
+           </div>
+           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
+              <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Volume Total</p>
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-display font-bold text-primary-foreground leading-none">{entradas.reduce((acc: number, e: any) => acc + Number(e.quantidade), 0)}</span>
+                <span className="text-xs text-white/30 mb-1">unidades</span>
+              </div>
+           </div>
+        </div>
+      </div>
 
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
         <p className="text-center py-16 text-muted-foreground">{search ? 'Nenhuma entrada encontrada' : 'Nenhuma entrada registrada'}</p>
       ) : (
         <div className="space-y-2">
           {filtered.map((e: any) => (
-            <Card key={e.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
+            <Card key={e.id} className="border-primary/10 border shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
               <CardContent className="p-4 flex items-center gap-4">
-                <div className="h-12 w-12 rounded-xl bg-success/10 flex items-center justify-center shrink-0">
-                  <ArrowDownToLine className="h-5 w-5 text-success" />
+                <div className="h-12 w-12 rounded-xl bg-primary flex items-center justify-center shrink-0 shadow-sm">
+                  <ArrowDownToLine className="h-5 w-5 text-primary-foreground" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-sm truncate">{e.produtos?.nome}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(e.data).toLocaleDateString('pt-BR')}{e.fornecedor && ` • ${e.fornecedor}`}</p>
+                  <p className="text-xs text-muted-foreground font-medium">{new Date(e.data).toLocaleDateString('pt-BR')}{e.fornecedor && ` • ${e.fornecedor}`}</p>
                 </div>
-                <span className="text-lg font-display font-bold text-success">+{Number(e.quantidade)}</span>
-                <div className="flex gap-1">
+                <div className="text-right flex flex-col items-end">
+                   <span className="text-lg font-display font-bold text-primary">+{Number(e.quantidade)}</span>
+                   <span className="text-[10px] text-muted-foreground uppercase">{e.produtos?.unidade || 'un'}</span>
+                </div>
+                <div className="flex gap-1 ml-2">
                   {e.nota_fiscal_url && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewNota(e.nota_fiscal_url)}><Eye className="h-4 w-4 text-info" /></Button>}
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(e)}><Pencil className="h-3.5 w-3.5" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(e.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
@@ -269,7 +341,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 {(form.produto_id || isNewProduct) && (
                   <div className="mt-2 flex items-center justify-between p-3 rounded-lg border bg-muted/30">
                     <div className="flex items-center gap-3">
-                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${isNewProduct ? 'bg-primary/10 text-primary' : 'bg-success/10 text-success'}`}>
+                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${isNewProduct ? 'bg-primary/10 text-primary' : 'bg-primary/10 text-primary'}`}>
                         {isNewProduct ? <Plus className="h-5 w-5" /> : <Package className="h-5 w-5" />}
                       </div>
                       <div>
@@ -355,7 +427,16 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                   </div>
                   <div className="space-y-1">
                     <label className="text-xs text-muted-foreground ml-1">Categoria</label>
-                    <Input placeholder="Opcional" value={newProduct.categoria} onChange={e => setNewProduct(p => ({ ...p, categoria: e.target.value }))} className="h-10" />
+                    <Select value={newProduct.categoria} onValueChange={v => setNewProduct(p => ({ ...p, categoria: v }))}>
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CONSTRUCAO_CATEGORIES.map(cat => (
+                          <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="space-y-1 col-span-2">
                     <label className="text-xs text-muted-foreground ml-1">Estoque Mínimo</label>

@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, TrendingDown, DollarSign } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, TrendingDown, DollarSign, LayoutDashboard, History, User } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { motion } from 'framer-motion';
 import { SkeletonCards } from '@/components/SkeletonList';
 import SkeletonList from '@/components/SkeletonList';
 import ImageThumbnail from '@/components/ImageThumbnail';
+import { startOfDay, endOfDay } from 'date-fns';
 
 export default function DashboardTab({ obraId }: { obraId: string }) {
   const { data: produtos = [], isLoading: loadingProdutos } = useQuery({
@@ -26,8 +27,9 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
   const { data: todaySaidas = [] } = useQuery({
     queryKey: ['today-saidas', obraId],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase.from('saidas').select('*, produtos(nome)').eq('obra_id', obraId).gte('data', today);
+      const start = startOfDay(new Date()).toISOString();
+      const end = endOfDay(new Date()).toISOString();
+      const { data } = await supabase.from('saidas').select('*, produtos(nome)').eq('obra_id', obraId).gte('data', start).lte('data', end);
       return data || [];
     },
   });
@@ -35,8 +37,9 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
   const { data: todayEntradas = [] } = useQuery({
     queryKey: ['today-entradas', obraId],
     queryFn: async () => {
-      const today = new Date().toISOString().split('T')[0];
-      const { data } = await supabase.from('entradas').select('*, produtos(nome)').eq('obra_id', obraId).gte('data', today);
+      const start = startOfDay(new Date()).toISOString();
+      const end = endOfDay(new Date()).toISOString();
+      const { data } = await supabase.from('entradas').select('*, produtos(nome)').eq('obra_id', obraId).gte('data', start).lte('data', end);
       return data || [];
     },
   });
@@ -63,6 +66,14 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
     },
   });
 
+  const { data: logs = [] } = useQuery({
+    queryKey: ['logs-atividades', obraId],
+    queryFn: async () => {
+      const { data } = await supabase.from('logs_atividades' as any).select('*').eq('obra_id', obraId).order('data', { ascending: false }).limit(6);
+      return data || [];
+    },
+  });
+
   if (loadingProdutos) {
     return (
       <div className="space-y-6">
@@ -84,24 +95,52 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
   ];
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <SidebarTrigger className="lg:hidden -ml-1" />
-        <h1 className="text-xl lg:text-2xl font-display font-bold">Dashboard</h1>
+    <div className="space-y-8 animate-fade-in pb-10">
+      {/* Header with Title */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
+             <LayoutDashboard className="h-6 w-6 text-white" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Controle de Estoque</h1>
+            <p className="text-sm text-muted-foreground font-medium">Buddy Construtora</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <SidebarTrigger className="lg:hidden h-10 w-10 border shadow-sm" />
+          <div className="px-4 py-2 bg-muted/50 rounded-xl border text-[10px] font-bold text-muted-foreground flex items-center gap-2 tracking-wider">
+            <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+            TEMPO REAL
+          </div>
+        </div>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Hero Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         {summaryCards.map((c, i) => (
-          <motion.div key={c.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}>
-            <Card className="border-none shadow-sm hover:shadow-md transition-shadow">
-              <CardContent className="p-5">
-                <div className={`h-10 w-10 rounded-xl ${c.bg} flex items-center justify-center mb-3`}>
-                  <c.icon className={`h-5 w-5 ${c.color}`} />
+          <motion.div 
+            key={c.label} 
+            initial={{ opacity: 0, y: 20 }} 
+            animate={{ opacity: 1, y: 0 }} 
+            transition={{ delay: i * 0.1, duration: 0.4 }}
+            whileHover={{ y: -4 }}
+          >
+            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 overflow-hidden group">
+              <CardContent className="p-6 relative">
+                 {/* Design Element */}
+                <div className={`absolute -right-4 -top-4 h-24 w-24 rounded-full ${c.bg} opacity-10 group-hover:scale-110 transition-transform duration-500`} />
+                
+                <div className="relative z-10">
+                  <div className={`h-12 w-12 rounded-2xl ${c.bg} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300`}>
+                    <c.icon className={`h-6 w-6 ${c.color}`} />
+                  </div>
+                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">{c.label}</h4>
+                  <div className="flex items-baseline gap-2">
+                    <p className="text-3xl font-display font-bold tabular-nums tracking-tight">{c.value}</p>
+                    {c.label === 'Estoque Baixo' && Number(c.value) > 0 && <span className="text-[10px] text-destructive font-bold">ALERTA</span>}
+                  </div>
                 </div>
-                <p className="text-2xl font-display font-bold">{c.value}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">{c.label}</p>
               </CardContent>
             </Card>
           </motion.div>
@@ -152,8 +191,11 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
                   <div key={f.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
                     <ImageThumbnail src={f.foto_url} alt={f.nome} type="ferramenta" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{f.nome}</p>
-                      <p className="text-xs text-muted-foreground">{f.pessoas?.nome || 'Sem responsável'}</p>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <p className="text-sm font-bold truncate">{f.nome}</p>
+                        {f.codigo && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">#{f.codigo}</span>}
+                      </div>
+                      <p className="text-xs text-muted-foreground font-medium">{f.pessoas?.nome || 'Sem responsável'}</p>
                     </div>
                     <Badge className="bg-warning/10 text-warning border-warning/20">Em uso</Badge>
                   </div>
@@ -169,9 +211,9 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
         <Card className="border-none shadow-sm">
           <CardContent className="p-5">
             <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
-              <ArrowDownToLine className="h-4 w-4 text-success" />
+              <ArrowDownToLine className="h-4 w-4 text-primary" />
               Entradas de Hoje
-              <Badge variant="secondary" className="ml-auto bg-success/10 text-success hover:bg-success/20 border-none">{todayEntradas.length}</Badge>
+              <Badge variant="secondary" className="ml-auto bg-primary/10 text-primary hover:bg-primary/20 border-none">{todayEntradas.length}</Badge>
             </h3>
             {todayEntradas.length === 0 ? (
               <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma entrada registrada hoje</p>
@@ -180,7 +222,7 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
                 {todayEntradas.slice(0, 8).map((e: any) => (
                   <div key={e.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                     <span className="text-sm truncate">{e.produtos?.nome}</span>
-                    <span className="text-sm font-bold text-success">+{Number(e.quantidade)}</span>
+                    <span className="text-sm font-bold text-primary">+{Number(e.quantidade)}</span>
                   </div>
                 ))}
               </div>
@@ -204,6 +246,38 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
                   <div key={s.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                     <span className="text-sm truncate">{s.produtos?.nome}</span>
                     <span className="text-sm font-bold text-destructive">-{Number(s.quantidade)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Activity Logs */}
+      <div className="grid grid-cols-1 gap-6">
+        <Card className="border-none shadow-sm">
+          <CardContent className="p-5">
+            <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+              <History className="h-4 w-4 text-primary" />
+              Últimas Atividades no Sistema
+            </h3>
+            {logs.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-10 text-center">Nenhuma atividade registrada</p>
+            ) : (
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {logs.map((log: any) => (
+                  <div key={log.id} className="flex gap-3 items-center p-3 bg-muted/30 rounded-xl border border-border/50 group hover:bg-muted/50 transition-colors">
+                    <div className="h-10 w-10 rounded-full bg-white flex items-center justify-center shrink-0 shadow-sm">
+                      <User className="h-5 w-5 text-primary/60" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] font-bold text-primary tracking-widest uppercase">{log.user_email?.split('@')[0] || 'Usuário'}</p>
+                        <span className="text-[10px] text-muted-foreground">{new Date(log.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                      <p className="text-xs text-foreground font-medium mt-0.5 truncate">{log.detalhes}</p>
+                    </div>
                   </div>
                 ))}
               </div>

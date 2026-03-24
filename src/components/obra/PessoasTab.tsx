@@ -30,17 +30,44 @@ export default function PessoasTab({ obraId }: { obraId: string }) {
 
   const save = useMutation({
     mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       const payload = { obra_id: obraId, nome: form.nome, funcao: form.funcao || null, telefone: form.telefone || null, foto_url: form.foto_url || null };
-      if (editingId) { const { error } = await supabase.from('pessoas').update(payload).eq('id', editingId); if (error) throw error; }
-      else { const { error } = await supabase.from('pessoas').insert(payload); if (error) throw error; }
+      
+      let res;
+      if (editingId) { res = await supabase.from('pessoas').update(payload).eq('id', editingId); }
+      else { res = await supabase.from('pessoas').insert(payload); }
+      
+      if (res.error) throw res.error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: editingId ? 'EDITAR' : 'CADASTRAR',
+        entidade: 'EQUIPE',
+        detalhes: `${editingId ? 'Editou' : 'Cadastrou'} o colaborador: ${form.nome}`
+      });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pessoas', obraId] }); setDialogOpen(false); setEditingId(null); setForm(emptyForm); toast.success(editingId ? 'Pessoa atualizada!' : 'Pessoa adicionada!'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pessoas', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDialogOpen(false); setEditingId(null); setForm(emptyForm); toast.success(editingId ? 'Pessoa atualizada!' : 'Pessoa adicionada!'); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from('pessoas').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pessoas', obraId] }); setDeleteId(null); toast.success('Pessoa excluída!'); },
+    mutationFn: async (id: string) => { 
+      const { data: { user } } = await supabase.auth.getUser();
+      const person = pessoas.find((p: any) => p.id === id);
+      const { error } = await supabase.from('pessoas').delete().eq('id', id); if (error) throw error; 
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EXCLUIR',
+        entidade: 'EQUIPE',
+        detalhes: `Excluiu o colaborador: ${person?.nome || id}`
+      });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['pessoas', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDeleteId(null); toast.success('Pessoa excluída!'); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -49,7 +76,27 @@ export default function PessoasTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <PageHeader title="Equipe" count={pessoas.length} search={search} onSearchChange={setSearch} searchPlaceholder="Buscar pessoa..." actionLabel="Pessoa" onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }} />
+      <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
+        <div className="text-white">
+          <PageHeader 
+            title="Equipe" 
+            search={search} 
+            onSearchChange={setSearch} 
+            searchPlaceholder="Buscar pessoa..." 
+            actionLabel="Pessoa" 
+            onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }} 
+          />
+        </div>
+        <div className="mt-4 flex gap-4">
+           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
+              <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Total Equipe</p>
+              <div className="flex items-end gap-2">
+                <span className="text-3xl font-display font-bold text-white leading-none">{pessoas.length}</span>
+                <span className="text-xs text-white/30 mb-1">colaboradores</span>
+              </div>
+           </div>
+        </div>
+      </div>
 
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
         <p className="text-center py-16 text-muted-foreground">{search ? 'Nenhuma pessoa encontrada' : 'Nenhuma pessoa cadastrada'}</p>

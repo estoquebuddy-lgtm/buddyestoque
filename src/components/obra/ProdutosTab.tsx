@@ -14,6 +14,27 @@ import ImageUpload from '@/components/ImageUpload';
 import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SkeletonList from '@/components/SkeletonList';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { FileDown, FileSpreadsheet, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import * as XLSX from 'xlsx';
+
+const CONSTRUCAO_CATEGORIES = [
+  'Hidráulica',
+  'Elétrica',
+  'Esgoto',
+  'Estrutural',
+  'Alvenaria',
+  'Acabamento',
+  'Pintura',
+  'Ferramentas',
+  'Segurança (EPI)',
+  'Marcenaria',
+  'Serralheria',
+  'OUTROS'
+];
 
 interface Props {
   obraId: string;
@@ -58,28 +79,67 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const save = useMutation({
     mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
       const payload = { obra_id: obraId, nome: form.nome, categoria: form.categoria || null, unidade: form.unidade, estoque_minimo: Number(form.estoque_minimo), custo_unitario: Number(form.custo_unitario), fornecedor: form.fornecedor || null, localizacao: form.localizacao || null, foto_url: form.foto_url || null, observacoes: form.observacoes || null };
-      if (editingId) { const { error } = await supabase.from('produtos').update(payload).eq('id', editingId); if (error) throw error; }
-      else { const { error } = await supabase.from('produtos').insert(payload); if (error) throw error; }
+      
+      let res;
+      if (editingId) { res = await supabase.from('produtos').update(payload).eq('id', editingId); }
+      else { res = await supabase.from('produtos').insert(payload); }
+      
+      if (res.error) throw res.error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: editingId ? 'EDITAR' : 'CADASTRAR',
+        entidade: 'PRODUTO',
+        detalhes: `${editingId ? 'Editou' : 'Cadastrou'} o produto: ${form.nome}`
+      });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); setDialogOpen(false); setEditingId(null); setForm(emptyForm); toast.success(editingId ? 'Produto atualizado!' : 'Produto adicionado!'); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDialogOpen(false); setEditingId(null); setForm(emptyForm); toast.success(editingId ? 'Produto atualizado!' : 'Produto adicionado!'); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from('produtos').delete().eq('id', id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); setDeleteId(null); toast.success('Produto excluído!'); },
+    mutationFn: async (id: string) => { 
+      const { data: { user } } = await supabase.auth.getUser();
+      const prod = produtos.find((p: any) => p.id === id);
+      const { error } = await supabase.from('produtos').delete().eq('id', id); if (error) throw error; 
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EXCLUIR',
+        entidade: 'PRODUTO',
+        detalhes: `Excluiu o produto: ${prod?.nome || id}`
+      });
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDeleteId(null); toast.success('Produto excluído!'); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const quickAction = useMutation({
     mutationFn: async ({ type, produtoId }: { type: 'entrada' | 'saida'; produtoId: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const prod = produtos.find((p: any) => p.id === produtoId);
       const table = type === 'entrada' ? 'entradas' : 'saidas';
       const { error } = await supabase.from(table).insert({ obra_id: obraId, produto_id: produtoId, quantidade: Number(quickQtd) });
       if (error) throw error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: type === 'entrada' ? 'ENTRADA' : 'SAIDA',
+        entidade: 'ESTOQUE',
+        detalhes: `${type === 'entrada' ? 'Adicionou' : 'Retirou'} ${quickQtd} ${prod?.unidade || ''} de ${prod?.nome || 'produto'}`
+      });
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
       queryClient.invalidateQueries({ queryKey: [vars.type === 'entrada' ? 'entradas' : 'saidas', obraId] });
       setQuickEntrada(null); setQuickSaida(null); setQuickQtd('');
       toast.success(vars.type === 'entrada' ? 'Entrada registrada!' : 'Saída registrada!');
@@ -100,6 +160,59 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     if (atual <= minimo) return <Badge className="bg-warning/10 text-warning border-warning/20">Baixo</Badge>;
     return <Badge className="bg-success/10 text-success border-success/20">OK</Badge>;
   };
+  
+  const handleExportPDF = () => {
+    const doc = new jsPDF();
+    const dataAtual = new Date().toLocaleDateString('pt-BR');
+    
+    doc.setFontSize(18);
+    doc.text('Relatório de Estoque - Buddy Estoque', 14, 22);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(100);
+    doc.text(`Data: ${dataAtual}`, 14, 30);
+    
+    const tableData = filtered.map((p: any) => [
+      p.nome,
+      p.categoria || '-',
+      `${Number(p.estoque_atual)} ${p.unidade}`,
+      `${Number(p.estoque_minimo)} ${p.unidade}`,
+      p.localizacao || '-',
+      p.fornecedor || '-'
+    ]);
+
+    autoTable(doc, {
+      startY: 36,
+      head: [['Produto', 'Categoria', 'Estoque Atual', 'Estoque Mínimo', 'Localização', 'Fornecedor']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [79, 70, 229] }, // primary-600 approx
+    });
+
+    doc.save(`estoque-${dataAtual.replace(/\//g, '-')}.pdf`);
+    toast.success('Relatório PDF gerado com sucesso!');
+  };
+
+  const handleExportExcel = () => {
+    const dataAtual = new Date().toLocaleDateString('pt-BR');
+    const worksheetData = filtered.map((p: any) => ({
+      'Produto': p.nome,
+      'Categoria': p.categoria || '-',
+      'Estoque Atual': Number(p.estoque_atual),
+      'Unidade': p.unidade,
+      'Estoque Mínimo': Number(p.estoque_minimo),
+      'Localização': p.localizacao || '-',
+      'Fornecedor': p.fornecedor || '-',
+      'Observações': p.observacoes || '-'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(worksheetData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Estoque');
+
+    XLSX.writeFile(workbook, `estoque-${dataAtual.replace(/\//g, '-')}.xlsx`);
+    toast.success('Planilha Excel gerada com sucesso!');
+  };
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -111,30 +224,64 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         searchPlaceholder="Buscar produto por nome ou categoria..."
         actionLabel="Produto"
         onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }}
-      />
+      >
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportPDF} className="h-9">
+            <FileText className="h-4 w-4 mr-1.5 text-destructive" />
+            PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExportExcel} className="h-9">
+            <FileSpreadsheet className="h-4 w-4 mr-1.5 text-success" />
+            Excel
+          </Button>
+        </div>
+      </PageHeader>
 
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
         <p className="text-center py-16 text-muted-foreground">{search ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}</p>
       ) : (
-        <div className="space-y-2">
-          {filtered.map((p: any) => (
-            <Card key={p.id} className="border-none shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.995]" onClick={() => setSelectedProduct(p)}>
-              <CardContent className="p-4 flex items-center gap-4">
-                <ImageThumbnail src={p.foto_url} alt={p.nome} type="produto" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{p.nome}</p>
-                  {p.categoria && <p className="text-xs text-muted-foreground">{p.categoria}</p>}
-                  {p.localizacao && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{p.localizacao}</p>}
-                </div>
-                <div className="text-right flex flex-col items-end gap-1">
-                  <span className="text-lg font-display font-bold">{Number(p.estoque_atual)}</span>
-                  <span className="text-[10px] text-muted-foreground">{p.unidade}</span>
-                </div>
-                {getStockBadge(Number(p.estoque_atual), Number(p.estoque_minimo))}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <Accordion type="multiple" defaultValue={CONSTRUCAO_CATEGORIES} className="space-y-3">
+          {[...CONSTRUCAO_CATEGORIES, 'Não Categorizado'].map((cat) => {
+            const productsInCat = filtered.filter(p => 
+              (cat === 'Não Categorizado' ? !p.categoria : p.categoria === cat)
+            );
+            
+            if (productsInCat.length === 0) return null;
+
+            return (
+              <AccordionItem key={cat} value={cat} className="border-none">
+                <AccordionTrigger className="hover:no-underline py-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-primary/10 text-primary border-none">
+                      {cat}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground font-normal">
+                      ({productsInCat.length} {productsInCat.length === 1 ? 'produto' : 'produtos'})
+                    </span>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="pt-2 space-y-2 pb-4">
+                  {productsInCat.map((p: any) => (
+                    <Card key={p.id} className="border-none shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.995]" onClick={() => setSelectedProduct(p)}>
+                      <CardContent className="p-4 flex items-center gap-4">
+                        <ImageThumbnail src={p.foto_url} alt={p.nome} type="produto" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{p.nome}</p>
+                          {p.localizacao && <p className="text-xs text-muted-foreground flex items-center gap-1"><MapPin className="h-3 w-3" />{p.localizacao}</p>}
+                        </div>
+                        <div className="text-right flex flex-col items-end gap-1">
+                          <span className="text-lg font-display font-bold">{Number(p.estoque_atual)}</span>
+                          <span className="text-[10px] text-muted-foreground">{p.unidade}</span>
+                        </div>
+                        {getStockBadge(Number(p.estoque_atual), Number(p.estoque_minimo))}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </AccordionContent>
+              </AccordionItem>
+            );
+          })}
+        </Accordion>
       )}
 
       {/* Product Detail Sheet */}
@@ -216,8 +363,17 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground ml-1">Categoria</label>
-              <Input placeholder="Ex: Hidráulica, Elétrica, Estrutural..." value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))} className="h-12" />
+              <label className="text-xs text-muted-foreground ml-1">Categoria *</label>
+              <Select value={form.categoria} onValueChange={v => setForm(f => ({ ...f, categoria: v }))}>
+                <SelectTrigger className="h-12">
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONSTRUCAO_CATEGORIES.map(cat => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
