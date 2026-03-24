@@ -2,13 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, TrendingDown, DollarSign, LayoutDashboard, History, User } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, DollarSign, LayoutDashboard, History, User, FileText } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { motion } from 'framer-motion';
 import { SkeletonCards } from '@/components/SkeletonList';
 import SkeletonList from '@/components/SkeletonList';
 import ImageThumbnail from '@/components/ImageThumbnail';
-import { startOfDay, endOfDay } from 'date-fns';
+import { startOfDay, endOfDay, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function DashboardTab({ obraId }: { obraId: string }) {
   const { data: produtos = [], isLoading: loadingProdutos } = useQuery({
