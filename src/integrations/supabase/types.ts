@@ -167,6 +167,38 @@ export type Database = {
           },
         ]
       }
+      importacoes_xml: {
+        Row: {
+          created_at: string
+          data: string
+          id: string
+          obra_id: string
+          total_itens: number
+        }
+        Insert: {
+          created_at?: string
+          data?: string
+          id?: string
+          obra_id: string
+          total_itens?: number
+        }
+        Update: {
+          created_at?: string
+          data?: string
+          id?: string
+          obra_id?: string
+          total_itens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "importacoes_xml_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       logs_atividades: {
         Row: {
           acao: string

@@ -2,13 +2,14 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, TrendingDown, DollarSign, LayoutDashboard, History, User } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, DollarSign, LayoutDashboard, History, User, FileText } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { motion } from 'framer-motion';
 import { SkeletonCards } from '@/components/SkeletonList';
 import SkeletonList from '@/components/SkeletonList';
 import ImageThumbnail from '@/components/ImageThumbnail';
-import { startOfDay, endOfDay } from 'date-fns';
+import { startOfDay, endOfDay, format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function DashboardTab({ obraId }: { obraId: string }) {
   const { data: produtos = [], isLoading: loadingProdutos } = useQuery({
@@ -73,6 +74,31 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
       return data || [];
     },
   });
+
+  const { data: importacoes = [] } = useQuery({
+    queryKey: ['importacoes-xml', obraId],
+    queryFn: async () => {
+      const { data } = await supabase.from('importacoes_xml' as any).select('*').eq('obra_id', obraId).order('data', { ascending: false });
+      return data || [];
+    },
+  });
+
+  // Group imports by month
+  const resumoMensal = (() => {
+    const map = new Map<string, { label: string; totalItens: number; totalXmls: number; sortKey: string }>();
+    (importacoes as any[]).forEach((imp: any) => {
+      const date = new Date(imp.data);
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = format(date, 'MMMM yyyy', { locale: ptBR });
+      if (!map.has(key)) {
+        map.set(key, { label, totalItens: 0, totalXmls: 0, sortKey: key });
+      }
+      const entry = map.get(key)!;
+      entry.totalItens += Number(imp.total_itens) || 0;
+      entry.totalXmls += 1;
+    });
+    return Array.from(map.values()).sort((a, b) => b.sortKey.localeCompare(a.sortKey));
+  })();
 
   if (loadingProdutos) {
     return (
@@ -253,6 +279,33 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Resumo Mensal de Compras (XML) */}
+      <Card className="border-none shadow-sm">
+        <CardContent className="p-5">
+          <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+            <FileText className="h-4 w-4 text-info" />
+            Resumo Mensal de Compras (XML)
+          </h3>
+          {resumoMensal.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma importação de XML registrada</p>
+          ) : (
+            <div className="divide-y divide-border">
+              {resumoMensal.map((m) => (
+                <div key={m.sortKey} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
+                  <div>
+                    <p className="text-sm font-medium capitalize">{m.label}</p>
+                    <p className="text-xs text-muted-foreground">{m.totalXmls} XML(s) importado(s)</p>
+                  </div>
+                  <Badge variant="secondary" className="bg-info/10 text-info border-info/20">
+                    {m.totalItens} itens
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Activity Logs */}
       <div className="grid grid-cols-1 gap-6">

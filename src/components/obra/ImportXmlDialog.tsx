@@ -141,9 +141,16 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
         });
       }
 
+      // Save XML import record
+      await supabase.from('importacoes_xml' as any).insert({
+        obra_id: obraId,
+        total_itens: items.length,
+      });
+
       queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
       queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['importacoes-xml', obraId] });
       toast.success(`${items.length} item(ns) importado(s) com sucesso!`);
       reset();
       onOpenChange(false);
