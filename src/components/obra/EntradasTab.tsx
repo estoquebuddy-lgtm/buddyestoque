@@ -238,14 +238,21 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     <div className="space-y-4 animate-fade-in">
       <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
         <div className="text-white">
-          <PageHeader 
-            title="Entradas" 
-            search={search} 
-            onSearchChange={setSearch} 
-            searchPlaceholder="Buscar entrada..." 
-            actionLabel="Entrada" 
-            onAction={resetDialog}
-          />
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex-1">
+              <PageHeader 
+                title="Entradas" 
+                search={search} 
+                onSearchChange={setSearch} 
+                searchPlaceholder="Buscar entrada..." 
+                actionLabel="Entrada" 
+                onAction={resetDialog}
+              />
+            </div>
+            <Button variant="outline" size="sm" className="border-white/20 text-white hover:bg-white/10 hover:text-white shrink-0" onClick={() => setXmlOpen(true)}>
+              <FileUp className="h-4 w-4 mr-1" /> Importar XML
+            </Button>
+          </div>
         </div>
         <div className="flex gap-4 mt-6">
            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
