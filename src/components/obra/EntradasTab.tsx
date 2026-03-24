@@ -155,7 +155,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         entidade: 'ESTOQUE',
         detalhes: editingId 
           ? `Editou entrada de: ${prod?.nome}` 
-          : `Registrou entrada de ${form.quantidade} ${prod?.unidade || ''} de ${prod?.nome}`
+          : `Registrou entrada de ${form.quantidade} ${'unidade' in prod ? prod.unidade : ''} de ${prod?.nome}`
       });
     },
     onSuccess: () => {
