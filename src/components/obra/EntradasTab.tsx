@@ -15,7 +15,7 @@ import ImageUpload from '@/components/ImageUpload';
 
 interface Props { obraId: string; fabOpen?: boolean; onFabClose?: () => void; }
 const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '' };
-const emptyNewProduct = { nome: '', unidade: 'un', categoria: '' };
+const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '' };
 
 export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const queryClient = useQueryClient();
@@ -94,7 +94,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             nome: newProduct.nome.trim(),
             unidade: newProduct.unidade || 'un',
             categoria: newProduct.categoria || null,
-            estoque_minimo: 0,
+            estoque_minimo: Number(newProduct.estoque_minimo) || 0,
             estoque_atual: 0,
           })
           .select('id')
@@ -337,8 +337,18 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               <div className="space-y-2 p-3 bg-primary/5 rounded-lg border border-primary/10">
                 <p className="text-xs font-medium text-primary">Dados do novo produto</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input placeholder="Unidade (ex: un, kg, m)" value={newProduct.unidade} onChange={e => setNewProduct(p => ({ ...p, unidade: e.target.value }))} className="h-10" />
-                  <Input placeholder="Categoria (opcional)" value={newProduct.categoria} onChange={e => setNewProduct(p => ({ ...p, categoria: e.target.value }))} className="h-10" />
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">Unidade</label>
+                    <Input placeholder="ex: un, kg, m" value={newProduct.unidade} onChange={e => setNewProduct(p => ({ ...p, unidade: e.target.value }))} className="h-10" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">Categoria</label>
+                    <Input placeholder="Opcional" value={newProduct.categoria} onChange={e => setNewProduct(p => ({ ...p, categoria: e.target.value }))} className="h-10" />
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <label className="text-xs text-muted-foreground ml-1">Estoque Mínimo</label>
+                    <Input placeholder="Defina um alerta de estoque baixo (ex: 5)" type="number" min="0" value={newProduct.estoque_minimo} onChange={e => setNewProduct(p => ({ ...p, estoque_minimo: e.target.value }))} className="h-10" />
+                  </div>
                 </div>
               </div>
             )}
