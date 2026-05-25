@@ -229,23 +229,14 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
+      {/* Navigation Tabs (Subtabs) */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <SidebarTrigger className="lg:hidden -ml-1" />
-          <div>
-            <h1 className="text-xl lg:text-2xl font-display font-bold">Relatório de Ferramentas</h1>
-            <p className="text-sm text-muted-foreground mt-1">Consulte utilização, histórico e baixe relatórios</p>
-          </div>
-        </div>
-        
-        {/* Navigation Tabs (Subtabs) */}
-        <div className="bg-muted p-1 rounded-xl flex gap-1 self-stretch sm:self-auto">
+        <div className="bg-muted p-1 rounded-xl flex gap-1 self-stretch sm:self-auto w-full sm:w-auto">
           <Button 
             variant="ghost" 
             size="sm"
             onClick={() => { setActiveSubTab('em-uso'); setSearch(''); }}
-            className={`rounded-lg h-9 font-semibold text-xs px-4 ${activeSubTab === 'em-uso' ? 'bg-[#0e1629] text-white shadow-sm' : 'text-muted-foreground'}`}
+            className={`rounded-lg h-9 font-semibold text-xs px-4 flex-1 sm:flex-none ${activeSubTab === 'em-uso' ? 'bg-[#0e1629] text-white shadow-sm' : 'text-muted-foreground'}`}
           >
             <Wrench className="h-3.5 w-3.5 mr-1.5" />
             Em Uso
@@ -254,7 +245,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
             variant="ghost" 
             size="sm"
             onClick={() => { setActiveSubTab('historico'); setSearch(''); }}
-            className={`rounded-lg h-9 font-semibold text-xs px-4 ${activeSubTab === 'historico' ? 'bg-[#0e1629] text-white shadow-sm' : 'text-muted-foreground'}`}
+            className={`rounded-lg h-9 font-semibold text-xs px-4 flex-1 sm:flex-none ${activeSubTab === 'historico' ? 'bg-[#0e1629] text-white shadow-sm' : 'text-muted-foreground'}`}
           >
             <History className="h-3.5 w-3.5 mr-1.5" />
             Movimentações (QR)

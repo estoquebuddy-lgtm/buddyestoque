@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
 import PageHeader from '@/components/PageHeader';
@@ -18,10 +18,46 @@ import { Switch } from '@/components/ui/switch';
 const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '' };
 
 const columnsList = [
-  { id: 'SOLICITADO', label: 'Solicitado', color: 'bg-amber-500/10 text-amber-600 border-amber-200/50', dot: 'bg-amber-500' },
-  { id: 'APROVADO', label: 'Aprovado', color: 'bg-blue-500/10 text-blue-600 border-blue-200/50', dot: 'bg-blue-500' },
-  { id: 'COMPRADO', label: 'Comprado', color: 'bg-purple-500/10 text-purple-600 border-purple-200/50', dot: 'bg-purple-500' },
-  { id: 'ENTREGUE', label: 'Entregue', color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200/50', dot: 'bg-emerald-500' },
+  { 
+    id: 'SOLICITADO', 
+    label: 'SOLICITADO', 
+    dot: 'bg-slate-400',
+    titleColor: 'text-slate-600',
+    badgeColor: 'bg-slate-200/50 text-slate-700',
+    colStyle: 'border-slate-200 bg-slate-50/50',
+    progressBarColor: 'bg-slate-300',
+    progressPercent: 25
+  },
+  { 
+    id: 'APROVADO', 
+    label: 'APROVADO', 
+    dot: 'bg-blue-500',
+    titleColor: 'text-blue-600',
+    badgeColor: 'bg-blue-100/60 text-blue-700',
+    colStyle: 'border-blue-200 bg-blue-50/10',
+    progressBarColor: 'bg-blue-500',
+    progressPercent: 50
+  },
+  { 
+    id: 'COMPRADO', 
+    label: 'COMPRADO', 
+    dot: 'bg-purple-500',
+    titleColor: 'text-purple-600',
+    badgeColor: 'bg-purple-100/60 text-purple-700',
+    colStyle: 'border-purple-200 bg-purple-50/10',
+    progressBarColor: 'bg-purple-500',
+    progressPercent: 75
+  },
+  { 
+    id: 'ENTREGUE', 
+    label: 'CONCLUÍDO', 
+    dot: 'bg-emerald-500',
+    titleColor: 'text-emerald-600',
+    badgeColor: 'bg-emerald-100/60 text-emerald-700',
+    colStyle: 'border-emerald-500 bg-emerald-50/10',
+    progressBarColor: 'bg-emerald-500',
+    progressPercent: 100
+  },
 ];
 
 const formatUserDisplay = (userObj: any) => {
@@ -258,21 +294,23 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
 
   const renderKanban = () => {
     return (
-      <div className="flex gap-4 overflow-x-auto pb-6 md:grid md:grid-cols-4 md:overflow-x-visible items-start scrollbar-thin">
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-4 gap-4 md:gap-6 pb-6 items-start">
         {columnsList.map(col => {
           const items = filtered.filter((s: any) => s.status === col.id);
           return (
-            <div key={col.id} className="flex-1 min-w-[280px] bg-slate-50/60 border border-slate-200/40 rounded-3xl p-4 space-y-4 flex flex-col min-h-[450px] max-h-[80vh] md:max-h-none overflow-y-auto">
-              <div className="flex items-center justify-between pb-2.5 border-b border-slate-200/60 shrink-0">
-                <div className="flex items-center gap-2">
-                  <span className={`h-2.5 w-2.5 rounded-full ${col.dot}`} />
-                  <span className="font-display font-bold text-sm text-slate-800">{col.label}</span>
-                </div>
-                <Badge variant="secondary" className="bg-slate-200/50 text-slate-700 font-bold text-xs h-5 px-2 rounded-full">
+            <div 
+              key={col.id} 
+              className={`w-full border-2 rounded-[2rem] p-5 space-y-4 flex flex-col min-h-[480px] max-h-[80vh] md:max-h-[calc(100vh-250px)] overflow-y-auto ${col.colStyle}`}
+            >
+              {/* Header with Title and Counter */}
+              <div className="flex items-center justify-between pb-3 shrink-0">
+                <span className={`font-display font-black text-xs tracking-wider ${col.titleColor}`}>{col.label}</span>
+                <span className={`font-display font-bold text-xs h-6 min-w-6 flex items-center justify-center px-1.5 rounded-full ${col.badgeColor}`}>
                   {items.length}
-                </Badge>
+                </span>
               </div>
 
+              {/* Card List */}
               <div className="space-y-4 flex-1 overflow-y-auto">
                 {items.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-12 text-muted-foreground bg-white/40 border border-dashed border-slate-200/80 rounded-2xl">
@@ -280,136 +318,54 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                   </div>
                 ) : (
                   items.map((s: any) => (
-                    <Card key={s.id} className="border border-slate-100/80 shadow-[0_4px_12px_rgba(0,0,0,0.02)] hover:shadow-[0_8px_24px_rgba(0,0,0,0.06)] hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group bg-white">
+                    <Card 
+                      key={s.id} 
+                      onClick={() => openStatusDialog(s)}
+                      className="border border-slate-100 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 hover:border-primary/30 transition-all duration-200 bg-white overflow-hidden relative group cursor-pointer"
+                    >
+                      {/* Urgency side indicator stripe */}
                       {s.urgencia === 'Urgente' && <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-500"></div>}
                       {s.urgencia === 'Alta' && <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>}
                       {s.urgencia === 'Normal' && <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>}
                       {s.urgencia === 'Baixa' && <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-300"></div>}
-                      <CardContent className="p-4 space-y-4">
-                        <div className="flex justify-between items-center">
+                      
+                      <CardContent className="p-5 pl-6 space-y-3.5">
+                        {/* Title and Urgency Badge */}
+                        <div className="flex justify-between items-start gap-2">
+                          <h4 className="font-bold text-base text-slate-800 leading-normal whitespace-pre-wrap">{s.descricao_materiais}</h4>
                           {urgenciaBadge(s.urgencia)}
-                          <div className="flex items-center gap-1">
-                            {s.status === 'ENTREGUE' && !s.arquivado && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg shrink-0 transition-colors"
-                                onClick={() => archiveMutation.mutate({ id: s.id, arquivado: true })}
-                                title="Arquivar solicitação"
-                              >
-                                <Archive className="h-4 w-4" />
-                              </Button>
-                            )}
-                            {s.arquivado && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-slate-400 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg shrink-0 transition-colors"
-                                onClick={() => archiveMutation.mutate({ id: s.id, arquivado: false })}
-                                title="Desarquivar solicitação"
-                              >
-                                <ArchiveRestore className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg shrink-0 transition-colors"
-                              onClick={() => setDeleteId(s.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                        </div>
+
+                        {/* Metadata Rows (User & Calendar) */}
+                        <div className="space-y-1.5 text-[10px] text-slate-500">
+                          <div className="flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">De: <strong className="text-slate-700 font-semibold">{formatUserDisplay(s.solicitante)}</strong></span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">Para: <strong className="text-slate-700 font-semibold">{formatUserDisplay(s.destinatario)}</strong></span>
                           </div>
                         </div>
 
-                        <p className="text-xs font-semibold text-slate-800 whitespace-pre-wrap leading-relaxed line-clamp-5">
-                          {s.descricao_materiais}
-                        </p>
-
-                        <div className="bg-slate-50/60 rounded-2xl p-3 space-y-2 text-[11px] border border-slate-100/60">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-slate-400 font-medium">Solicitante:</span>
-                            <span className="font-semibold text-slate-700 truncate bg-white px-2 py-0.5 rounded-lg border border-slate-100" title={s.solicitante?.email}>
-                              {formatUserDisplay(s.solicitante)}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-slate-400 font-medium">Destinatário:</span>
-                            <span className="font-semibold text-slate-700 truncate bg-white px-2 py-0.5 rounded-lg border border-slate-100" title={s.destinatario?.email}>
-                              {formatUserDisplay(s.destinatario)}
-                            </span>
-                          </div>
-                        </div>
-
+                        {/* Observação da resposta (se houver) */}
                         {s.observacao_resposta && (
-                          <div className="bg-blue-50/30 rounded-2xl p-3 border border-blue-100/40 text-[11px]">
-                            <p className="font-bold text-blue-600 mb-0.5">Observação da resposta:</p>
-                            <p className="text-slate-600 italic line-clamp-4 leading-relaxed">{s.observacao_resposta}</p>
+                          <div className="bg-slate-50/70 border border-slate-100 rounded-xl p-2.5 text-[10px] text-slate-600 italic">
+                            <strong className="block text-slate-700 font-bold not-italic mb-0.5">Obs:</strong>
+                            {s.observacao_resposta}
                           </div>
                         )}
 
-                        {/* Linha do Tempo / Histórico */}
-                        <div className="pt-3 border-t border-slate-100 space-y-2.5">
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Histórico de Fluxo</p>
-                          <div className="flex flex-col gap-2 pl-2 relative border-l border-slate-100 ml-1">
-                            {/* Solicitado */}
-                            <div className="flex items-center justify-between text-[10px] relative leading-none py-0.5">
-                              <div className="absolute -left-[13px] w-2.5 h-2.5 rounded-full bg-amber-500 ring-4 ring-amber-50" />
-                              <span className="text-slate-500 font-medium pl-2">Solicitado</span>
-                              <span className="text-slate-400 font-semibold font-mono text-[9px]">
-                                {new Date(s.data_solicitacao).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                            </div>
-
-                            {/* Aprovado */}
-                            <div className="flex items-center justify-between text-[10px] relative leading-none py-0.5">
-                              <div className={`absolute -left-[13px] w-2.5 h-2.5 rounded-full ring-4 ${s.data_aprovado ? 'bg-blue-500 ring-blue-50' : 'bg-slate-200 ring-transparent'}`} />
-                              <span className={`pl-2 font-medium ${s.data_aprovado ? 'text-slate-500' : 'text-slate-300'}`}>Aprovado</span>
-                              {s.data_aprovado ? (
-                                <span className="text-slate-400 font-semibold font-mono text-[9px]">
-                                  {new Date(s.data_aprovado).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-[9px] font-medium">-</span>
-                              )}
-                            </div>
-
-                            {/* Comprado */}
-                            <div className="flex items-center justify-between text-[10px] relative leading-none py-0.5">
-                              <div className={`absolute -left-[13px] w-2.5 h-2.5 rounded-full ring-4 ${s.data_comprado ? 'bg-purple-500 ring-purple-50' : 'bg-slate-200 ring-transparent'}`} />
-                              <span className={`pl-2 font-medium ${s.data_comprado ? 'text-slate-500' : 'text-slate-300'}`}>Comprado</span>
-                              {s.data_comprado ? (
-                                <span className="text-slate-400 font-semibold font-mono text-[9px]">
-                                  {new Date(s.data_comprado).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-[9px] font-medium">-</span>
-                              )}
-                            </div>
-
-                            {/* Entregue */}
-                            <div className="flex items-center justify-between text-[10px] relative leading-none py-0.5">
-                              <div className={`absolute -left-[13px] w-2.5 h-2.5 rounded-full ring-4 ${s.data_entregue ? 'bg-emerald-500 ring-emerald-50' : 'bg-slate-200 ring-transparent'}`} />
-                              <span className={`pl-2 font-medium ${s.data_entregue ? 'text-slate-500' : 'text-slate-300'}`}>Entregue</span>
-                              {s.data_entregue ? (
-                                <span className="text-slate-400 font-semibold font-mono text-[9px]">
-                                  {new Date(s.data_entregue).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                                </span>
-                              ) : (
-                                <span className="text-slate-300 text-[9px] font-medium">-</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-1 pt-2 justify-between border-t border-slate-100/60 mt-1">
+                        {/* Card Footer Actions */}
+                        <div className="flex items-center justify-between pt-2 border-t border-slate-100/60 mt-1 shrink-0 opacity-80 group-hover:opacity-100 transition-opacity">
                           <div className="flex items-center gap-0.5">
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg disabled:opacity-20 transition-all"
+                              className="h-6 w-6 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-md disabled:opacity-20 transition-all"
                               disabled={col.id === 'SOLICITADO'}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 const prevStatus = columnsList[columnsList.findIndex(c => c.id === col.id) - 1].id;
                                 updateStatus.mutate({ 
                                   id: s.id, 
@@ -428,9 +384,10 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-7 w-7 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg disabled:opacity-20 transition-all"
+                              className="h-6 w-6 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-md disabled:opacity-20 transition-all"
                               disabled={col.id === 'ENTREGUE'}
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 const nextStatus = columnsList[columnsList.findIndex(c => c.id === col.id) + 1].id;
                                 updateStatus.mutate({ 
                                   id: s.id, 
@@ -448,14 +405,58 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                             </Button>
                           </div>
 
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="h-7 text-[10px] font-bold px-2 rounded-lg transition-all hover:bg-slate-200"
-                            onClick={() => openStatusDialog(s)}
-                          >
-                            Status / Obs
-                          </Button>
+                          <div className="flex items-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 text-[10px] font-bold px-1.5 rounded-md hover:bg-slate-50 text-slate-500"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openStatusDialog(s);
+                              }}
+                            >
+                              Status
+                            </Button>
+                            {s.status === 'ENTREGUE' && !s.arquivado && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-md"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  archiveMutation.mutate({ id: s.id, arquivado: true });
+                                }}
+                                title="Arquivar"
+                              >
+                                <Archive className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            {s.arquivado && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50/5 rounded-md"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  archiveMutation.mutate({ id: s.id, arquivado: false });
+                                }}
+                                title="Desarquivar"
+                              >
+                                <ArchiveRestore className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteId(s.id);
+                              }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -585,12 +586,45 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Atualizar Solicitação</DialogTitle>
+            <DialogTitle>Detalhes da Solicitação</DialogTitle>
           </DialogHeader>
           {selectedSolicitacao && (
             <div className="space-y-4 pt-4">
               <div className="bg-muted/30 p-4 rounded-xl text-sm mb-4">
-                <p className="font-medium">{selectedSolicitacao.descricao_materiais}</p>
+                <p className="font-bold text-base whitespace-pre-wrap">{selectedSolicitacao.descricao_materiais}</p>
+                <div className="flex flex-col gap-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 shrink-0" /> De: <strong>{formatUserDisplay(selectedSolicitacao.solicitante)}</strong></span>
+                  <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 shrink-0" /> Para: <strong>{formatUserDisplay(selectedSolicitacao.destinatario)}</strong></span>
+                </div>
+              </div>
+
+              {/* Histórico na Modal */}
+              <div className="space-y-2 pb-4 border-b">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Histórico de Andamento</label>
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-slate-400" /> Solicitado</span>
+                    <span className="font-medium text-slate-700">{new Date(selectedSolicitacao.data_solicitacao).toLocaleDateString('pt-BR')}</span>
+                  </div>
+                  {selectedSolicitacao.data_aprovado && (
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-blue-400" /> Aprovado</span>
+                      <span className="font-medium text-slate-700">{new Date(selectedSolicitacao.data_aprovado).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  )}
+                  {selectedSolicitacao.data_comprado && (
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1.5"><ShoppingCart className="w-3.5 h-3.5 text-purple-400" /> Comprado</span>
+                      <span className="font-medium text-slate-700">{new Date(selectedSolicitacao.data_comprado).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  )}
+                  {selectedSolicitacao.data_entregue && (
+                    <div className="flex justify-between items-center">
+                      <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Concluído</span>
+                      <span className="font-medium text-slate-700">{new Date(selectedSolicitacao.data_entregue).toLocaleDateString('pt-BR')}</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-2">

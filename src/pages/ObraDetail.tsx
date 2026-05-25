@@ -7,7 +7,7 @@ import ObraSidebar from '@/components/ObraSidebar';
 import DashboardTab from '@/components/obra/DashboardTab';
 import ProdutosTab from '@/components/obra/ProdutosTab';
 import FerramentasTab from '@/components/obra/FerramentasTab';
-import RelatorioFerramentasTab from '@/components/obra/RelatorioFerramentasTab';
+import RelatoriosTab from '@/components/obra/RelatoriosTab';
 import EntradasTab from '@/components/obra/EntradasTab';
 import SaidasTab from '@/components/obra/SaidasTab';
 import PessoasTab from '@/components/obra/PessoasTab';
@@ -59,11 +59,11 @@ export default function ObraDetail() {
           onTabChange={setActiveTab}
         />
         <main className="flex-1 overflow-auto">
-          <div className="max-w-5xl mx-auto p-4 lg:p-8">
+          <div className="max-w-[1600px] mx-auto p-4 lg:p-8">
             {activeTab === 'dashboard' && <DashboardTab obraId={id!} onTabChange={setActiveTab} />}
             {activeTab === 'produtos' && <ProdutosTab obraId={id!} />}
             {activeTab === 'ferramentas' && <FerramentasTab obraId={id!} />}
-            {activeTab === 'relatorio-ferramentas' && <RelatorioFerramentasTab obraId={id!} />}
+            {activeTab === 'relatorios' && <RelatoriosTab obraId={id!} />}
             {activeTab === 'entradas' && <EntradasTab obraId={id!} />}
             {activeTab === 'saidas' && <SaidasTab obraId={id!} />}
             {activeTab === 'solicitacoes' && <SolicitacoesTab obraId={id!} />}

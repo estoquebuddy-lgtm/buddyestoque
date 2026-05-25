@@ -34,7 +34,7 @@ const menuItems = [
   { value: 'entradas', label: 'Entradas', icon: ArrowDownToLine },
   { value: 'saidas', label: 'Saídas', icon: ArrowUpFromLine },
   { value: 'ferramentas', label: 'Ferramentas', icon: Wrench },
-  { value: 'relatorio-ferramentas', label: 'Relatórios', icon: FileBarChart },
+  { value: 'relatorios', label: 'Relatórios', icon: FileBarChart },
   { value: 'solicitacoes', label: 'Solicitações', icon: MessageSquarePlus },
   { value: 'xml', label: 'Compras XML', icon: FileCode2 },
   { value: 'atividades', label: 'Atividades', icon: ListTodo },
@@ -48,16 +48,18 @@ interface ObraSidebarProps {
   onTabChange: (tab: string) => void;
 }
 
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+
 export default function ObraSidebar({ obraNome, obraEndereco, activeTab, onTabChange }: ObraSidebarProps) {
   const navigate = useNavigate();
-  const { state } = useSidebar();
+  const { state, toggleSidebar } = useSidebar();
   const collapsed = state === 'collapsed';
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="p-4">
         {!collapsed && (
-          <div className="space-y-1">
+          <div className="space-y-1 relative">
             <button
               onClick={() => navigate('/obras')}
               className="flex items-center gap-1.5 text-xs text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors mb-2"
@@ -65,19 +67,33 @@ export default function ObraSidebar({ obraNome, obraEndereco, activeTab, onTabCh
               <ChevronLeft className="h-3 w-3" />
               Voltar para obras
             </button>
-            <h2 className="font-display font-bold text-sm text-sidebar-foreground truncate">{obraNome}</h2>
+            <button 
+              onClick={toggleSidebar}
+              className="absolute right-0 top-0 text-sidebar-foreground/40 hover:text-sidebar-foreground transition-colors p-1 rounded-md"
+            >
+              <PanelLeftClose className="h-4 w-4" />
+            </button>
+            <h2 className="font-display font-bold text-sm text-sidebar-foreground truncate pr-6">{obraNome}</h2>
             {obraEndereco && (
               <p className="text-xs text-sidebar-foreground/50 truncate">{obraEndereco}</p>
             )}
           </div>
         )}
         {collapsed && (
-          <button
-            onClick={() => navigate('/obras')}
-            className="flex items-center justify-center text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </button>
+          <div className="flex flex-col gap-4 items-center justify-center">
+            <button
+              onClick={() => navigate('/obras')}
+              className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
+            <button 
+              onClick={toggleSidebar}
+              className="text-sidebar-foreground/60 hover:text-sidebar-foreground transition-colors"
+            >
+              <PanelLeftOpen className="h-4 w-4" />
+            </button>
+          </div>
         )}
       </SidebarHeader>
 
