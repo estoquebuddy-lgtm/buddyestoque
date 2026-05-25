@@ -80,7 +80,10 @@ export type Database = {
           nome: string
           obra_id: string
           observacoes: string | null
+          qr_code: string | null
           responsavel_id: string | null
+          status: string
+          ultima_movimentacao: string | null
         }
         Insert: {
           codigo?: string | null
@@ -93,7 +96,10 @@ export type Database = {
           nome: string
           obra_id: string
           observacoes?: string | null
+          qr_code?: string | null
           responsavel_id?: string | null
+          status?: string
+          ultima_movimentacao?: string | null
         }
         Update: {
           codigo?: string | null
@@ -106,7 +112,10 @@ export type Database = {
           nome?: string
           obra_id?: string
           observacoes?: string | null
+          qr_code?: string | null
           responsavel_id?: string | null
+          status?: string
+          ultima_movimentacao?: string | null
         }
         Relationships: [
           {
@@ -195,6 +204,58 @@ export type Database = {
             columns: ["obra_id"]
             isOneToOne: false
             referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      movimentacoes_ferramentas: {
+        Row: {
+          data_hora: string
+          ferramenta_id: string
+          id: string
+          obra_id: string
+          observacao: string | null
+          tipo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          data_hora?: string
+          ferramenta_id: string
+          id?: string
+          obra_id: string
+          observacao?: string | null
+          tipo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          data_hora?: string
+          ferramenta_id?: string
+          id?: string
+          obra_id?: string
+          observacao?: string | null
+          tipo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "movimentacoes_ferramentas_ferramenta_id_fkey"
+            columns: ["ferramenta_id"]
+            isOneToOne: false
+            referencedRelation: "ferramentas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimentacoes_ferramentas_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "movimentacoes_ferramentas_usuario_id_fkey"
+            columns: ["usuario_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
             referencedColumns: ["id"]
           },
         ]
