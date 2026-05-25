@@ -7,13 +7,15 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore } from 'lucide-react';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
 import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
+import { useAuth } from '@/hooks/useAuth';
+import { Switch } from '@/components/ui/switch';
 
-const emptyForm = { descricao: '', urgencia: 'Normal', solicitante_id: '', destinatario_id: '' };
+const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '' };
 
 const columnsList = [
   { id: 'SOLICITADO', label: 'Solicitado', color: 'bg-amber-500/10 text-amber-600 border-amber-200/50', dot: 'bg-amber-500' },
@@ -32,10 +34,12 @@ const formatUserDisplay = (userObj: any) => {
 };
 
 export default function SolicitacoesTab({ obraId }: { obraId: string }) {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [selectedSolicitacao, setSelectedSolicitacao] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
@@ -87,7 +91,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       const { data: { user } } = await supabase.auth.getUser();
       const payload = {
         obra_id: obraId,
-        solicitante_id: form.solicitante_id,
+        solicitante_id: user?.id,
         destinatario_id: form.destinatario_id,
         descricao_materiais: form.descricao,
         urgencia: form.urgencia,
@@ -192,10 +196,38 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = solicitacoes.filter((s: any) => 
-    s.descricao_materiais.toLowerCase().includes(search.toLowerCase()) || 
-    s.solicitante?.email?.toLowerCase().includes(search.toLowerCase())
-  );
+  const archiveMutation = useMutation({
+    mutationFn: async ({ id, arquivado }: { id: string; arquivado: boolean }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('solicitacoes_material' as any)
+        .update({ arquivado } as any)
+        .eq('id', id);
+      
+      if (error) throw error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EDITAR',
+        entidade: 'SOLICITACAO',
+        detalhes: arquivado ? `Solicitação arquivada` : `Solicitação desarquivada`
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['solicitacoes', obraId] });
+      toast.success(variables.arquivado ? 'Solicitação arquivada!' : 'Solicitação restaurada!');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const filtered = solicitacoes.filter((s: any) => {
+    const matchesSearch = s.descricao_materiais.toLowerCase().includes(search.toLowerCase()) || 
+      s.solicitante?.email?.toLowerCase().includes(search.toLowerCase());
+    const matchesArchived = showArchived ? s.arquivado === true : !s.arquivado;
+    return matchesSearch && matchesArchived;
+  });
 
   const statusBadge = (status: string) => {
     switch (status) {
@@ -256,14 +288,38 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                       <CardContent className="p-4 space-y-4">
                         <div className="flex justify-between items-center">
                           {urgenciaBadge(s.urgencia)}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg shrink-0 transition-colors"
-                            onClick={() => setDeleteId(s.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            {s.status === 'ENTREGUE' && !s.arquivado && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-slate-400 hover:text-primary hover:bg-primary/10 rounded-lg shrink-0 transition-colors"
+                                onClick={() => archiveMutation.mutate({ id: s.id, arquivado: true })}
+                                title="Arquivar solicitação"
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {s.arquivado && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-slate-400 hover:text-emerald-500 hover:bg-emerald-500/10 rounded-lg shrink-0 transition-colors"
+                                onClick={() => archiveMutation.mutate({ id: s.id, arquivado: false })}
+                                title="Desarquivar solicitação"
+                              >
+                                <ArchiveRestore className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg shrink-0 transition-colors"
+                              onClick={() => setDeleteId(s.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
 
                         <p className="text-xs font-semibold text-slate-800 whitespace-pre-wrap leading-relaxed line-clamp-5">
@@ -408,48 +464,55 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               </div>
             </div>
           );
-        })}
-      </div>
-    );
-  };
-
-  return (
+         return (
     <div className="space-y-4 animate-fade-in">
       <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
         <div className="text-white">
           <PageHeader 
             title="Solicitações" 
-            count={solicitacoes.length} 
+            count={solicitacoes.filter((s: any) => showArchived ? s.arquivado : !s.arquivado).length} 
             search={search} 
             onSearchChange={setSearch} 
             searchPlaceholder="Buscar por material ou solicitante..." 
             actionLabel="Solicitar Material" 
             onAction={() => { setForm(emptyForm); setDialogOpen(true); }} 
-          />
+          >
+            <div className="flex items-center gap-2 mt-2 select-none">
+              <Switch 
+                id="show-archived" 
+                checked={showArchived} 
+                onCheckedChange={setShowArchived} 
+                className="data-[state=checked]:bg-primary bg-white/20 border-none"
+              />
+              <label htmlFor="show-archived" className="text-xs font-bold text-white/75 cursor-pointer uppercase tracking-wider">
+                Ver Solicitações Arquivadas
+              </label>
+            </div>
+          </PageHeader>
         </div>
         <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-3">
            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Solicitados</p>
               <div className="flex items-end gap-2">
-                <span className="text-3xl font-display font-bold text-amber-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'SOLICITADO').length}</span>
+                <span className="text-3xl font-display font-bold text-amber-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'SOLICITADO' && (showArchived ? s.arquivado : !s.arquivado)).length}</span>
               </div>
            </div>
            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Aprovados</p>
               <div className="flex items-end gap-2">
-                <span className="text-3xl font-display font-bold text-blue-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'APROVADO').length}</span>
+                <span className="text-3xl font-display font-bold text-blue-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'APROVADO' && (showArchived ? s.arquivado : !s.arquivado)).length}</span>
               </div>
            </div>
            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Comprados</p>
               <div className="flex items-end gap-2">
-                <span className="text-3xl font-display font-bold text-purple-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'COMPRADO').length}</span>
+                <span className="text-3xl font-display font-bold text-purple-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'COMPRADO' && (showArchived ? s.arquivado : !s.arquivado)).length}</span>
               </div>
            </div>
            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Entregues</p>
               <div className="flex items-end gap-2">
-                <span className="text-3xl font-display font-bold text-emerald-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'ENTREGUE').length}</span>
+                <span className="text-3xl font-display font-bold text-emerald-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'ENTREGUE' && (showArchived ? s.arquivado : !s.arquivado)).length}</span>
               </div>
            </div>
            
@@ -457,7 +520,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               <FilePlus2 className="h-5 w-5 opacity-90" />
               <span className="text-[10px] font-bold uppercase tracking-wider text-center">Novo Pedido</span>
            </Button>
-        </div>
+         </div>
       </div>
 
       {isLoading ? <SkeletonList /> : renderKanban()}
@@ -470,16 +533,6 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
           </DialogHeader>
           <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="space-y-4 pt-4">
             
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quem está solicitando? *</label>
-              <Select value={form.solicitante_id} onValueChange={v => setForm(f => ({ ...f, solicitante_id: v }))}>
-                <SelectTrigger className="h-12"><SelectValue placeholder="Selecione o solicitante" /></SelectTrigger>
-                <SelectContent>
-                  {usuarios.map((u: any) => <SelectItem key={u.id} value={u.id}>{formatUserDisplay(u)} ({u.email})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Para quem enviar? *</label>
               <Select value={form.destinatario_id} onValueChange={v => setForm(f => ({ ...f, destinatario_id: v }))}>
@@ -516,7 +569,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               />
             </div>
 
-            <Button type="submit" className="w-full h-12 text-sm font-bold" disabled={save.isPending || !form.solicitante_id || !form.destinatario_id || !form.descricao.trim()}>
+            <Button type="submit" className="w-full h-12 text-sm font-bold" disabled={save.isPending || !user?.id || !form.destinatario_id || !form.descricao.trim()}>
               {save.isPending ? 'Enviando...' : 'Enviar Solicitação'}
             </Button>
           </form>

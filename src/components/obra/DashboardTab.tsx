@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,9 +15,10 @@ import { startOfDay, endOfDay } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 
-export default function DashboardTab({ obraId }: { obraId: string }) {
+export default function DashboardTab({ obraId, onTabChange }: { obraId: string; onTabChange?: (tab: string) => void }) {
   const { user } = useAuth();
   const { isAdmin } = useProfile();
+  const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
 
   // ─── Produtos ────────────────────────────────────────────
@@ -205,7 +207,13 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
                       key={s.id}
                       initial={{ opacity: 0, x: -8 }}
                       animate={{ opacity: 1, x: 0 }}
-                      className="bg-card border border-border rounded-xl p-4 flex items-start gap-3 shadow-sm hover:shadow-md transition-shadow"
+                      className="bg-card border border-border rounded-xl p-4 flex items-start gap-3 shadow-sm hover:shadow-md hover:border-primary/20 transition-all cursor-pointer"
+                      onClick={() => {
+                        if (onTabChange) {
+                          onTabChange('solicitacoes');
+                        }
+                        navigate(`/obra/${obraId}?tab=solicitacoes`);
+                      }}
                     >
                       <div className="mt-0.5 shrink-0">
                         <ShieldAlert className={`h-4 w-4 ${

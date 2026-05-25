@@ -60,7 +60,7 @@ export default function ObraDetail() {
         />
         <main className="flex-1 overflow-auto">
           <div className="max-w-5xl mx-auto p-4 lg:p-8">
-            {activeTab === 'dashboard' && <DashboardTab obraId={id!} />}
+            {activeTab === 'dashboard' && <DashboardTab obraId={id!} onTabChange={setActiveTab} />}
             {activeTab === 'produtos' && <ProdutosTab obraId={id!} />}
             {activeTab === 'ferramentas' && <FerramentasTab obraId={id!} />}
             {activeTab === 'relatorio-ferramentas' && <RelatorioFerramentasTab obraId={id!} />}
