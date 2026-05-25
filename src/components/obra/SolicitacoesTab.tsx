@@ -464,7 +464,12 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               </div>
             </div>
           );
-         return (
+        })}
+      </div>
+    );
+  };
+
+  return (
     <div className="space-y-4 animate-fade-in">
       <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
         <div className="text-white">
