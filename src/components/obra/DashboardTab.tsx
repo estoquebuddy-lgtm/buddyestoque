@@ -1,17 +1,25 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, DollarSign, LayoutDashboard, History, User, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, DollarSign, LayoutDashboard, Bell, Clock, ShieldAlert, ChevronDown, ChevronUp, MessageSquarePlus } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { SkeletonCards } from '@/components/SkeletonList';
 import SkeletonList from '@/components/SkeletonList';
 import ImageThumbnail from '@/components/ImageThumbnail';
-import { startOfDay, endOfDay, format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { startOfDay, endOfDay } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 
 export default function DashboardTab({ obraId }: { obraId: string }) {
+  const { user } = useAuth();
+  const { isAdmin } = useProfile();
+  const [notifOpen, setNotifOpen] = useState(false);
+
+  // ─── Produtos ────────────────────────────────────────────
   const { data: produtos = [], isLoading: loadingProdutos } = useQuery({
     queryKey: ['produtos', obraId],
     queryFn: async () => {
@@ -21,10 +29,10 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
   });
 
   const lowStock = produtos.filter((p: any) => Number(p.estoque_atual) <= Number(p.estoque_minimo));
-  const zeroStock = produtos.filter((p: any) => Number(p.estoque_atual) <= 0);
   const totalProdutos = produtos.length;
   const valorTotal = produtos.reduce((acc: number, p: any) => acc + (Number(p.estoque_atual) * Number(p.custo_unitario || 0)), 0);
 
+  // ─── Saídas / Entradas de hoje ────────────────────────────
   const { data: todaySaidas = [] } = useQuery({
     queryKey: ['today-saidas', obraId],
     queryFn: async () => {
@@ -45,21 +53,15 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
     },
   });
 
+  // ─── Ferramentas em uso ──────────────────────────────────
   const { data: ferramentasEmUso = [] } = useQuery({
     queryKey: ['ferramentas-uso', obraId],
     queryFn: async () => {
       const { data: ferramentasData, error } = await supabase.from('ferramentas').select('*').eq('obra_id', obraId).eq('estado', 'em_uso');
-      
-      if (error) {
-        console.error('Error fetching ferramentas:', error);
-        return [];
-      }
-      
+      if (error) return [];
       if (!ferramentasData || ferramentasData.length === 0) return [];
-      
       const { data: pessoasData } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId);
       const pessoasMap = new Map((pessoasData || []).map((p: any) => [p.id, p.nome]));
-      
       return ferramentasData.map((f: any) => ({
         ...f,
         pessoas: f.responsavel_id ? { nome: pessoasMap.get(f.responsavel_id) || null } : null,
@@ -67,6 +69,46 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
     },
   });
 
+  // ─── Solicitações pendentes para o painel de notificações ──
+  const formatUserDisplay = (userObj: any) => {
+    if (!userObj) return 'Desconhecido';
+    if (userObj.apelido) return userObj.apelido;
+    const email = userObj.email;
+    if (!email) return 'Desconhecido';
+    const name = email.split('@')[0].split('.')[0];
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  // Busca solicitações pendentes
+  // Admin: todas da obra | Usuário comum: apenas as dele
+  const { data: solicitacoesPendentes = [] } = useQuery({
+    queryKey: ['solicitacoes-pendentes-dashboard', obraId, isAdmin, user?.id],
+    queryFn: async () => {
+      if (!user?.id) return [];
+      let query = supabase
+        .from('solicitacoes_material' as any)
+        .select(`
+          *,
+          solicitante:profiles!solicitacoes_material_solicitante_id_fkey(email, apelido),
+          destinatario:profiles!solicitacoes_material_destinatario_id_fkey(email, apelido)
+        `)
+        .eq('obra_id', obraId)
+        .eq('status', 'SOLICITADO')
+        .order('data_solicitacao', { ascending: false });
+
+      // Se NÃO é admin, filtra só as endereçadas a mim
+      if (!isAdmin) {
+        query = query.eq('destinatario_id', user.id);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!obraId && !!user?.id,
+  });
+
+  // ─── Loading ──────────────────────────────────────────────
   if (loadingProdutos) {
     return (
       <div className="space-y-6">
@@ -86,6 +128,15 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
     { label: 'Ferramentas em Uso', value: ferramentasEmUso.length, icon: Wrench, color: 'text-info', bg: 'bg-info/10' },
     { label: 'Valor em Estoque', value: `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, icon: DollarSign, color: 'text-success', bg: 'bg-success/10' },
   ];
+
+  const urgenciaColor = (u: string) => {
+    switch (u) {
+      case 'Urgente': return 'bg-red-500/15 text-red-400 border-red-500/30';
+      case 'Alta': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
+      case 'Normal': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+      default: return 'bg-muted/30 text-muted-foreground border-muted/30';
+    }
+  };
 
   return (
     <div className="space-y-8 animate-fade-in pb-10">
@@ -108,6 +159,97 @@ export default function DashboardTab({ obraId }: { obraId: string }) {
           </div>
         </div>
       </div>
+
+      {/* ═══════ PAINEL DE SOLICITAÇÕES PENDENTES ═══════ */}
+      {solicitacoesPendentes.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <button
+            onClick={() => setNotifOpen((v) => !v)}
+            className="w-full flex items-center gap-3 bg-warning/10 border border-warning/25 rounded-2xl px-5 py-3.5 hover:bg-warning/15 transition-all duration-200 group"
+          >
+            <span className="relative">
+              <Bell className="h-5 w-5 text-warning" />
+              <span className="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center leading-none px-1">
+                {solicitacoesPendentes.length}
+              </span>
+            </span>
+            <span className="flex-1 text-left">
+              <span className="text-sm font-bold text-warning">
+                {solicitacoesPendentes.length === 1
+                  ? '1 solicitação pendente'
+                  : `${solicitacoesPendentes.length} solicitações pendentes`}
+                {isAdmin ? ' nesta obra' : ' para você'}
+              </span>
+              <span className="block text-xs text-warning/60 font-normal">
+                {isAdmin ? 'Você vê todas como administrador' : 'Clique para ver os detalhes'}
+              </span>
+            </span>
+            {notifOpen
+              ? <ChevronUp className="h-4 w-4 text-warning/70 group-hover:text-warning transition-colors" />
+              : <ChevronDown className="h-4 w-4 text-warning/70 group-hover:text-warning transition-colors" />
+            }
+          </button>
+
+          <AnimatePresence>
+            {notifOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                className="overflow-hidden"
+              >
+                <div className="mt-2 space-y-2 pb-2">
+                  {solicitacoesPendentes.map((s: any) => (
+                    <motion.div
+                      key={s.id}
+                      initial={{ opacity: 0, x: -8 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="bg-card border border-border rounded-xl p-4 flex items-start gap-3 shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      <div className="mt-0.5 shrink-0">
+                        <ShieldAlert className={`h-4 w-4 ${
+                          s.urgencia === 'Urgente' ? 'text-red-400'
+                          : s.urgencia === 'Alta' ? 'text-orange-400'
+                          : 'text-blue-400'
+                        }`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span className="text-sm font-bold text-foreground">
+                            {formatUserDisplay(s.solicitante)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">→</span>
+                          <span className="text-sm font-medium text-foreground">
+                            {formatUserDisplay(s.destinatario)}
+                          </span>
+                          <Badge className={`text-[10px] font-bold border ${urgenciaColor(s.urgencia)}`}>
+                            {s.urgencia}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mb-1.5">
+                          {s.descricao_materiais}
+                        </p>
+                        <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Clock className="h-3 w-3 shrink-0" />
+                          <span>
+                            {new Date(s.data_solicitacao).toLocaleDateString('pt-BR', {
+                              day: '2-digit',
+                              month: 'short',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
 
       {/* Hero Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">

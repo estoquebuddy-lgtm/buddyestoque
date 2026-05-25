@@ -19,7 +19,9 @@ import SkeletonList from '@/components/SkeletonList';
 export default function ObraDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialTab = searchParams.get('tab') || 'dashboard';
+  const [activeTab, setActiveTab] = useState(initialTab);
 
   const { data: obra, isLoading } = useQuery({
     queryKey: ['obra', id],

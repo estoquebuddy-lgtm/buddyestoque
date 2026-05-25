@@ -1,13 +1,13 @@
 import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Package, Plus, LogOut, Building2, MapPin, User, ChevronRight, Shield } from 'lucide-react';
 import AlterarSenhaDialog from '@/components/AlterarSenhaDialog';
 import { toast } from 'sonner';
@@ -26,12 +26,26 @@ export default function Obras() {
 
   const { data: obras = [], isLoading } = useQuery({
     queryKey: ['obras'],
-    queryFn: async () => { const { data, error } = await supabase.from('obras').select('*').order('created_at', { ascending: false }); if (error) throw error; return data; },
+    queryFn: async () => {
+      const { data, error } = await supabase.from('obras').select('*').order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
   });
 
   const createObra = useMutation({
-    mutationFn: async () => { const { error } = await supabase.from('obras').insert({ nome, endereco, responsavel, user_id: user!.id }); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['obras'] }); setOpen(false); setNome(''); setEndereco(''); setResponsavel(''); toast.success('Obra criada!'); },
+    mutationFn: async () => {
+      const { error } = await supabase.from('obras').insert({ nome, endereco, responsavel, user_id: user!.id });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['obras'] });
+      setOpen(false);
+      setNome('');
+      setEndereco('');
+      setResponsavel('');
+      toast.success('Obra criada!');
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -64,15 +78,21 @@ export default function Obras() {
           <h2 className="text-2xl font-display font-bold">Minhas Obras</h2>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-1.5" /> Nova Obra</Button>
+              <Button>
+                <Plus className="h-4 w-4 mr-1.5" /> Nova Obra
+              </Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle>Nova Obra</DialogTitle></DialogHeader>
-              <form onSubmit={e => { e.preventDefault(); createObra.mutate(); }} className="space-y-4">
-                <Input placeholder="Nome da obra *" value={nome} onChange={e => setNome(e.target.value)} required className="h-12" />
-                <Input placeholder="Endereço" value={endereco} onChange={e => setEndereco(e.target.value)} className="h-12" />
-                <Input placeholder="Responsável" value={responsavel} onChange={e => setResponsavel(e.target.value)} className="h-12" />
-                <Button type="submit" className="w-full h-12 text-base" disabled={createObra.isPending}>{createObra.isPending ? 'Criando...' : 'Criar Obra'}</Button>
+              <DialogHeader>
+                <DialogTitle>Nova Obra</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={(e) => { e.preventDefault(); createObra.mutate(); }} className="space-y-4">
+                <Input placeholder="Nome da obra *" value={nome} onChange={(e) => setNome(e.target.value)} required className="h-12" />
+                <Input placeholder="Endereço" value={endereco} onChange={(e) => setEndereco(e.target.value)} className="h-12" />
+                <Input placeholder="Responsável" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="h-12" />
+                <Button type="submit" className="w-full h-12 text-base" disabled={createObra.isPending}>
+                  {createObra.isPending ? 'Criando...' : 'Criar Obra'}
+                </Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -97,8 +117,16 @@ export default function Obras() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-base truncate">{obra.nome}</p>
-                      {obra.endereco && <p className="text-sm text-muted-foreground flex items-center gap-1 truncate"><MapPin className="h-3 w-3 shrink-0" /> {obra.endereco}</p>}
-                      {obra.responsavel && <p className="text-sm text-muted-foreground flex items-center gap-1"><User className="h-3 w-3 shrink-0" /> {obra.responsavel}</p>}
+                      {obra.endereco && (
+                        <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
+                          <MapPin className="h-3 w-3 shrink-0" /> {obra.endereco}
+                        </p>
+                      )}
+                      {obra.responsavel && (
+                        <p className="text-sm text-muted-foreground flex items-center gap-1">
+                          <User className="h-3 w-3 shrink-0" /> {obra.responsavel}
+                        </p>
+                      )}
                     </div>
                     <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
                   </CardContent>

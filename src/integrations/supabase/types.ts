@@ -427,18 +427,21 @@ export type Database = {
       }
       profiles: {
         Row: {
+          apelido: string | null
           approved: boolean
           created_at: string
           email: string
           id: string
         }
         Insert: {
+          apelido?: string | null
           approved?: boolean
           created_at?: string
           email: string
           id: string
         }
         Update: {
+          apelido?: string | null
           approved?: boolean
           created_at?: string
           email?: string
@@ -503,6 +506,9 @@ export type Database = {
       }
       solicitacoes_material: {
         Row: {
+          data_aprovado: string | null
+          data_comprado: string | null
+          data_entregue: string | null
           data_solicitacao: string
           descricao_materiais: string
           destinatario_id: string
@@ -514,6 +520,9 @@ export type Database = {
           urgencia: string
         }
         Insert: {
+          data_aprovado?: string | null
+          data_comprado?: string | null
+          data_entregue?: string | null
           data_solicitacao?: string
           descricao_materiais: string
           destinatario_id: string
@@ -525,6 +534,9 @@ export type Database = {
           urgencia?: string
         }
         Update: {
+          data_aprovado?: string | null
+          data_comprado?: string | null
+          data_entregue?: string | null
           data_solicitacao?: string
           descricao_materiais?: string
           destinatario_id?: string
@@ -540,7 +552,7 @@ export type Database = {
             foreignKeyName: "solicitacoes_material_destinatario_id_fkey"
             columns: ["destinatario_id"]
             isOneToOne: false
-            referencedRelation: "pessoas"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -554,7 +566,7 @@ export type Database = {
             foreignKeyName: "solicitacoes_material_solicitante_id_fkey"
             columns: ["solicitante_id"]
             isOneToOne: false
-            referencedRelation: "pessoas"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

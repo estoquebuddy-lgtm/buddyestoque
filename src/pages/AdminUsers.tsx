@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, CheckCircle2, XCircle, Shield, UserCheck, Clock } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { ArrowLeft, CheckCircle2, XCircle, Shield, UserCheck, Clock, Edit2, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
@@ -47,6 +49,21 @@ export default function AdminUsers() {
     onSuccess: (_, { approved }) => {
       queryClient.invalidateQueries({ queryKey: ['admin-profiles'] });
       toast.success(approved ? 'Usuário aprovado!' : 'Acesso revogado.');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const updateApelido = useMutation({
+    mutationFn: async ({ userId, apelido }: { userId: string; apelido: string }) => {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ apelido: apelido || null })
+        .eq('id', userId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-profiles'] });
+      toast.success('Apelido atualizado!');
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -130,39 +147,15 @@ export default function AdminUsers() {
                 <div className="grid gap-3">
                   {approvedUsers.map((user: any, i: number) => {
                     const roles = getUserRoles(user.id);
-                    const isAdmin = roles.includes('admin');
                     return (
                       <motion.div key={user.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                        <Card className="border-none shadow-sm">
-                          <CardContent className="p-4 flex items-center justify-between gap-4">
-                            <div className="min-w-0 flex-1 flex items-center gap-3">
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <p className="font-medium truncate">{user.email}</p>
-                                  {isAdmin && (
-                                    <Badge variant="secondary" className="text-xs">
-                                      <Shield className="h-3 w-3 mr-1" /> Admin
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                  Desde {new Date(user.created_at).toLocaleDateString('pt-BR')}
-                                </p>
-                              </div>
-                            </div>
-                            {!isAdmin && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => updateApproval.mutate({ userId: user.id, approved: false })}
-                                disabled={updateApproval.isPending}
-                                className="text-destructive hover:bg-destructive/10 shrink-0"
-                              >
-                                <XCircle className="h-4 w-4 mr-1" /> Revogar
-                              </Button>
-                            )}
-                          </CardContent>
-                        </Card>
+                        <UserRow 
+                          user={user} 
+                          roles={roles} 
+                          onUpdateApproval={(approved) => updateApproval.mutate({ userId: user.id, approved })}
+                          onUpdateApelido={(apelido) => updateApelido.mutate({ userId: user.id, apelido })}
+                          isApprovalPending={updateApproval.isPending}
+                        />
                       </motion.div>
                     );
                   })}
@@ -173,5 +166,92 @@ export default function AdminUsers() {
         )}
       </main>
     </div>
+  );
+}
+
+function UserRow({ user, roles, onUpdateApproval, onUpdateApelido, isApprovalPending }: { 
+  user: any; 
+  roles: string[]; 
+  onUpdateApproval: (approved: boolean) => void;
+  onUpdateApelido: (apelido: string) => void;
+  isApprovalPending: boolean;
+}) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [apelido, setApelido] = useState(user.apelido || '');
+  const isAdmin = roles.includes('admin');
+
+  return (
+    <Card className="border-none shadow-sm hover:shadow-md transition-shadow duration-200">
+      <CardContent className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <p className="font-semibold text-slate-800 truncate">{user.email}</p>
+            {isAdmin && (
+              <Badge variant="secondary" className="text-xs bg-primary/10 text-primary border-none">
+                <Shield className="h-3 w-3 mr-1" /> Admin
+              </Badge>
+            )}
+            {user.apelido && (
+              <Badge className="text-xs bg-slate-100 text-slate-700 border-none font-medium">
+                Exibido como: {user.apelido}
+              </Badge>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-2 pt-1">
+            {isEditing ? (
+              <div className="flex items-center gap-1.5 w-full max-w-[240px]">
+                <Input 
+                  size={10} 
+                  className="h-8 text-xs font-semibold py-1 px-2.5 rounded-lg" 
+                  value={apelido} 
+                  onChange={e => setApelido(e.target.value)} 
+                  placeholder="Apelido/Nome"
+                  autoFocus 
+                />
+                <Button 
+                  size="icon" 
+                  className="h-8 w-8 shrink-0 rounded-lg" 
+                  onClick={() => {
+                    onUpdateApelido(apelido.trim());
+                    setIsEditing(false);
+                  }}
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-muted-foreground">
+                  {user.apelido ? `Apelido definido` : "Sem apelido (exibe email)"}
+                </span>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="h-6 w-6 text-slate-400 hover:text-slate-700 rounded-md"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <Edit2 className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+          {!isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUpdateApproval(false)}
+              disabled={isApprovalPending}
+              className="text-destructive hover:bg-destructive/10 border-slate-200 shrink-0 h-9 font-semibold text-xs"
+            >
+              <XCircle className="h-3.5 w-3.5 mr-1" /> Revogar
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
