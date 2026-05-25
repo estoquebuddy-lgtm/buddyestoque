@@ -501,6 +501,64 @@ export type Database = {
           },
         ]
       }
+      solicitacoes_material: {
+        Row: {
+          data_solicitacao: string
+          descricao_materiais: string
+          destinatario_id: string
+          id: string
+          obra_id: string
+          observacao_resposta: string | null
+          solicitante_id: string
+          status: string
+          urgencia: string
+        }
+        Insert: {
+          data_solicitacao?: string
+          descricao_materiais: string
+          destinatario_id: string
+          id?: string
+          obra_id: string
+          observacao_resposta?: string | null
+          solicitante_id: string
+          status?: string
+          urgencia?: string
+        }
+        Update: {
+          data_solicitacao?: string
+          descricao_materiais?: string
+          destinatario_id?: string
+          id?: string
+          obra_id?: string
+          observacao_resposta?: string | null
+          solicitante_id?: string
+          status?: string
+          urgencia?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacoes_material_destinatario_id_fkey"
+            columns: ["destinatario_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_material_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_material_solicitante_id_fkey"
+            columns: ["solicitante_id"]
+            isOneToOne: false
+            referencedRelation: "pessoas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           id: string
