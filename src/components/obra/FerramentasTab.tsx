@@ -106,6 +106,45 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     }
   }, [qrCodeOpen, selectedTool]);
 
+  const downloadQRCode = () => {
+    if (!qrCodeUrl || !selectedTool) return;
+    const a = document.createElement('a');
+    a.href = qrCodeUrl;
+    a.download = `QR_${selectedTool.nome.replace(/\s+/g, '_')}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  const printQRCode = () => {
+    if (!qrCodeUrl || !selectedTool) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Imprimir QR Code - ${selectedTool.nome}</title>
+            <style>
+              body { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; font-family: sans-serif; }
+              img { width: 200px; height: 200px; margin-bottom: 20px; }
+              h1 { font-size: 24px; margin: 0 0 10px 0; }
+              p { font-size: 16px; margin: 0; color: #666; }
+            </style>
+          </head>
+          <body>
+            <h1>${selectedTool.nome}</h1>
+            <p>${selectedTool.codigo ? `Código: ${selectedTool.codigo}` : ''}</p>
+            <img src="${qrCodeUrl}" />
+            <script>
+              window.onload = () => { window.print(); window.close(); }
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
   // Scanner Lifecycle Control
   useEffect(() => {
     if (scannerOpen) {
