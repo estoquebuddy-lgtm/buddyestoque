@@ -13,6 +13,15 @@ import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
 
+const formatUserDisplay = (userObj: any) => {
+  if (!userObj) return 'Desconhecido';
+  if (userObj.apelido) return userObj.apelido;
+  const email = userObj.email;
+  if (!email) return 'Desconhecido';
+  const name = email.split('@')[0].split('.')[0];
+  return name.charAt(0).toUpperCase() + name.slice(1);
+};
+
 export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string }) {
   const [search, setSearch] = useState('');
   
@@ -27,8 +36,8 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
   const { data: filterPessoas = [] } = useQuery({
     queryKey: ['pessoas-relatorios-solic', obraId],
     queryFn: async () => {
-      const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome');
-      return data || [];
+      const { data } = await supabase.from('profiles').select('id, email, apelido').eq('approved', true).order('email');
+      return (data || []).map(p => ({ id: p.id, nome: formatUserDisplay(p) }));
     }
   });
 
@@ -37,8 +46,12 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
     queryKey: ['relatorio-solicitacoes', obraId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('solicitacoes_material')
-        .select('*')
+        .from('solicitacoes_material' as any)
+        .select(`
+          *,
+          solicitante:profiles!solicitacoes_material_solicitante_id_fkey(email, apelido),
+          destinatario:profiles!solicitacoes_material_destinatario_id_fkey(email, apelido)
+        `)
         .eq('obra_id', obraId)
         .order('data_solicitacao', { ascending: false });
       
@@ -49,13 +62,10 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
       
       if (!data || data.length === 0) return [];
       
-      const { data: pessoasData } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId);
-      const pessoasMap = new Map((pessoasData || []).map((p: any) => [p.id, p.nome]));
-      
       return data.map((s: any) => ({
         ...s,
-        solicitante_nome: s.solicitante_id ? (pessoasMap.get(s.solicitante_id) || 'Desconhecido') : 'Desconhecido',
-        destinatario_nome: s.destinatario_id ? (pessoasMap.get(s.destinatario_id) || 'Desconhecido') : 'Desconhecido',
+        solicitante_nome: formatUserDisplay(s.solicitante),
+        destinatario_nome: formatUserDisplay(s.destinatario),
       }));
     },
   });
