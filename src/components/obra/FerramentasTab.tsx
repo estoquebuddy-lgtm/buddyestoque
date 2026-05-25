@@ -458,15 +458,15 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         <div className="text-white">
           <PageHeader title="Ferramentas" count={ferramentas.length} search={search} onSearchChange={setSearch} searchPlaceholder="Buscar ferramenta..." actionLabel="Ferramenta" onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }} />
         </div>
-        <div className="mt-4 flex gap-4">
-           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
+        <div className="mt-4 grid grid-cols-2 md:flex md:flex-row gap-3">
+           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 md:flex-1 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Monitoramento</p>
               <div className="flex items-end gap-2">
                 <span className="text-3xl font-display font-bold text-white leading-none">{ferramentas.filter(f => f.estado === 'em_uso').length}</span>
                 <span className="text-xs text-white/30 mb-1">em uso</span>
               </div>
            </div>
-           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
+           <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 md:flex-1 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Disponível</p>
               <div className="flex items-end gap-2">
                 <span className="text-3xl font-display font-bold text-success leading-none">{ferramentas.filter(f => f.estado === 'disponivel').length}</span>
@@ -474,14 +474,14 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               </div>
            </div>
 
-           <Button variant="outline" className="h-auto py-5 bg-[#d97706]/10 border-warning/20 text-warning flex-1 flex flex-col items-center gap-1 hover:bg-[#d97706]/20 border-none transition-all hover:scale-105" onClick={() => setScannerOpen(true)}>
+           <Button variant="outline" className="h-auto py-4 md:py-5 bg-[#d97706]/10 border-warning/20 text-warning md:flex-1 flex flex-col items-center justify-center gap-1 hover:bg-[#d97706]/20 border-none transition-all hover:scale-105" onClick={() => setScannerOpen(true)}>
               <Camera className="h-5 w-5 opacity-90" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Escanear QR</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-center">Escanear QR</span>
            </Button>
            
-           <Button variant="outline" className="h-auto py-5 bg-white/5 border-white/10 text-white flex-1 flex flex-col items-center gap-1 hover:bg-white/10 border-none transition-all hover:scale-105" onClick={() => setHistoryOpen(true)}>
+           <Button variant="outline" className="h-auto py-4 md:py-5 bg-white/5 border-white/10 text-white md:flex-1 flex flex-col items-center justify-center gap-1 hover:bg-white/10 border-none transition-all hover:scale-105" onClick={() => setHistoryOpen(true)}>
               <History className="h-5 w-5 opacity-50" />
-              <span className="text-[10px] font-bold uppercase tracking-wider">Ver Histórico</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-center">Histórico</span>
            </Button>
         </div>
       </div>
