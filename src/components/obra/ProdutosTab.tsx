@@ -223,8 +223,12 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   };
 
   const getStockBadge = (atual: number, minimo: number) => {
-    if (atual <= 0) return <Badge variant="destructive">Crítico</Badge>;
-    if (atual <= minimo) return <Badge className="bg-warning/10 text-warning border-warning/20">Baixo</Badge>;
+    if (atual <= 0) {
+      // Only show Crítico if a minimum was defined — otherwise it's just empty stock, not an alert
+      if (minimo > 0) return <Badge variant="destructive">Crítico</Badge>;
+      return <Badge className="bg-muted text-muted-foreground border-muted-foreground/20">Zerado</Badge>;
+    }
+    if (minimo > 0 && atual <= minimo) return <Badge className="bg-warning/10 text-warning border-warning/20">Baixo</Badge>;
     return <Badge className="bg-success/10 text-success border-success/20">OK</Badge>;
   };
   
