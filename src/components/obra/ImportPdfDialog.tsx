@@ -41,6 +41,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
   const [items, setItems] = useState<PdfItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'upload' | 'review'>('upload');
+  const [descontoTotal, setDescontoTotal] = useState<number>(0);
 
   const makeItem = (overrides: Partial<PdfItem> = {}): PdfItem => ({
     id: crypto.randomUUID(),
@@ -59,6 +60,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
     setItems([]);
     setStep('upload');
     setLoading(false);
+    setDescontoTotal(0);
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -156,7 +158,14 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
       let ferramentasCreated = 0;
       let materiaisCreated = 0;
 
+      const subtotal = itemsToImport.reduce((acc, item) => acc + (item.quantidade * item.valor), 0);
+      const appliedDiscount = Math.min(descontoTotal, subtotal);
+
       for (const item of itemsToImport) {
+        const itemTotal = item.quantidade * item.valor;
+        const itemDiscount = subtotal > 0 ? (itemTotal / subtotal) * appliedDiscount : 0;
+        const finalUnitValue = item.quantidade > 0 ? Math.max(0, itemTotal - itemDiscount) / item.quantidade : 0;
+
         if (item.tipo === 'ferramenta') {
           // --- FERRAMENTA FLOW ---
           // 1. Find or create the virtual [FERRAMENTA] product for financial tracking
@@ -175,10 +184,14 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
           }
 
           // 2. Register the financial entry
+          const note = descontoTotal > 0
+            ? `[FERRAMENTA] Importado via PDF (Com desconto de R$ ${itemDiscount.toFixed(2)} proporcional de R$ ${descontoTotal.toFixed(2)})`
+            : '[FERRAMENTA] Importado via PDF';
+
           const { error: entErr } = await supabase.from('entradas').insert({
             obra_id: obraId, produto_id: produtoId,
-            quantidade: item.quantidade, valor_unitario: item.valor,
-            observacao: '[FERRAMENTA] Importado via PDF',
+            quantidade: item.quantidade, valor_unitario: finalUnitValue,
+            observacao: note,
           });
           if (entErr) throw entErr;
 
@@ -224,9 +237,14 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
             });
           }
 
+          const note = descontoTotal > 0
+            ? `Importado via PDF (Com desconto de R$ ${itemDiscount.toFixed(2)} proporcional de R$ ${descontoTotal.toFixed(2)})`
+            : 'Importado via PDF';
+
           const { error: entErr } = await supabase.from('entradas').insert({
             obra_id: obraId, produto_id: produtoId,
-            quantidade: item.quantidade, valor_unitario: item.valor,
+            quantidade: item.quantidade, valor_unitario: finalUnitValue,
+            observacao: note,
           });
           if (entErr) throw entErr;
 
@@ -257,6 +275,10 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
       setLoading(false);
     }
   };
+
+  const selectedItems = items.filter(i => i.selected && i.nome.trim() !== '' && i.quantidade > 0);
+  const subtotal = selectedItems.reduce((acc, item) => acc + (item.quantidade * item.valor), 0);
+  const totalComDesconto = Math.max(0, subtotal - descontoTotal);
 
   const ferramentaCount = items.filter(i => i.selected && i.tipo === 'ferramenta').reduce((acc, i) => acc + Math.round(i.quantidade || 0), 0);
   const materialCount = items.filter(i => i.selected && i.tipo === 'material').length;
@@ -364,15 +386,22 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                       placeholder="Qtd"
                       disabled={!item.selected}
                     />
-                    <Input
-                      type="number" step="0.01"
-                      value={item.valor || ''}
-                      onChange={(e) => updateItem(item.id, 'valor', parseFloat(e.target.value) || 0)}
-                      className="h-9 w-28 shrink-0"
-                      placeholder="R$ unit."
-                      disabled={!item.selected}
-                    />
-                    <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)} className="h-8 w-8 text-destructive shrink-0">
+                    <div className="flex flex-col gap-1 shrink-0">
+                      <Input
+                        type="number" step="0.01"
+                        value={item.valor || ''}
+                        onChange={(e) => updateItem(item.id, 'valor', parseFloat(e.target.value) || 0)}
+                        className="h-9 w-28 text-right"
+                        placeholder="R$ unit."
+                        disabled={!item.selected}
+                      />
+                      {descontoTotal > 0 && subtotal > 0 && item.selected && item.valor > 0 && (
+                        <span className="text-[10px] text-green-600 dark:text-green-400 font-semibold text-right pr-1">
+                          Desc: R$ {((item.valor * (1 - Math.min(descontoTotal, subtotal) / subtotal))).toFixed(2)}
+                        </span>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)} className="h-8 w-8 text-destructive shrink-0 mt-0.5">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -422,6 +451,66 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
             <Button variant="outline" size="sm" onClick={addItem} className="mt-2 h-9 border-dashed border-2">
               <Plus className="h-4 w-4 mr-2" /> Adicionar Linha Manualmente
             </Button>
+
+            {/* Resumo da Nota e Desconto */}
+            <div className="bg-muted/30 border border-border/60 rounded-xl p-4 mt-4 space-y-4">
+              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                Resumo da Importação
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                {/* Desconto Input */}
+                <div className="space-y-2">
+                  <label htmlFor="desconto-input" className="text-xs font-medium text-muted-foreground ml-1">
+                    Desconto Total da Nota (R$)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-sm text-muted-foreground font-medium">R$</span>
+                    <Input
+                      id="desconto-input"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={descontoTotal || ''}
+                      onChange={(e) => setDescontoTotal(Math.max(0, parseFloat(e.target.value) || 0))}
+                      className="pl-9 h-9 text-sm"
+                      placeholder="0,00"
+                    />
+                  </div>
+                </div>
+
+                {/* Valores */}
+                <div className="md:col-span-2 flex flex-col sm:flex-row justify-end items-start sm:items-center gap-6 text-sm">
+                  <div className="space-y-1 text-right">
+                    <span className="text-xs text-muted-foreground block">Subtotal</span>
+                    <span className="font-semibold text-base text-foreground">
+                      R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  
+                  {descontoTotal > 0 && (
+                    <div className="space-y-1 text-right text-green-600 dark:text-green-400">
+                      <span className="text-xs text-muted-foreground block">Desconto</span>
+                      <span className="font-semibold text-base font-medium">
+                        - R$ {Math.min(descontoTotal, subtotal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="space-y-1 text-right border-t sm:border-t-0 sm:border-l pt-2 sm:pt-0 sm:pl-6 border-border/85">
+                    <span className="text-xs text-muted-foreground block font-medium">Total com Desconto</span>
+                    <span className="font-bold text-lg text-primary block">
+                      R$ {totalComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {descontoTotal > 0 && subtotal > 0 && (
+                <p className="text-xs text-muted-foreground bg-green-500/5 border border-green-500/10 rounded-lg p-2.5">
+                  💡 O desconto de <strong>R$ {Math.min(descontoTotal, subtotal).toFixed(2)}</strong> será distribuído proporcionalmente ao valor total de cada item. O valor unitário final de cada item inserido já refletirá essa redução.
+                </p>
+              )}
+            </div>
 
             <div className="flex gap-3 pt-4 border-t mt-6">
               <Button variant="outline" className="flex-1 h-12" onClick={reset} disabled={loading}>
