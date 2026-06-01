@@ -51,11 +51,13 @@ interface ObraSidebarProps {
 }
 
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { useProfile } from '@/hooks/useProfile';
 
 export default function ObraSidebar({ obraNome, obraEndereco, activeTab, onTabChange }: ObraSidebarProps) {
   const navigate = useNavigate();
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === 'collapsed';
+  const { isAdmin } = useProfile();
 
   return (
     <Sidebar collapsible="icon">
@@ -106,6 +108,7 @@ export default function ObraSidebar({ obraNome, obraEndereco, activeTab, onTabCh
           <SidebarGroupContent>
             <SidebarMenu>
               {menuItems.map((item) => {
+                if (item.value === 'atividades' && !isAdmin) return null;
                 const isActive = activeTab === item.value;
                 return (
                   <SidebarMenuItem key={item.value}>

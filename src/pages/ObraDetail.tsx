@@ -16,6 +16,7 @@ import SolicitacoesTab from '@/components/obra/SolicitacoesTab';
 import FinanceiroTab from '@/components/obra/FinanceiroTab';
 import FerramentasFuncionarioTab from '@/components/obra/FerramentasFuncionarioTab';
 import SkeletonList from '@/components/SkeletonList';
+import { useProfile } from '@/hooks/useProfile';
 
 export default function ObraDetail() {
   const { id } = useParams<{ id: string }>();
@@ -23,6 +24,7 @@ export default function ObraDetail() {
   const searchParams = new URLSearchParams(window.location.search);
   const initialTab = searchParams.get('tab') || 'dashboard';
   const [activeTab, setActiveTab] = useState(initialTab);
+  const { isAdmin } = useProfile();
 
   const { data: obra, isLoading } = useQuery({
     queryKey: ['obra', id],
@@ -69,7 +71,7 @@ export default function ObraDetail() {
             {activeTab === 'entradas' && <EntradasTab obraId={id!} />}
             {activeTab === 'saidas' && <SaidasTab obraId={id!} />}
             {activeTab === 'solicitacoes' && <SolicitacoesTab obraId={id!} />}
-            {activeTab === 'atividades' && <AtividadesTab obraId={id!} />}
+            {activeTab === 'atividades' && isAdmin && <AtividadesTab obraId={id!} />}
             {activeTab === 'pessoas' && <PessoasTab obraId={id!} />}
             {activeTab === 'ferramentas-funcionario' && <FerramentasFuncionarioTab obraId={id!} />}
           </div>
