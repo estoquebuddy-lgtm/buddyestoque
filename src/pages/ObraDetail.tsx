@@ -15,6 +15,7 @@ import AtividadesTab from '@/components/obra/AtividadesTab';
 import ImportacaoXMLTab from '@/components/obra/ImportacaoXMLTab';
 import SolicitacoesTab from '@/components/obra/SolicitacoesTab';
 import FinanceiroTab from '@/components/obra/FinanceiroTab';
+import FerramentasFuncionarioTab from '@/components/obra/FerramentasFuncionarioTab';
 import SkeletonList from '@/components/SkeletonList';
 
 export default function ObraDetail() {
@@ -72,6 +73,7 @@ export default function ObraDetail() {
             {activeTab === 'atividades' && <AtividadesTab obraId={id!} />}
             {activeTab === 'xml' && <ImportacaoXMLTab obraId={id!} />}
             {activeTab === 'pessoas' && <PessoasTab obraId={id!} />}
+            {activeTab === 'ferramentas-funcionario' && <FerramentasFuncionarioTab obraId={id!} />}
           </div>
         </main>
       </div>
