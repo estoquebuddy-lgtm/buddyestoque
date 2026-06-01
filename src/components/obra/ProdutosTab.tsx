@@ -112,6 +112,10 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     mutationFn: async (id: string) => { 
       const { data: { user } } = await supabase.auth.getUser();
       const prod = produtos.find((p: any) => p.id === id);
+      
+      await supabase.from('entradas').delete().eq('produto_id', id);
+      await supabase.from('saidas').delete().eq('produto_id', id);
+      
       const { error } = await supabase.from('produtos').delete().eq('id', id); if (error) throw error; 
 
       await supabase.from('logs_atividades' as any).insert({
@@ -120,10 +124,17 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         user_email: user?.email,
         acao: 'EXCLUIR',
         entidade: 'PRODUTO',
-        detalhes: `Excluiu o produto: ${prod?.nome || id}`
+        detalhes: `Excluiu o produto e histórico: ${prod?.nome || id}`
       });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDeleteId(null); toast.success('Produto excluído!'); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['produtos', obraId] }); 
+      queryClient.invalidateQueries({ queryKey: ['entradas', obraId] }); 
+      queryClient.invalidateQueries({ queryKey: ['saidas', obraId] }); 
+      queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); 
+      setDeleteId(null); 
+      toast.success('Produto excluído!'); 
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -132,6 +143,9 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       const selectedProds = produtos.filter((p: any) => selectedIds.includes(p.id));
       
+      await supabase.from('entradas').delete().in('produto_id', selectedIds);
+      await supabase.from('saidas').delete().in('produto_id', selectedIds);
+
       const { error } = await supabase.from('produtos').delete().in('id', selectedIds);
       if (error) throw error;
 
@@ -148,6 +162,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['saidas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
       setSelectedIds([]);
       setBulkDeleteOpen(false);

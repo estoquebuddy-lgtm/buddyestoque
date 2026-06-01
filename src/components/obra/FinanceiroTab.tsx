@@ -12,6 +12,8 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
+import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 
 interface FinanceiroTabProps {
   obraId: string;
@@ -20,6 +22,30 @@ interface FinanceiroTabProps {
 export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
   const [search, setSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const channel1 = supabase.channel('financeiro-produtos')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos', filter: `obra_id=eq.${obraId}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      }).subscribe();
+      
+    const channel2 = supabase.channel('financeiro-entradas')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'entradas', filter: `obra_id=eq.${obraId}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
+      }).subscribe();
+      
+    const channel3 = supabase.channel('financeiro-saidas')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'saidas', filter: `obra_id=eq.${obraId}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['saidas', obraId] });
+      }).subscribe();
+
+    return () => {
+      supabase.removeChannel(channel1);
+      supabase.removeChannel(channel2);
+      supabase.removeChannel(channel3);
+    };
+  }, [obraId, queryClient]);
 
   // Queries
   const { data: produtos = [], isLoading: loadingProds } = useQuery({
