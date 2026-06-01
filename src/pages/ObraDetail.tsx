@@ -12,7 +12,6 @@ import EntradasTab from '@/components/obra/EntradasTab';
 import SaidasTab from '@/components/obra/SaidasTab';
 import PessoasTab from '@/components/obra/PessoasTab';
 import AtividadesTab from '@/components/obra/AtividadesTab';
-import ImportacaoXMLTab from '@/components/obra/ImportacaoXMLTab';
 import SolicitacoesTab from '@/components/obra/SolicitacoesTab';
 import FinanceiroTab from '@/components/obra/FinanceiroTab';
 import FerramentasFuncionarioTab from '@/components/obra/FerramentasFuncionarioTab';
@@ -71,7 +70,6 @@ export default function ObraDetail() {
             {activeTab === 'saidas' && <SaidasTab obraId={id!} />}
             {activeTab === 'solicitacoes' && <SolicitacoesTab obraId={id!} />}
             {activeTab === 'atividades' && <AtividadesTab obraId={id!} />}
-            {activeTab === 'xml' && <ImportacaoXMLTab obraId={id!} />}
             {activeTab === 'pessoas' && <PessoasTab obraId={id!} />}
             {activeTab === 'ferramentas-funcionario' && <FerramentasFuncionarioTab obraId={id!} />}
           </div>

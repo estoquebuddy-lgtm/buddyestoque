@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
@@ -83,6 +84,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [observacao, setObservacao] = useState('');
+  const [selectedProdutoId, setSelectedProdutoId] = useState('');
+  const [selectedQtd, setSelectedQtd] = useState('');
 
   const { data: usuarios = [] } = useQuery({
     queryKey: ['profiles-list'],
@@ -95,6 +98,20 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       if (error) throw error;
       return data || [];
     },
+  });
+
+  const { data: produtos = [] } = useQuery({
+    queryKey: ['produtos', obraId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('produtos')
+        .select('id, nome, unidade')
+        .eq('obra_id', obraId)
+        .order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!obraId,
   });
 
   const { data: solicitacoes = [], isLoading } = useQuery({
@@ -570,11 +587,44 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
 
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Materiais Necessários *</label>
+              
+              <div className="flex gap-2">
+                <Select value={selectedProdutoId} onValueChange={setSelectedProdutoId}>
+                  <SelectTrigger className="flex-1 h-11"><SelectValue placeholder="Puxar do estoque..." /></SelectTrigger>
+                  <SelectContent>
+                    {produtos.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Input 
+                  type="number" 
+                  placeholder="Qtd" 
+                  className="w-20 h-11" 
+                  value={selectedQtd} 
+                  onChange={e => setSelectedQtd(e.target.value)} 
+                />
+                <Button 
+                  type="button" 
+                  variant="secondary" 
+                  className="h-11 px-4 font-bold"
+                  onClick={() => {
+                    const p = produtos.find((x: any) => x.id === selectedProdutoId);
+                    if (p && selectedQtd) {
+                      const linha = `${selectedQtd} ${p.unidade} - ${p.nome}`;
+                      setForm(f => ({ ...f, descricao: f.descricao ? f.descricao + '\n' + linha : linha }));
+                      setSelectedProdutoId('');
+                      setSelectedQtd('');
+                    }
+                  }}
+                >
+                  Adicionar
+                </Button>
+              </div>
+
               <Textarea 
-                placeholder="Ex: 5 sacos de cimento Votorantim, 10 metros de areia fina..." 
+                placeholder="Ex: 5 sacos de cimento... (Digite livremente ou adicione usando o estoque acima)" 
                 value={form.descricao} 
                 onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} 
-                className="min-h-[120px] resize-none"
+                className="min-h-[120px] resize-none mt-2"
                 required
               />
             </div>

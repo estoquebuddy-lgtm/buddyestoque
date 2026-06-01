@@ -10,7 +10,6 @@ import {
   FileBarChart,
   ArrowLeft,
   ChevronLeft,
-  FileCode2,
   ListTodo,
   MessageSquarePlus,
   DollarSign
@@ -39,7 +38,6 @@ const menuItems = [
   { value: 'ferramentas-funcionario', label: 'Ferr. por Funcionário', icon: Users2 },
   { value: 'solicitacoes', label: 'Solicitações', icon: MessageSquarePlus },
   { value: 'relatorios', label: 'Relatórios', icon: FileBarChart },
-  { value: 'xml', label: 'Compras XML', icon: FileCode2 },
   { value: 'atividades', label: 'Atividades', icon: ListTodo },
   { value: 'pessoas', label: 'Equipe', icon: Users },
   { value: 'financeiro', label: 'Financeiro', icon: DollarSign },

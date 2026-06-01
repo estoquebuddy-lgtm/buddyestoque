@@ -1,11 +1,33 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
-import { History, User } from 'lucide-react';
+import { History, User, Trash2 } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import SkeletonList from '@/components/SkeletonList';
+import { useProfile } from '@/hooks/useProfile';
+import { Button } from '@/components/ui/button';
+import ConfirmDialog from '@/components/ConfirmDialog';
+import { useState } from 'react';
+import { toast } from 'sonner';
 
 export default function AtividadesTab({ obraId }: { obraId: string }) {
+  const { isAdmin } = useProfile();
+  const queryClient = useQueryClient();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+
+  const clearLogs = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from('logs_atividades' as any).delete().eq('obra_id', obraId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
+      toast.success('Todas as atividades foram apagadas.');
+      setDeleteConfirmOpen(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const { data: logs = [], isLoading } = useQuery({
     queryKey: ['logs-atividades', obraId],
     queryFn: async () => {
@@ -28,9 +50,17 @@ export default function AtividadesTab({ obraId }: { obraId: string }) {
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
-      <div className="flex items-center gap-3">
-        <SidebarTrigger className="lg:hidden -ml-1" />
-        <h1 className="text-xl lg:text-2xl font-display font-bold">Atividades Recentes</h1>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <SidebarTrigger className="lg:hidden -ml-1" />
+          <h1 className="text-xl lg:text-2xl font-display font-bold">Atividades Recentes</h1>
+        </div>
+        {isAdmin && logs.length > 0 && (
+          <Button variant="destructive" size="sm" onClick={() => setDeleteConfirmOpen(true)}>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Apagar Todas
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6">
@@ -65,6 +95,15 @@ export default function AtividadesTab({ obraId }: { obraId: string }) {
           </CardContent>
         </Card>
       </div>
+
+      <ConfirmDialog 
+        open={deleteConfirmOpen} 
+        onOpenChange={setDeleteConfirmOpen} 
+        title="Apagar Histórico" 
+        description="Tem certeza de que deseja apagar permanentemente todas as atividades? Esta ação não pode ser desfeita." 
+        onConfirm={() => clearLogs.mutate()} 
+        loading={clearLogs.isPending} 
+      />
     </div>
   );
 }

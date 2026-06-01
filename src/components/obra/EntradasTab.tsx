@@ -12,13 +12,12 @@ import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SkeletonList from '@/components/SkeletonList';
 import ImageUpload from '@/components/ImageUpload';
-import ImportXmlDialog from '@/components/obra/ImportXmlDialog';
 import ImportPdfDialog from '@/components/obra/ImportPdfDialog';
 import { useProfile } from '@/hooks/useProfile';
 
 interface Props { obraId: string; fabOpen?: boolean; onFabClose?: () => void; }
 const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '' };
-const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '', foto_url: '' };
+const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '', foto_url: '', localizacao: '' };
 
 const CONSTRUCAO_CATEGORIES = [
   'Hidráulica',
@@ -44,7 +43,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewNota, setViewNota] = useState<string | null>(null);
-  const [xmlOpen, setXmlOpen] = useState(false);
   const [pdfOpen, setPdfOpen] = useState(false);
 
   // New product inline state
@@ -116,6 +114,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             nome: newProduct.nome.trim(),
             unidade: newProduct.unidade || 'un',
             categoria: newProduct.categoria || null,
+            localizacao: newProduct.localizacao || null,
             foto_url: newProduct.foto_url || null,
             estoque_minimo: Number(newProduct.estoque_minimo) || 0,
             estoque_atual: 0,
@@ -254,9 +253,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             <div className="flex flex-col gap-2 shrink-0 pt-1">
               <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={resetDialog}>
                 <ArrowDownToLine className="h-4 w-4 mr-1" /> Entrada
-              </Button>
-              <Button size="sm" className="bg-info hover:bg-info/90 text-white" onClick={() => setXmlOpen(true)}>
-                <FileUp className="h-4 w-4 mr-1" /> Importar XML
               </Button>
               <Button size="sm" className="bg-info/20 hover:bg-info/30 text-info border border-info/50" onClick={() => setPdfOpen(true)}>
                 <FileText className="h-4 w-4 mr-1" /> Importar PDF
@@ -498,9 +494,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-1 col-span-2">
+                  <div className="space-y-1">
                     <label className="text-xs text-muted-foreground ml-1">Estoque Mínimo</label>
                     <Input placeholder="Alerta de estoque baixo (ex: 5)" type="number" min="0" value={newProduct.estoque_minimo} onChange={e => setNewProduct(p => ({ ...p, estoque_minimo: e.target.value }))} className="h-10" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-xs text-muted-foreground ml-1">Localização</label>
+                    <Input placeholder="Ex: Prateleira 3" value={newProduct.localizacao} onChange={e => setNewProduct(p => ({ ...p, localizacao: e.target.value }))} className="h-10" />
                   </div>
                 </div>
               </div>
@@ -543,7 +543,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Entrada" description="A quantidade será subtraída do estoque automaticamente." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
 
-      <ImportXmlDialog obraId={obraId} open={xmlOpen} onOpenChange={setXmlOpen} />
       <ImportPdfDialog obraId={obraId} open={pdfOpen} onOpenChange={setPdfOpen} />
     </div>
   );
