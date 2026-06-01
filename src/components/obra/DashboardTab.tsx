@@ -30,7 +30,10 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
     },
   });
 
-  const lowStock = produtos.filter((p: any) => Number(p.estoque_atual) <= Number(p.estoque_minimo));
+  // Only consider items with a defined minimum (> 0) as low stock
+  const lowStock = produtos
+    .filter((p: any) => !p.nome?.startsWith('[FERRAMENTA]'))
+    .filter((p: any) => Number(p.estoque_minimo) > 0 && Number(p.estoque_atual) <= Number(p.estoque_minimo));
   const totalProdutos = produtos.length;
 
   // ─── Saídas / Entradas de hoje ────────────────────────────
@@ -307,7 +310,10 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
                       <p className="text-sm font-medium truncate">{p.nome}</p>
                       {p.categoria && <p className="text-xs text-muted-foreground">{p.categoria}</p>}
                     </div>
-                    <Badge variant={Number(p.estoque_atual) <= 0 ? 'destructive' : 'secondary'} className={Number(p.estoque_atual) <= 0 ? '' : 'bg-warning/10 text-warning border-warning/20'}>
+                    <Badge
+                      variant={Number(p.estoque_atual) <= 0 && Number(p.estoque_minimo) > 0 ? 'destructive' : 'secondary'}
+                      className={Number(p.estoque_atual) <= 0 && Number(p.estoque_minimo) > 0 ? '' : 'bg-warning/10 text-warning border-warning/20'}
+                    >
                       {Number(p.estoque_atual) <= 0 ? 'Crítico' : 'Baixo'}
                     </Badge>
                   </div>
