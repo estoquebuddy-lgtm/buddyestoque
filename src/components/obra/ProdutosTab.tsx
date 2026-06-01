@@ -21,6 +21,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Checkbox } from '@/components/ui/checkbox';
+import { useProfile } from '@/hooks/useProfile';
 
 const CONSTRUCAO_CATEGORIES = [
   'Hidráulica',
@@ -43,10 +44,11 @@ interface Props {
   onFabClose?: () => void;
 }
 
-const emptyForm = { nome: '', categoria: '', unidade: 'un', estoque_minimo: '0', custo_unitario: '0', fornecedor: '', localizacao: '', foto_url: '', observacoes: '' };
+const emptyForm = { nome: '', categoria: '', unidade: 'un', estoque_minimo: '0', fornecedor: '', localizacao: '', foto_url: '', observacoes: '' };
 
 export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const queryClient = useQueryClient();
+  const { isAdmin } = useProfile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -83,7 +85,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const save = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      const payload = { obra_id: obraId, nome: form.nome, categoria: form.categoria || null, unidade: form.unidade, estoque_minimo: Number(form.estoque_minimo), custo_unitario: Number(form.custo_unitario), fornecedor: form.fornecedor || null, localizacao: form.localizacao || null, foto_url: form.foto_url || null, observacoes: form.observacoes || null };
+      const payload = { obra_id: obraId, nome: form.nome, categoria: form.categoria || null, unidade: form.unidade, estoque_minimo: Number(form.estoque_minimo), fornecedor: form.fornecedor || null, localizacao: form.localizacao || null, foto_url: form.foto_url || null, observacoes: form.observacoes || null };
       
       let res;
       if (editingId) { res = await supabase.from('produtos').update(payload).eq('id', editingId); }
@@ -181,7 +183,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const startEdit = (p: any) => {
     setEditingId(p.id);
-    setForm({ nome: p.nome, categoria: p.categoria || '', unidade: p.unidade, estoque_minimo: String(p.estoque_minimo), custo_unitario: String(p.custo_unitario || 0), fornecedor: p.fornecedor || '', localizacao: p.localizacao || '', foto_url: p.foto_url || '', observacoes: p.observacoes || '' });
+    setForm({ nome: p.nome, categoria: p.categoria || '', unidade: p.unidade, estoque_minimo: String(p.estoque_minimo), fornecedor: p.fornecedor || '', localizacao: p.localizacao || '', foto_url: p.foto_url || '', observacoes: p.observacoes || '' });
     setDialogOpen(true);
   };
 
@@ -258,7 +260,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }}
       >
         <div className="flex gap-2">
-          {selectedIds.length > 0 && (
+          {isAdmin && selectedIds.length > 0 && (
             <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)} className="h-9 animate-in fade-in zoom-in duration-200">
               <Trash2 className="h-4 w-4 mr-1.5" />
               Excluir ({selectedIds.length})
@@ -365,9 +367,11 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                   <Button variant="outline" className="flex-1" onClick={() => { startEdit(selectedProduct); setSelectedProduct(null); }}>
                     <Pencil className="h-4 w-4 mr-1.5" /> Editar
                   </Button>
-                  <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => { setDeleteId(selectedProduct.id); setSelectedProduct(null); }}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  {isAdmin && (
+                    <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => { setDeleteId(selectedProduct.id); setSelectedProduct(null); }}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               </div>
             </SheetHeader>
@@ -473,10 +477,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs text-muted-foreground ml-1">Custo Unitário Padrão</label>
-              <Input placeholder="R$" type="number" step="0.01" value={form.custo_unitario} onChange={e => setForm(f => ({ ...f, custo_unitario: e.target.value }))} className="h-12" />
-            </div>
+
 
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground ml-1">Fornecedor Principal (Opcional)</label>

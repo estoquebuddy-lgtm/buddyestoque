@@ -14,6 +14,7 @@ import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import { useAuth } from '@/hooks/useAuth';
 import { Switch } from '@/components/ui/switch';
+import { useProfile } from '@/hooks/useProfile';
 
 const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '' };
 
@@ -70,8 +71,9 @@ const formatUserDisplay = (userObj: any) => {
 };
 
 export default function SolicitacoesTab({ obraId }: { obraId: string }) {
-  const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const { isAdmin } = useProfile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
@@ -445,17 +447,19 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                                 <ArchiveRestore className="h-3.5 w-3.5" />
                               </Button>
                             )}
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDeleteId(s.id);
-                              }}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            {isAdmin && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteId(s.id);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardContent>

@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, DollarSign, LayoutDashboard, Bell, Clock, ShieldAlert, ChevronDown, ChevronUp, MessageSquarePlus } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, LayoutDashboard, Bell, Clock, ShieldAlert, ChevronDown, ChevronUp, MessageSquarePlus } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SkeletonCards } from '@/components/SkeletonList';
@@ -32,7 +32,6 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
 
   const lowStock = produtos.filter((p: any) => Number(p.estoque_atual) <= Number(p.estoque_minimo));
   const totalProdutos = produtos.length;
-  const valorTotal = produtos.reduce((acc: number, p: any) => acc + (Number(p.estoque_atual) * Number(p.custo_unitario || 0)), 0);
 
   // ─── Saídas / Entradas de hoje ────────────────────────────
   const { data: todaySaidas = [] } = useQuery({
@@ -128,7 +127,6 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
     { label: 'Total de Produtos', value: totalProdutos, icon: Package, color: 'text-primary', bg: 'bg-primary/10' },
     { label: 'Estoque Baixo', value: lowStock.length, icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/10' },
     { label: 'Ferramentas em Uso', value: ferramentasEmUso.length, icon: Wrench, color: 'text-info', bg: 'bg-info/10' },
-    { label: 'Valor em Estoque', value: `R$ ${valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`, icon: DollarSign, color: 'text-success', bg: 'bg-success/10' },
   ];
 
   const urgenciaColor = (u: string) => {
@@ -259,29 +257,29 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
         </motion.div>
       )}
 
-      {/* Hero Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* Hero Stats — 3 cards equidistantes */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
         {summaryCards.map((c, i) => (
-          <motion.div 
-            key={c.label} 
-            initial={{ opacity: 0, y: 20 }} 
-            animate={{ opacity: 1, y: 0 }} 
+          <motion.div
+            key={c.label}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.1, duration: 0.4 }}
             whileHover={{ y: -4 }}
           >
             <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 overflow-hidden group">
               <CardContent className="p-6 relative">
-                 {/* Design Element */}
-                <div className={`absolute -right-4 -top-4 h-24 w-24 rounded-full ${c.bg} opacity-10 group-hover:scale-110 transition-transform duration-500`} />
-                
+                <div className={`absolute -right-5 -top-5 h-28 w-28 rounded-full ${c.bg} opacity-40 group-hover:scale-110 transition-transform duration-500`} />
                 <div className="relative z-10">
-                  <div className={`h-12 w-12 rounded-2xl ${c.bg} flex items-center justify-center mb-5 group-hover:scale-110 transition-transform duration-300`}>
-                    <c.icon className={`h-6 w-6 ${c.color}`} />
+                  <div className={`h-11 w-11 rounded-xl ${c.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                    <c.icon className={`h-5 w-5 ${c.color}`} />
                   </div>
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-1">{c.label}</h4>
+                  <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">{c.label}</h4>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-3xl font-display font-bold tabular-nums tracking-tight">{c.value}</p>
-                    {c.label === 'Estoque Baixo' && Number(c.value) > 0 && <span className="text-[10px] text-destructive font-bold">ALERTA</span>}
+                    <p className="text-4xl font-display font-bold tabular-nums tracking-tight">{c.value}</p>
+                    {c.label === 'Estoque Baixo' && Number(c.value) > 0 && (
+                      <span className="text-[10px] text-destructive font-bold">ALERTA</span>
+                    )}
                   </div>
                 </div>
               </CardContent>

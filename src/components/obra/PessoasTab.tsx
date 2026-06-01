@@ -12,11 +12,13 @@ import ImageUpload from '@/components/ImageUpload';
 import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SkeletonList from '@/components/SkeletonList';
+import { useProfile } from '@/hooks/useProfile';
 
 const emptyForm = { nome: '', funcao: '', telefone: '', foto_url: '' };
 
 export default function PessoasTab({ obraId }: { obraId: string }) {
   const queryClient = useQueryClient();
+  const { isAdmin } = useProfile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -117,7 +119,7 @@ export default function PessoasTab({ obraId }: { obraId: string }) {
                 )}
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  {isAdmin && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
                 </div>
               </CardContent>
             </Card>

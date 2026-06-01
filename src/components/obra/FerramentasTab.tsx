@@ -19,12 +19,14 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { motion } from 'framer-motion';
 import QRCode from 'qrcode';
 import { Html5Qrcode } from 'html5-qrcode';
+import { useProfile } from '@/hooks/useProfile';
 
 const FERRAMENTA_CATEGORIES = ['Ferramentas Manuais', 'Ferramentas Elétricas', 'Equipamentos de Proteção (EPI)', 'Equipamentos de Medição', 'OUTROS'];
 const emptyForm = { nome: '', codigo: '', estado: 'disponivel', foto_url: '', observacoes: '', categoria: '', qr_code: '' };
 
 export default function FerramentasTab({ obraId }: { obraId: string }) {
   const queryClient = useQueryClient();
+  const { isAdmin } = useProfile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -558,7 +560,9 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                 </Button>
                 <div className="flex gap-2">
                   <Button variant="outline" className="flex-1" onClick={() => { startEdit(selectedTool); setSelectedTool(null); }}><Pencil className="h-4 w-4 mr-1.5" /> Editar</Button>
-                  <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => { setDeleteId(selectedTool.id); setSelectedTool(null); }}><Trash2 className="h-4 w-4" /></Button>
+                  {isAdmin && (
+                    <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => { setDeleteId(selectedTool.id); setSelectedTool(null); }}><Trash2 className="h-4 w-4" /></Button>
+                  )}
                 </div>
               </div>
             </SheetHeader>

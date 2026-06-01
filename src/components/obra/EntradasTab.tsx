@@ -13,6 +13,8 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import SkeletonList from '@/components/SkeletonList';
 import ImageUpload from '@/components/ImageUpload';
 import ImportXmlDialog from '@/components/obra/ImportXmlDialog';
+import ImportPdfDialog from '@/components/obra/ImportPdfDialog';
+import { useProfile } from '@/hooks/useProfile';
 
 interface Props { obraId: string; fabOpen?: boolean; onFabClose?: () => void; }
 const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '' };
@@ -35,6 +37,7 @@ const CONSTRUCAO_CATEGORIES = [
 
 export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const queryClient = useQueryClient();
+  const { isAdmin } = useProfile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -42,6 +45,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewNota, setViewNota] = useState<string | null>(null);
   const [xmlOpen, setXmlOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
 
   // New product inline state
   const [isNewProduct, setIsNewProduct] = useState(false);
@@ -231,8 +235,8 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const filtered = entradas.filter((e: any) => e.produtos?.nome?.toLowerCase().includes(search.toLowerCase()) || (e.fornecedor && e.fornecedor.toLowerCase().includes(search.toLowerCase())));
 
   const canSubmit = isNewProduct
-    ? !!newProduct.nome.trim() && !!form.quantidade
-    : !!form.produto_id && !!form.quantidade;
+    ? !!newProduct.nome.trim() && !!form.quantidade && !!form.valor_unitario
+    : !!form.produto_id && !!form.quantidade && !!form.valor_unitario;
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -253,6 +257,9 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               </Button>
               <Button size="sm" className="bg-info hover:bg-info/90 text-white" onClick={() => setXmlOpen(true)}>
                 <FileUp className="h-4 w-4 mr-1" /> Importar XML
+              </Button>
+              <Button size="sm" className="bg-info/20 hover:bg-info/30 text-info border border-info/50" onClick={() => setPdfOpen(true)}>
+                <FileText className="h-4 w-4 mr-1" /> Importar PDF
               </Button>
             </div>
           </div>
@@ -296,7 +303,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 <div className="flex gap-1 ml-2">
                   {e.nota_fiscal_url && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewNota(e.nota_fiscal_url)}><Eye className="h-4 w-4 text-info" /></Button>}
                   <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(e)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(e.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  {isAdmin && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(e.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
                 </div>
               </CardContent>
             </Card>
@@ -505,8 +512,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             </div>
             
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground ml-1">Valor Total (opcional)</label>
-              <Input placeholder="R$" type="number" step="0.01" value={form.valor_unitario} onChange={e => setForm(f => ({ ...f, valor_unitario: e.target.value }))} className="h-12" />
+              <label className="text-xs text-muted-foreground ml-1">Valor Unitário (R$) *</label>
+              <Input placeholder="R$ por unidade (ex: 2.50)" type="number" step="0.01" value={form.valor_unitario} onChange={e => setForm(f => ({ ...f, valor_unitario: e.target.value }))} required className="h-12" />
+              {form.quantidade && form.valor_unitario && Number(form.quantidade) > 0 && Number(form.valor_unitario) > 0 && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Valor Total Estimado: <span className="font-semibold text-foreground">R$ {(Number(form.quantidade) * Number(form.valor_unitario)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </p>
+              )}
             </div>
 
             <div className="space-y-1">
@@ -532,6 +544,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Entrada" description="A quantidade será subtraída do estoque automaticamente." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
 
       <ImportXmlDialog obraId={obraId} open={xmlOpen} onOpenChange={setXmlOpen} />
+      <ImportPdfDialog obraId={obraId} open={pdfOpen} onOpenChange={setPdfOpen} />
     </div>
   );
 }

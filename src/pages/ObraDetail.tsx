@@ -14,6 +14,7 @@ import PessoasTab from '@/components/obra/PessoasTab';
 import AtividadesTab from '@/components/obra/AtividadesTab';
 import ImportacaoXMLTab from '@/components/obra/ImportacaoXMLTab';
 import SolicitacoesTab from '@/components/obra/SolicitacoesTab';
+import FinanceiroTab from '@/components/obra/FinanceiroTab';
 import SkeletonList from '@/components/SkeletonList';
 
 export default function ObraDetail() {
@@ -62,6 +63,7 @@ export default function ObraDetail() {
           <div className="max-w-[1600px] mx-auto p-4 lg:p-8">
             {activeTab === 'dashboard' && <DashboardTab obraId={id!} onTabChange={setActiveTab} />}
             {activeTab === 'produtos' && <ProdutosTab obraId={id!} />}
+            {activeTab === 'financeiro' && <FinanceiroTab obraId={id!} />}
             {activeTab === 'ferramentas' && <FerramentasTab obraId={id!} />}
             {activeTab === 'relatorios' && <RelatoriosTab obraId={id!} />}
             {activeTab === 'entradas' && <EntradasTab obraId={id!} />}

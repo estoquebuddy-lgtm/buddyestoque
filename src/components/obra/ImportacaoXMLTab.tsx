@@ -15,12 +15,14 @@ import GerarLivroFiscalDialog from '@/components/obra/GerarLivroFiscalDialog';
 import { useState } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Trash2 } from 'lucide-react';
+import { useProfile } from '@/hooks/useProfile';
 
 export default function ImportacaoXMLTab({ obraId }: { obraId: string }) {
   const [fiscalOpen, setFiscalOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [fiscalRows, setFiscalRows] = useState<any[]>([]);
   const queryClient = useQueryClient();
+  const { isAdmin } = useProfile();
 
   const { data: importacoes = [], isLoading } = useQuery({
     queryKey: ['importacoes-xml', obraId],
@@ -244,9 +246,11 @@ export default function ImportacaoXMLTab({ obraId }: { obraId: string }) {
                       <Badge variant="outline" className="shrink-0 text-[10px] font-mono">
                          {imp.valor_total ? `R$ ${Number(imp.valor_total).toLocaleString('pt-BR')}` : `${imp.total_itens} itens`}
                       </Badge>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(imp.id)} className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {isAdmin && (
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(imp.id)} className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 hover:text-destructive transition-all">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

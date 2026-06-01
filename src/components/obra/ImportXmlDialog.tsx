@@ -9,6 +9,7 @@ import { useQueryClient } from '@tanstack/react-query';
 interface XmlItem {
   nome: string;
   quantidade: number;
+  valorUnitario: number;
 }
 
 interface FiscalLine {
@@ -87,9 +88,11 @@ function parseNFeXml(xmlText: string): { items: XmlItem[], meta: NfMetadata | nu
     const qCom = parseFloat(prod?.getElementsByTagName('qCom')[0]?.textContent || '0');
     const cfop = prod?.getElementsByTagName('CFOP')[0]?.textContent?.trim() || '1556';
     const vProd = parseFloat(prod?.getElementsByTagName('vProd')[0]?.textContent || '0');
+    const vUnCom = parseFloat(prod?.getElementsByTagName('vUnCom')[0]?.textContent || '0');
+    const valorUnitario = vUnCom || (qCom > 0 ? vProd / qCom : 0);
 
     if (xProd && qCom > 0) {
-      items.push({ nome: xProd, quantidade: qCom });
+      items.push({ nome: xProd, quantidade: qCom, valorUnitario });
     }
 
     // Determine fiscal code (1: credit, 2: exempt, 3: other)
@@ -201,6 +204,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
           obra_id: obraId,
           produto_id: produtoId,
           quantidade: item.quantidade,
+          valor_unitario: item.valorUnitario,
         });
         if (entErr) throw entErr;
 

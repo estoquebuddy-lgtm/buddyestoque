@@ -11,7 +11,8 @@ import {
   ChevronLeft,
   FileCode2,
   ListTodo,
-  MessageSquarePlus
+  MessageSquarePlus,
+  DollarSign
 } from 'lucide-react';
 import {
   Sidebar,
@@ -39,6 +40,7 @@ const menuItems = [
   { value: 'xml', label: 'Compras XML', icon: FileCode2 },
   { value: 'atividades', label: 'Atividades', icon: ListTodo },
   { value: 'pessoas', label: 'Equipe', icon: Users },
+  { value: 'financeiro', label: 'Financeiro', icon: DollarSign },
 ];
 
 interface ObraSidebarProps {

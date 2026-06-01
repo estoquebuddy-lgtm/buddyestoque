@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Wrench, MessageSquarePlus } from 'lucide-react';
+import { Wrench, MessageSquarePlus, DollarSign } from 'lucide-react';
 import RelatorioFerramentasTab from './RelatorioFerramentasTab';
 import RelatorioSolicitacoesTab from './RelatorioSolicitacoesTab';
+import FinanceiroTab from './FinanceiroTab';
 
 export default function RelatoriosTab({ obraId }: { obraId: string }) {
-  const [activeTab, setActiveTab] = useState<'ferramentas' | 'solicitacoes'>('ferramentas');
+  const [activeTab, setActiveTab] = useState<'ferramentas' | 'solicitacoes' | 'financeiro'>('ferramentas');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -40,15 +41,22 @@ export default function RelatoriosTab({ obraId }: { obraId: string }) {
             <MessageSquarePlus className="h-4 w-4 mr-2" />
             Solicitações
           </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setActiveTab('financeiro')}
+            className={`rounded-lg h-10 font-semibold text-xs px-5 flex-1 sm:flex-none transition-all ${activeTab === 'financeiro' ? 'bg-white text-primary shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <DollarSign className="h-4 w-4 mr-2" />
+            Financeiro
+          </Button>
         </div>
       </div>
 
       {/* Render Active Tab Component */}
-      {activeTab === 'ferramentas' ? (
-        <RelatorioFerramentasTab obraId={obraId} />
-      ) : (
-        <RelatorioSolicitacoesTab obraId={obraId} />
-      )}
+      {activeTab === 'ferramentas' && <RelatorioFerramentasTab obraId={obraId} />}
+      {activeTab === 'solicitacoes' && <RelatorioSolicitacoesTab obraId={obraId} />}
+      {activeTab === 'financeiro' && <FinanceiroTab obraId={obraId} />}
     </div>
   );
 }
