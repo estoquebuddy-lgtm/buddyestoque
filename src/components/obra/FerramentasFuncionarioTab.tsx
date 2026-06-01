@@ -18,11 +18,12 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
   const [search, setSearch] = useState('');
   const [selectedPessoa, setSelectedPessoa] = useState<any | null>(null);
 
-  // Busca todas as ferramentas em uso (estado = em_uso) com responsável
-  const { data: ferramentas = [], isLoading: loadingFerr } = useQuery({
-    queryKey: ['ferramentas-em-uso', obraId],
+  // Busca ferramentas em uso e resolve nomes dentro do mesmo queryFn
+  // (mesmo padrão do RelatorioFerramentasTab — evita race condition de joins em memória)
+  const { data: ferramentas = [], isLoading } = useQuery({
+    queryKey: ['ferramentas-funcionario', obraId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: ferramentasData, error } = await supabase
         .from('ferramentas')
         .select('*')
         .eq('obra_id', obraId)
@@ -30,50 +31,45 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
         .not('responsavel_id', 'is', null)
         .order('nome');
       if (error) throw error;
-      return data || [];
-    },
-  });
+      if (!ferramentasData || ferramentasData.length === 0) return [];
 
-  // Busca todas as pessoas da obra
-  const { data: pessoas = [], isLoading: loadingPessoas } = useQuery({
-    queryKey: ['pessoas', obraId],
-    queryFn: async () => {
-      const { data } = await supabase
+      // Resolve nomes de pessoas na mesma chamada
+      const { data: pessoasData } = await supabase
         .from('pessoas')
         .select('id, nome, cargo, foto_url')
-        .eq('obra_id', obraId)
-        .order('nome');
-      return data || [];
+        .eq('obra_id', obraId);
+      const pessoasMap = new Map((pessoasData || []).map((p: any) => [p.id, p]));
+
+      return ferramentasData.map((f: any) => {
+        const catMatch = f.observacoes?.match(/\[CAT:(.*?)\]/);
+        const categoria = catMatch ? catMatch[1] : null;
+        const cleanObs = f.observacoes?.replace(/\[CAT:.*?\]/, '').trim() || null;
+        const pessoa = pessoasMap.get(f.responsavel_id) || { id: f.responsavel_id, nome: 'Desconhecido', cargo: null, foto_url: null };
+        return { ...f, categoria, observacoes: cleanObs, pessoa };
+      });
     },
   });
 
-  const isLoading = loadingFerr || loadingPessoas;
 
-  // Agrupa ferramentas por responsavel_id
+  // Agrupa ferramentas por responsavel_id usando os dados já resolvidos em f.pessoa
   const pessoasComFerramentas = useMemo(() => {
-    const pessoasMap = new Map(pessoas.map((p: any) => [p.id, p]));
-
     const grupos: Record<string, { pessoa: any; ferramentas: any[] }> = {};
 
     ferramentas.forEach((f: any) => {
       if (!f.responsavel_id) return;
       if (!grupos[f.responsavel_id]) {
         grupos[f.responsavel_id] = {
-          pessoa: pessoasMap.get(f.responsavel_id) || { id: f.responsavel_id, nome: 'Desconhecido' },
+          pessoa: f.pessoa,
           ferramentas: [],
         };
       }
-      // Extrai categoria do campo observacoes
-      const catMatch = f.observacoes?.match(/\[CAT:(.*?)\]/);
-      const categoria = catMatch ? catMatch[1] : null;
-      const cleanObs = f.observacoes?.replace(/\[CAT:.*?\]/, '').trim() || null;
-      grupos[f.responsavel_id].ferramentas.push({ ...f, categoria, observacoes: cleanObs });
+      grupos[f.responsavel_id].ferramentas.push(f);
     });
 
     return Object.values(grupos).sort((a, b) =>
       a.pessoa.nome.localeCompare(b.pessoa.nome)
     );
-  }, [ferramentas, pessoas]);
+  }, [ferramentas]);
 
   // Filtra por busca
   const filtered = useMemo(() =>
@@ -86,6 +82,7 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
     ),
     [pessoasComFerramentas, search]
   );
+
 
   const totalFerramentasEmUso = ferramentas.length;
   const totalFuncionariosComFerramentas = pessoasComFerramentas.length;
