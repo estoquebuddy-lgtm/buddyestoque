@@ -325,7 +325,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
   const retirar = useMutation({
     mutationFn: async ({ id, pessoaId, observacao, tipo = 'uso' }: { id: string; pessoaId: string; observacao?: string, tipo?: 'uso' | 'manutencao' }) => {
-      if (!pessoaId) throw new Error("É obrigatório selecionar um responsável.");
+      if (tipo === 'uso' && !pessoaId) throw new Error("É obrigatório selecionar um responsável para retirada de uso.");
       
       const timestamp = new Date().toISOString();
       const novoEstado = tipo === 'manutencao' ? 'manutencao' : 'em_uso';
@@ -600,10 +600,10 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             </Select>
 
             <Select value={retirarPessoaId} onValueChange={setRetirarPessoaId}>
-              <SelectTrigger className="h-12"><SelectValue placeholder="Responsável *" /></SelectTrigger>
+              <SelectTrigger className="h-12"><SelectValue placeholder={retirarTipo === 'uso' ? "Responsável *" : "Responsável (opcional)"} /></SelectTrigger>
               <SelectContent>{pessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
             </Select>
-            <Button type="submit" className="w-full h-12 bg-warning hover:bg-warning/90 text-warning-foreground" disabled={retirar.isPending || !retirarPessoaId}>{retirar.isPending ? 'Registrando...' : 'Confirmar Retirada'}</Button>
+            <Button type="submit" className="w-full h-12 bg-warning hover:bg-warning/90 text-warning-foreground" disabled={retirar.isPending || (retirarTipo === 'uso' && !retirarPessoaId)}>{retirar.isPending ? 'Registrando...' : 'Confirmar Retirada'}</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -783,9 +783,9 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                     </Select>
                   </div>
                   <div className="space-y-3">
-                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quem está retirando? *</label>
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quem está retirando? {scanRetirarTipo === 'uso' && '*'}</label>
                     <Select value={scanPessoaId} onValueChange={setScanPessoaId}>
-                      <SelectTrigger className="h-11"><SelectValue placeholder="Selecione o responsável..." /></SelectTrigger>
+                      <SelectTrigger className="h-11"><SelectValue placeholder={scanRetirarTipo === 'uso' ? "Selecione o responsável..." : "Responsável (opcional)"} /></SelectTrigger>
                       <SelectContent>
                         {pessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
                       </SelectContent>
@@ -795,7 +795,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Observação (opcional)</label>
                     <Input placeholder="Ex: Retirando para obra de reforço" value={scanObservacao} onChange={e => setScanObservacao(e.target.value)} className="h-11" />
                   </div>
-                  <Button className="w-full h-12 bg-warning text-warning-foreground hover:bg-warning/90 font-bold" onClick={() => retirar.mutate({ id: scannedTool.id, pessoaId: scanPessoaId, observacao: scanObservacao, tipo: scanRetirarTipo })} disabled={retirar.isPending || !scanPessoaId}>
+                  <Button className="w-full h-12 bg-warning text-warning-foreground hover:bg-warning/90 font-bold" onClick={() => retirar.mutate({ id: scannedTool.id, pessoaId: scanPessoaId, observacao: scanObservacao, tipo: scanRetirarTipo })} disabled={retirar.isPending || (scanRetirarTipo === 'uso' && !scanPessoaId)}>
                     {retirar.isPending ? 'Confirmando...' : 'Confirmar Retirada'}
                   </Button>
                 </div>
