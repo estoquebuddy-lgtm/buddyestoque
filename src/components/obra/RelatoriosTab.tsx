@@ -5,9 +5,12 @@ import { Wrench, MessageSquarePlus, DollarSign } from 'lucide-react';
 import RelatorioFerramentasTab from './RelatorioFerramentasTab';
 import RelatorioSolicitacoesTab from './RelatorioSolicitacoesTab';
 import FinanceiroTab from './FinanceiroTab';
+import RelatorioEntradasTab from './RelatorioEntradasTab';
+import RelatorioSaidasTab from './RelatorioSaidasTab';
+import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 export default function RelatoriosTab({ obraId }: { obraId: string }) {
-  const [activeTab, setActiveTab] = useState<'ferramentas' | 'solicitacoes' | 'financeiro'>('ferramentas');
+  const [activeTab, setActiveTab] = useState<'ferramentas' | 'solicitacoes' | 'financeiro' | 'entradas' | 'saidas'>('financeiro');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -26,6 +29,33 @@ export default function RelatoriosTab({ obraId }: { obraId: string }) {
           <Button 
             variant="ghost" 
             size="sm"
+            onClick={() => setActiveTab('financeiro')}
+            className={`rounded-lg h-10 font-semibold text-xs px-5 flex-1 sm:flex-none transition-all ${activeTab === 'financeiro' ? 'bg-white text-primary shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <DollarSign className="h-4 w-4 mr-2" />
+            Financeiro Geral
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setActiveTab('entradas')}
+            className={`rounded-lg h-10 font-semibold text-xs px-5 flex-1 sm:flex-none transition-all ${activeTab === 'entradas' ? 'bg-white text-primary shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <ArrowDownToLine className="h-4 w-4 mr-2" />
+            Entradas (Mensal)
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setActiveTab('saidas')}
+            className={`rounded-lg h-10 font-semibold text-xs px-5 flex-1 sm:flex-none transition-all ${activeTab === 'saidas' ? 'bg-white text-primary shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <ArrowUpFromLine className="h-4 w-4 mr-2" />
+            Saídas (Mensal)
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
             onClick={() => setActiveTab('ferramentas')}
             className={`rounded-lg h-10 font-semibold text-xs px-5 flex-1 sm:flex-none transition-all ${activeTab === 'ferramentas' ? 'bg-white text-primary shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground'}`}
           >
@@ -41,22 +71,15 @@ export default function RelatoriosTab({ obraId }: { obraId: string }) {
             <MessageSquarePlus className="h-4 w-4 mr-2" />
             Solicitações
           </Button>
-          <Button 
-            variant="ghost" 
-            size="sm"
-            onClick={() => setActiveTab('financeiro')}
-            className={`rounded-lg h-10 font-semibold text-xs px-5 flex-1 sm:flex-none transition-all ${activeTab === 'financeiro' ? 'bg-white text-primary shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            <DollarSign className="h-4 w-4 mr-2" />
-            Financeiro
-          </Button>
         </div>
       </div>
 
       {/* Render Active Tab Component */}
+      {activeTab === 'financeiro' && <FinanceiroTab obraId={obraId} />}
+      {activeTab === 'entradas' && <RelatorioEntradasTab obraId={obraId} />}
+      {activeTab === 'saidas' && <RelatorioSaidasTab obraId={obraId} />}
       {activeTab === 'ferramentas' && <RelatorioFerramentasTab obraId={obraId} />}
       {activeTab === 'solicitacoes' && <RelatorioSolicitacoesTab obraId={obraId} />}
-      {activeTab === 'financeiro' && <FinanceiroTab obraId={obraId} />}
     </div>
   );
 }
