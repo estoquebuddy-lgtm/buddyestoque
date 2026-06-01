@@ -72,7 +72,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase.from('produtos').select('*').eq('obra_id', obraId).order('nome');
       if (error) throw error;
-      return data;
+      // Filter out virtual [FERRAMENTA] products — they exist only for financial tracking
+      return (data || []).filter((p: any) => !p.nome?.startsWith('[FERRAMENTA]'));
     },
   });
 

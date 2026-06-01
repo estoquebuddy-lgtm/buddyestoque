@@ -190,7 +190,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
             estado: 'disponivel',
             status: 'DISPONIVEL',
             qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            observacoes: `[CAT:${item.ferrCategoria}] [LOC:${item.ferrLocalizacao || ''}]`,
+            observacoes: `[CAT:${item.ferrCategoria || 'OUTROS'}] [LOC:${item.ferrLocalizacao || ''}]`,
           }));
           const { error: ferrErr } = await supabase.from('ferramentas').insert(ferramentasToInsert);
           if (ferrErr) throw ferrErr;

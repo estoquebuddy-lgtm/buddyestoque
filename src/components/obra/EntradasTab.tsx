@@ -224,7 +224,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       const ferramentasToInsert = Array.from({ length: quantidade }, (_, i) => ({
         obra_id: obraId,
         nome: newFerramenta.nome.trim(),
-        categoria: null, // stored in observacoes via tag
         codigo: newFerramenta.codigoPrefixo ? `${newFerramenta.codigoPrefixo}-${String(i + 1).padStart(2, '0')}` : null,
         estado: 'disponivel',
         status: 'DISPONIVEL',
