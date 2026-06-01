@@ -1,27 +1,82 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Search, Wrench, User, Calendar, Hash, ChevronRight, Package } from 'lucide-react';
+import { Search, Wrench, User, Calendar, Hash, ChevronRight, Package, RotateCcw } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import SkeletonList from '@/components/SkeletonList';
 import ImageThumbnail from '@/components/ImageThumbnail';
+import { toast } from 'sonner';
 
 interface Props {
   obraId: string;
 }
 
 export default function FerramentasFuncionarioTab({ obraId }: Props) {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [selectedPessoa, setSelectedPessoa] = useState<any | null>(null);
 
+  const devolver = useMutation({
+    mutationFn: async ({ id, responsavelId }: { id: string; responsavelId?: string | null }) => {
+      const timestamp = new Date().toISOString();
+      const { error: updateError } = await supabase.from('ferramentas').update({ 
+        estado: 'disponivel', 
+        status: 'DISPONIVEL', 
+        responsavel_id: null, 
+        data_devolucao: timestamp,
+        ultima_movimentacao: timestamp
+      }).eq('id', id);
+      if (updateError) throw updateError;
+
+      const { error: histError } = await supabase.from('historico_ferramentas' as any).insert({
+        ferramenta_id: id,
+        obra_id: obraId,
+        pessoa_id: responsavelId || null,
+        tipo: 'devolucao',
+        data: timestamp
+      });
+      if (histError) console.error('Error saving history:', histError);
+
+      const { error: movError } = await supabase.from('movimentacoes_ferramentas' as any).insert({
+        ferramenta_id: id,
+        obra_id: obraId,
+        usuario_id: responsavelId || null,
+        tipo: 'DEVOLUCAO',
+        data_hora: timestamp,
+        observacao: 'Devolução via aba Funcionários'
+      });
+      if (movError) console.error('Error saving movements:', movError);
+    },
+    onSuccess: (_, variables) => { 
+      queryClient.invalidateQueries({ queryKey: ['ferramentas-funcionario-v2', obraId] }); 
+      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] }); 
+      queryClient.invalidateQueries({ queryKey: ['historico-ferramentas', obraId] }); 
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes-ferramentas', obraId] }); 
+      
+      // Remove a ferramenta devolvida da lista do painel lateral aberto
+      if (selectedPessoa) {
+        const novasFerramentas = selectedPessoa.ferramentas.filter((f: any) => f.id !== variables.id);
+        if (novasFerramentas.length === 0) {
+          setSelectedPessoa(null); // Fecha o modal se não tiver mais ferramentas
+        } else {
+          setSelectedPessoa({ ...selectedPessoa, ferramentas: novasFerramentas });
+        }
+      }
+      
+      toast.success('Ferramenta devolvida com sucesso!'); 
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   // Busca ferramentas em uso e resolve nomes dentro do mesmo queryFn
   // (mesmo padrão do RelatorioFerramentasTab — evita race condition de joins em memória)
-  const { data: ferramentas = [], isLoading } = useQuery({
-    queryKey: ['ferramentas-funcionario', obraId],
+  const { data: ferramentas = [], isLoading, error: queryError } = useQuery({
+    queryKey: ['ferramentas-funcionario-v2', obraId],
     queryFn: async () => {
       const { data: ferramentasData, error } = await supabase
         .from('ferramentas')
@@ -34,10 +89,16 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
       if (!ferramentasData || ferramentasData.length === 0) return [];
 
       // Resolve nomes de pessoas na mesma chamada
-      const { data: pessoasData } = await supabase
+      const { data: pessoasData, error: pessoasError } = await supabase
         .from('pessoas')
         .select('id, nome, funcao, foto_url')
         .eq('obra_id', obraId);
+        
+      if (pessoasError) {
+        console.error("Erro ao buscar pessoas:", pessoasError);
+        throw pessoasError;
+      }
+      
       const pessoasMap = new Map((pessoasData || []).map((p: any) => [p.id, p]));
 
       return ferramentasData.map((f: any) => {
@@ -104,6 +165,17 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
           <h1 className="text-xl lg:text-2xl font-display font-bold">Ferramentas por Funcionário</h1>
         </div>
         <SkeletonList count={4} />
+      </div>
+    );
+  }
+
+  if (queryError) {
+    return (
+      <div className="space-y-6">
+        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-500">
+          <p className="font-bold">Erro ao carregar dados:</p>
+          <p className="text-sm">{(queryError as any).message || 'Erro desconhecido'}</p>
+        </div>
       </div>
     );
   }
@@ -312,9 +384,21 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
                         </div>
                       </div>
 
-                      <Badge className="shrink-0 bg-warning/10 text-warning border-warning/20 text-[10px]">
-                        Em uso
-                      </Badge>
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <Badge className="bg-warning/10 text-warning border-warning/20 text-[10px]">
+                          Em uso
+                        </Badge>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="h-7 text-[10px] bg-success/10 text-success border-success/20 hover:bg-success/20 hover:text-success px-2 transition-all"
+                          onClick={() => devolver.mutate({ id: f.id, responsavelId: f.responsavel_id })}
+                          disabled={devolver.isPending}
+                        >
+                          <RotateCcw className="h-3 w-3 mr-1" />
+                          Devolver
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}

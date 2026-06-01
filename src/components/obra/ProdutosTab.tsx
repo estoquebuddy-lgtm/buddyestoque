@@ -60,6 +60,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const [quickQtd, setQuickQtd] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [filterSemLocalizacao, setFilterSemLocalizacao] = useState(false);
+  const [accordionValue, setAccordionValue] = useState<string[]>([...CONSTRUCAO_CATEGORIES, 'Não Categorizado']);
 
   useEffect(() => {
     if (fabOpen) { setEditingId(null); setForm(emptyForm); setDialogOpen(true); onFabClose?.(); }
@@ -187,7 +189,19 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     setDialogOpen(true);
   };
 
-  const filtered = produtos.filter((p: any) => p.nome.toLowerCase().includes(search.toLowerCase()) || (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase())));
+  const filtered = produtos.filter((p: any) => {
+    const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()));
+    const matchLocation = filterSemLocalizacao ? !p.localizacao?.trim() : true;
+    return matchSearch && matchLocation;
+  });
+
+  const toggleAccordion = () => {
+    if (accordionValue.length > 0) {
+      setAccordionValue([]);
+    } else {
+      setAccordionValue([...CONSTRUCAO_CATEGORIES, 'Não Categorizado']);
+    }
+  };
 
   const getStockBadge = (atual: number, minimo: number) => {
     if (atual <= 0) return <Badge variant="destructive">Crítico</Badge>;
@@ -277,10 +291,34 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         </div>
       </PageHeader>
 
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <Button 
+          variant={filterSemLocalizacao ? "default" : "outline"} 
+          size="sm" 
+          onClick={() => setFilterSemLocalizacao(!filterSemLocalizacao)} 
+          className={`h-8 text-xs rounded-full ${filterSemLocalizacao ? 'bg-primary text-primary-foreground' : 'bg-background'}`}
+        >
+          <MapPin className="h-3 w-3 mr-1.5" />
+          {filterSemLocalizacao ? 'Mostrando: Sem Localização' : 'Filtrar: Sem Localização'}
+        </Button>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={toggleAccordion} 
+          className="h-8 text-xs rounded-full bg-background text-muted-foreground hover:text-foreground"
+        >
+          {accordionValue.length > 0 ? (
+            <><ArrowUpFromLine className="h-3 w-3 mr-1.5" /> Recolher Tudo</>
+          ) : (
+            <><ArrowDownToLine className="h-3 w-3 mr-1.5" /> Expandir Tudo</>
+          )}
+        </Button>
+      </div>
+
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
-        <p className="text-center py-16 text-muted-foreground">{search ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}</p>
+        <p className="text-center py-16 text-muted-foreground">{(search || filterSemLocalizacao) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}</p>
       ) : (
-        <Accordion type="multiple" defaultValue={CONSTRUCAO_CATEGORIES} className="space-y-3">
+        <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue} className="space-y-3">
           {[...CONSTRUCAO_CATEGORIES, 'Não Categorizado'].map((cat) => {
             const productsInCat = filtered.filter(p => 
               (cat === 'Não Categorizado' ? !p.categoria : p.categoria === cat)
