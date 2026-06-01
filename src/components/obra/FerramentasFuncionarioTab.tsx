@@ -36,7 +36,7 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
       // Resolve nomes de pessoas na mesma chamada
       const { data: pessoasData } = await supabase
         .from('pessoas')
-        .select('id, nome, cargo, foto_url')
+        .select('id, nome, funcao, foto_url')
         .eq('obra_id', obraId);
       const pessoasMap = new Map((pessoasData || []).map((p: any) => [p.id, p]));
 
@@ -44,7 +44,7 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
         const catMatch = f.observacoes?.match(/\[CAT:(.*?)\]/);
         const categoria = catMatch ? catMatch[1] : null;
         const cleanObs = f.observacoes?.replace(/\[CAT:.*?\]/, '').trim() || null;
-        const pessoa = pessoasMap.get(f.responsavel_id) || { id: f.responsavel_id, nome: 'Desconhecido', cargo: null, foto_url: null };
+        const pessoa = pessoasMap.get(f.responsavel_id) || { id: f.responsavel_id, nome: 'Desconhecido', funcao: null, foto_url: null };
         return { ...f, categoria, observacoes: cleanObs, pessoa };
       });
     },
@@ -195,9 +195,9 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-semibold text-foreground text-sm">{pessoa.nome}</p>
-                      {pessoa.cargo && (
+                      {pessoa.funcao && (
                         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                          {pessoa.cargo}
+                          {pessoa.funcao}
                         </span>
                       )}
                     </div>
@@ -247,8 +247,8 @@ export default function FerramentasFuncionarioTab({ obraId }: Props) {
                   </div>
                   <div className="text-left">
                     <p className="font-bold text-base leading-tight">{selectedPessoa.pessoa.nome}</p>
-                    {selectedPessoa.pessoa.cargo && (
-                      <p className="text-xs text-muted-foreground font-normal">{selectedPessoa.pessoa.cargo}</p>
+                    {selectedPessoa.pessoa.funcao && (
+                      <p className="text-xs text-muted-foreground font-normal">{selectedPessoa.pessoa.funcao}</p>
                     )}
                   </div>
                 </SheetTitle>
