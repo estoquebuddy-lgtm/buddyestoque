@@ -22,7 +22,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { useProfile } from '@/hooks/useProfile';
 
 const FERRAMENTA_CATEGORIES = ['Ferramentas Manuais', 'Ferramentas Elétricas', 'Equipamentos de Proteção (EPI)', 'Equipamentos de Medição', 'OUTROS'];
-const emptyForm = { nome: '', codigo: '', estado: 'disponivel', foto_url: '', observacoes: '', categoria: '', qr_code: '' };
+const emptyForm = { nome: '', codigo: '', estado: 'disponivel', foto_url: '', observacoes: '', categoria: '', localizacao: '', qr_code: '' };
 
 export default function FerramentasTab({ obraId }: { obraId: string }) {
   const queryClient = useQueryClient();
@@ -35,6 +35,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [selectedTool, setSelectedTool] = useState<any>(null);
   const [retirarOpen, setRetirarOpen] = useState(false);
   const [retirarPessoaId, setRetirarPessoaId] = useState('');
+  const [retirarTipo, setRetirarTipo] = useState<'uso' | 'manutencao'>('uso');
   const [historyOpen, setHistoryOpen] = useState(false);
 
   // QR Code Generation State
@@ -53,6 +54,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [scanResultError, setScanResultError] = useState('');
   const [scanObservacao, setScanObservacao] = useState('');
   const [scanPessoaId, setScanPessoaId] = useState('');
+  const [scanRetirarTipo, setScanRetirarTipo] = useState<'uso' | 'manutencao'>('uso');
   const [manualCode, setManualCode] = useState('');
 
   const { data: pessoas = [] } = useQuery({
@@ -68,11 +70,14 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       const pessoasMap = new Map(pessoas.map((p: any) => [p.id, p.nome]));
       return (data || []).map((f: any) => {
         const catMatch = f.observacoes?.match(/\[CAT:(.*?)\]/);
+        const locMatch = f.observacoes?.match(/\[LOC:(.*?)\]/);
         const categoria = catMatch ? catMatch[1] : null;
-        const cleanObs = f.observacoes?.replace(/\[CAT:.*?\]/, '').trim() || f.observacoes;
+        const localizacao = locMatch ? locMatch[1] : null;
+        const cleanObs = f.observacoes?.replace(/\[CAT:.*?\]/g, '').replace(/\[LOC:.*?\]/g, '').trim() || f.observacoes;
         return {
           ...f,
           categoria,
+          localizacao,
           observacoes: cleanObs,
           pessoas: f.responsavel_id ? { nome: pessoasMap.get(f.responsavel_id) || null } : null,
         };
@@ -252,6 +257,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         }
         setScannedTool(toolWithPessoa);
         setScanPessoaId(tool.responsavel_id || '');
+        setScanRetirarTipo('uso');
         setScanObservacao('');
         setScanResultError('');
       }
@@ -275,7 +281,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         status: form.estado.toUpperCase() === 'EM_USO' ? 'EM_USO' : (form.estado.toUpperCase() === 'MANUTENCAO' ? 'MANUTENCAO' : (form.estado.toUpperCase() === 'EXTRAVIADA' ? 'EXTRAVIADA' : 'DISPONIVEL')),
         qr_code: generatedCode,
         foto_url: form.foto_url || null, 
-        observacoes: `[CAT:${form.categoria}] ${form.observacoes || ''}`.trim()
+        observacoes: `[CAT:${form.categoria}] [LOC:${form.localizacao || ''}] ${form.observacoes || ''}`.trim()
       };
       
       let res;
@@ -318,11 +324,18 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   });
 
   const retirar = useMutation({
-    mutationFn: async ({ id, pessoaId, observacao }: { id: string; pessoaId: string; observacao?: string }) => {
+    mutationFn: async ({ id, pessoaId, observacao, tipo = 'uso' }: { id: string; pessoaId: string; observacao?: string, tipo?: 'uso' | 'manutencao' }) => {
+      if (!pessoaId) throw new Error("É obrigatório selecionar um responsável.");
+      
       const timestamp = new Date().toISOString();
+      const novoEstado = tipo === 'manutencao' ? 'manutencao' : 'em_uso';
+      const novoStatus = tipo === 'manutencao' ? 'MANUTENCAO' : 'EM_USO';
+      const tipoHist = tipo === 'manutencao' ? 'manutencao' : 'retirada';
+      const tipoMov = tipo === 'manutencao' ? 'MANUTENCAO' : 'RETIRADA';
+
       const { error: updateError } = await supabase.from('ferramentas').update({ 
-        estado: 'em_uso', 
-        status: 'EM_USO', 
+        estado: novoEstado, 
+        status: novoStatus, 
         responsavel_id: pessoaId || null, 
         data_retirada: timestamp, 
         data_devolucao: null,
@@ -334,7 +347,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
           ferramenta_id: id,
           obra_id: obraId,
           pessoa_id: pessoaId || null,
-          tipo: 'retirada',
+          tipo: tipoHist,
           data: timestamp
       });
       if (histError) console.error('Error saving history:', histError);
@@ -343,7 +356,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
           ferramenta_id: id,
           obra_id: obraId,
           usuario_id: pessoaId || null,
-          tipo: 'RETIRADA',
+          tipo: tipoMov,
           data_hora: timestamp,
           observacao: observacao || null
       });
@@ -356,6 +369,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       setRetirarOpen(false); 
       setSelectedTool(null); 
       setRetirarPessoaId(''); 
+      setRetirarTipo('uso');
       setScanActionOpen(false);
       setScannedTool(null);
       toast.success('Ferramenta retirada!'); 
@@ -438,7 +452,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
   const startEdit = (f: any) => {
     setEditingId(f.id);
-    setForm({ nome: f.nome, codigo: f.codigo || '', estado: f.estado, foto_url: f.foto_url || '', observacoes: f.observacoes || '', categoria: f.categoria || '', qr_code: f.qr_code || '' });
+    setForm({ nome: f.nome, codigo: f.codigo || '', estado: f.estado, foto_url: f.foto_url || '', observacoes: f.observacoes || '', categoria: f.categoria || '', localizacao: f.localizacao || '', qr_code: f.qr_code || '' });
     setDialogOpen(true);
   };
 
@@ -516,6 +530,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                           <p className="font-medium text-sm truncate">{f.nome}</p>
                           <div className="flex items-center gap-2">
                             {f.codigo && <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Cód: {f.codigo}</p>}
+                            {f.localizacao && <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight bg-muted px-1.5 py-0.5 rounded">Loc: {f.localizacao}</p>}
                             {f.pessoas?.nome && <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">• Com: {f.pessoas.nome}</p>}
                           </div>
                         </div>
@@ -541,6 +556,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                   <ImageThumbnail src={selectedTool.foto_url} alt={selectedTool.nome} type="ferramenta" size="md" />
                   <div>
                     {estadoBadge(selectedTool.estado)}
+                    {selectedTool.localizacao && <p className="text-sm font-medium mt-1">Loc: {selectedTool.localizacao}</p>}
                     {selectedTool.pessoas?.nome && <p className="text-sm text-muted-foreground mt-1">Com: {selectedTool.pessoas.nome}</p>}
                     {selectedTool.data_retirada && <p className="text-xs text-muted-foreground">Retirada: {new Date(selectedTool.data_retirada).toLocaleDateString('pt-BR')}</p>}
                   </div>
@@ -574,12 +590,20 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       <Dialog open={retirarOpen} onOpenChange={setRetirarOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>Retirar Ferramenta</DialogTitle></DialogHeader>
-          <form onSubmit={e => { e.preventDefault(); selectedTool && retirar.mutate({ id: selectedTool.id, pessoaId: retirarPessoaId }); }} className="space-y-3">
+          <form onSubmit={e => { e.preventDefault(); selectedTool && retirar.mutate({ id: selectedTool.id, pessoaId: retirarPessoaId, tipo: retirarTipo }); }} className="space-y-3">
+            <Select value={retirarTipo} onValueChange={(v: 'uso' | 'manutencao') => setRetirarTipo(v)}>
+              <SelectTrigger className="h-12"><SelectValue placeholder="Finalidade" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="uso">Retirar para Uso</SelectItem>
+                <SelectItem value="manutencao">Enviar para Manutenção</SelectItem>
+              </SelectContent>
+            </Select>
+
             <Select value={retirarPessoaId} onValueChange={setRetirarPessoaId}>
-              <SelectTrigger className="h-12"><SelectValue placeholder="Responsável (opcional)" /></SelectTrigger>
+              <SelectTrigger className="h-12"><SelectValue placeholder="Responsável *" /></SelectTrigger>
               <SelectContent>{pessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
             </Select>
-            <Button type="submit" className="w-full h-12 bg-warning hover:bg-warning/90 text-warning-foreground" disabled={retirar.isPending}>{retirar.isPending ? 'Registrando...' : 'Confirmar Retirada'}</Button>
+            <Button type="submit" className="w-full h-12 bg-warning hover:bg-warning/90 text-warning-foreground" disabled={retirar.isPending || !retirarPessoaId}>{retirar.isPending ? 'Registrando...' : 'Confirmar Retirada'}</Button>
           </form>
         </DialogContent>
       </Dialog>
@@ -614,6 +638,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             )}
 
             <Input placeholder="Código" value={form.codigo} onChange={e => setForm(f => ({ ...f, codigo: e.target.value }))} className="h-12" />
+            <Input placeholder="Localização (Ex: Armário 1)" value={form.localizacao} onChange={e => setForm(f => ({ ...f, localizacao: e.target.value }))} className="h-12" />
             <Input placeholder="Código QR Code (Ex: F01 - opcional)" value={form.qr_code} onChange={e => setForm(f => ({ ...f, qr_code: e.target.value }))} className="h-12" />
             <Input placeholder="Observações" value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} className="h-12" />
             <Button type="submit" className="w-full h-12" disabled={save.isPending || !form.nome || !form.categoria}>{save.isPending ? 'Salvando...' : 'Salvar'}</Button>
@@ -748,6 +773,16 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                     </p>
                   </div>
                   <div className="space-y-3">
+                    <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Finalidade *</label>
+                    <Select value={scanRetirarTipo} onValueChange={(v: 'uso' | 'manutencao') => setScanRetirarTipo(v)}>
+                      <SelectTrigger className="h-11"><SelectValue placeholder="Selecione a finalidade..." /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="uso">Retirar para Uso</SelectItem>
+                        <SelectItem value="manutencao">Enviar para Manutenção</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-3">
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Quem está retirando? *</label>
                     <Select value={scanPessoaId} onValueChange={setScanPessoaId}>
                       <SelectTrigger className="h-11"><SelectValue placeholder="Selecione o responsável..." /></SelectTrigger>
@@ -760,7 +795,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                     <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Observação (opcional)</label>
                     <Input placeholder="Ex: Retirando para obra de reforço" value={scanObservacao} onChange={e => setScanObservacao(e.target.value)} className="h-11" />
                   </div>
-                  <Button className="w-full h-12 bg-warning text-warning-foreground hover:bg-warning/90 font-bold" onClick={() => retirar.mutate({ id: scannedTool.id, pessoaId: scanPessoaId, observacao: scanObservacao })} disabled={retirar.isPending || !scanPessoaId}>
+                  <Button className="w-full h-12 bg-warning text-warning-foreground hover:bg-warning/90 font-bold" onClick={() => retirar.mutate({ id: scannedTool.id, pessoaId: scanPessoaId, observacao: scanObservacao, tipo: scanRetirarTipo })} disabled={retirar.isPending || !scanPessoaId}>
                     {retirar.isPending ? 'Confirmando...' : 'Confirmar Retirada'}
                   </Button>
                 </div>
