@@ -61,6 +61,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [filterSemLocalizacao, setFilterSemLocalizacao] = useState(false);
+  const [filterOcultarZerados, setFilterOcultarZerados] = useState(false);
   const [accordionValue, setAccordionValue] = useState<string[]>([...CONSTRUCAO_CATEGORIES, 'Não Categorizado']);
 
   useEffect(() => {
@@ -209,7 +210,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const filtered = produtos.filter((p: any) => {
     const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()));
     const matchLocation = filterSemLocalizacao ? !p.localizacao?.trim() : true;
-    return matchSearch && matchLocation;
+    const matchZerado = filterOcultarZerados ? Number(p.estoque_atual) > 0 : true;
+    return matchSearch && matchLocation && matchZerado;
   });
 
   const toggleAccordion = () => {
@@ -319,6 +321,15 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
           {filterSemLocalizacao ? 'Mostrando: Sem Localização' : 'Filtrar: Sem Localização'}
         </Button>
         <Button 
+          variant={filterOcultarZerados ? "default" : "outline"} 
+          size="sm" 
+          onClick={() => setFilterOcultarZerados(!filterOcultarZerados)} 
+          className={`h-8 text-xs rounded-full ${filterOcultarZerados ? 'bg-destructive text-destructive-foreground' : 'bg-background'}`}
+        >
+          <ArrowUpFromLine className="h-3 w-3 mr-1.5" />
+          {filterOcultarZerados ? 'Mostrando: Com Estoque' : 'Ocultar Itens Zerados'}
+        </Button>
+        <Button 
           variant="outline" 
           size="sm" 
           onClick={toggleAccordion} 
@@ -333,7 +344,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       </div>
 
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
-        <p className="text-center py-16 text-muted-foreground">{(search || filterSemLocalizacao) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}</p>
+        <p className="text-center py-16 text-muted-foreground">{(search || filterSemLocalizacao || filterOcultarZerados) ? 'Nenhum produto encontrado com os filtros aplicados.' : 'Nenhum produto cadastrado'}</p>
       ) : (
         <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue} className="space-y-3">
           {[...CONSTRUCAO_CATEGORIES, 'Não Categorizado'].map((cat) => {
