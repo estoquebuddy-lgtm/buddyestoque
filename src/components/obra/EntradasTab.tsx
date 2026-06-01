@@ -661,9 +661,10 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                   {entryType === 'ferramenta' ? 'Quantidade (nº de unidades que serão criadas) *' : 'Quantidade da Entrada *'}
                 </label>
                 <Input
-                  placeholder="Ex: 15"
+                  placeholder="Ex: 0,5 ou 15"
                   type="number"
-                  min="1"
+                  min="0.001"
+                  step="0.001"
                   value={form.quantidade}
                   onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
                   required
