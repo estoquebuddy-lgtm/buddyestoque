@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
 import PageHeader from '@/components/PageHeader';
@@ -86,6 +86,17 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const [observacao, setObservacao] = useState('');
   const [selectedProdutoId, setSelectedProdutoId] = useState('');
   const [selectedQtd, setSelectedQtd] = useState('');
+  const [productSearch, setProductSearch] = useState('');
+  const [showProductList, setShowProductList] = useState(false);
+
+  useEffect(() => {
+    if (!dialogOpen) {
+      setSelectedProdutoId('');
+      setSelectedQtd('');
+      setProductSearch('');
+      setShowProductList(false);
+    }
+  }, [dialogOpen]);
 
   const { data: usuarios = [] } = useQuery({
     queryKey: ['profiles-list'],
@@ -589,12 +600,73 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Materiais Necessários *</label>
               
               <div className="flex gap-2">
-                <Select value={selectedProdutoId} onValueChange={setSelectedProdutoId}>
-                  <SelectTrigger className="flex-1 h-11"><SelectValue placeholder="Puxar do estoque..." /></SelectTrigger>
-                  <SelectContent>
-                    {produtos.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <div className="flex-1 relative">
+                  {!selectedProdutoId ? (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar no estoque..."
+                        value={productSearch}
+                        onChange={e => {
+                          setProductSearch(e.target.value);
+                          setShowProductList(true);
+                        }}
+                        onFocus={() => setShowProductList(true)}
+                        onBlur={() => setShowProductList(false)}
+                        className="h-11 pl-9 bg-background"
+                        autoComplete="off"
+                      />
+                      {showProductList && (
+                        <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {produtos
+                            .filter((p: any) => !p.nome.startsWith('[FERRAMENTA]'))
+                            .filter((p: any) => p.nome.toLowerCase().includes(productSearch.toLowerCase()))
+                            .map((p: any) => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                className="w-full text-left px-4 py-2 hover:bg-accent transition-colors flex flex-col justify-center text-sm min-h-[44px]"
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  setSelectedProdutoId(p.id);
+                                  setProductSearch('');
+                                  setShowProductList(false);
+                                }}
+                              >
+                                <span className="font-medium truncate text-foreground">{p.nome}</span>
+                                {p.unidade && <span className="text-[10px] text-muted-foreground">{p.unidade}</span>}
+                              </button>
+                            ))
+                          }
+                          {produtos
+                            .filter((p: any) => !p.nome.startsWith('[FERRAMENTA]'))
+                            .filter((p: any) => p.nome.toLowerCase().includes(productSearch.toLowerCase()))
+                            .length === 0 && (
+                            <p className="text-xs text-muted-foreground p-3 text-center">Nenhum produto encontrado</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between px-3 h-11 rounded-lg border bg-muted/40 text-sm">
+                      <span className="font-medium truncate">
+                        {produtos.find((p: any) => p.id === selectedProdutoId)?.nome}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-muted-foreground hover:text-foreground hover:bg-muted ml-2"
+                        onClick={() => {
+                          setSelectedProdutoId('');
+                          setProductSearch('');
+                        }}
+                      >
+                        Trocar
+                      </Button>
+                    </div>
+                  )}
+                </div>
                 <Input 
                   type="number" 
                   placeholder="Qtd" 
@@ -613,6 +685,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                       setForm(f => ({ ...f, descricao: f.descricao ? f.descricao + '\n' + linha : linha }));
                       setSelectedProdutoId('');
                       setSelectedQtd('');
+                      setProductSearch('');
                     }
                   }}
                 >
