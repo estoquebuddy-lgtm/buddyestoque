@@ -456,7 +456,13 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     setDialogOpen(true);
   };
 
-  const filtered = ferramentas.filter((f: any) => f.nome.toLowerCase().includes(search.toLowerCase()) || (f.codigo && f.codigo.toLowerCase().includes(search.toLowerCase())));
+  const filtered = ferramentas
+    .filter((f: any) => f.nome.toLowerCase().includes(search.toLowerCase()) || (f.codigo && f.codigo.toLowerCase().includes(search.toLowerCase())))
+    .sort((a: any, b: any) => {
+      const nomeComp = (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' });
+      if (nomeComp !== 0) return nomeComp;
+      return (a.codigo || '').localeCompare(b.codigo || '', 'pt-BR', { numeric: true, sensitivity: 'base' });
+    });
 
   const estadoBadge = (estado: string) => {
     switch (estado?.toLowerCase()) {
