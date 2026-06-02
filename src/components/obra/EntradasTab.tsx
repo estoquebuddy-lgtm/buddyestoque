@@ -918,6 +918,18 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               </div>
             </div>
 
+            {entryType === 'material' && (entryItems.length > 0 || (form.quantidade && form.valor_unitario && Number(form.quantidade) > 0 && Number(form.valor_unitario) > 0)) && (
+              <div className="flex justify-between items-center bg-primary/5 border border-primary/20 p-3 rounded-lg mb-2 mt-4">
+                <span className="font-semibold text-primary uppercase text-xs tracking-wider">Total Final da Entrada</span>
+                <span className="font-bold text-primary text-lg">
+                  R$ {(
+                    entryItems.reduce((acc, item) => acc + (Number(item.quantidade) * Number(item.valor_unitario)), 0) +
+                    (form.produto_id || isNewProduct ? (Number(form.quantidade || 0) * Number(form.valor_unitario || 0)) : 0)
+                  ).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
+            )}
+
             <Button type="submit" className="w-full h-12" disabled={isPending || !canSubmit}>
               {isPending
                 ? 'Registrando...'
