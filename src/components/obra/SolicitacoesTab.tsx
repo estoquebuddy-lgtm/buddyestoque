@@ -619,7 +619,6 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                       {showProductList && (
                         <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
                           {produtos
-                            .filter((p: any) => !p.nome.startsWith('[FERRAMENTA]'))
                             .filter((p: any) => p.nome.toLowerCase().includes(productSearch.toLowerCase()))
                             .map((p: any) => (
                               <button
@@ -633,13 +632,15 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                                   setShowProductList(false);
                                 }}
                               >
-                                <span className="font-medium truncate text-foreground">{p.nome}</span>
+                                <span className="font-medium truncate text-foreground flex items-center gap-2">
+                                  {p.nome.replace('[FERRAMENTA] ', '').replace('[FERRAMENTA]', '')}
+                                  {p.nome.startsWith('[FERRAMENTA]') && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">Ferramenta</span>}
+                                </span>
                                 {p.unidade && <span className="text-[10px] text-muted-foreground">{p.unidade}</span>}
                               </button>
                             ))
                           }
                           {produtos
-                            .filter((p: any) => !p.nome.startsWith('[FERRAMENTA]'))
                             .filter((p: any) => p.nome.toLowerCase().includes(productSearch.toLowerCase()))
                             .length === 0 && (
                             <p className="text-xs text-muted-foreground p-3 text-center">Nenhum produto encontrado</p>
@@ -649,8 +650,9 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     </div>
                   ) : (
                     <div className="flex items-center justify-between px-3 h-11 rounded-lg border bg-muted/40 text-sm">
-                      <span className="font-medium truncate">
-                        {produtos.find((p: any) => p.id === selectedProdutoId)?.nome}
+                      <span className="font-medium truncate flex items-center gap-2">
+                        {produtos.find((p: any) => p.id === selectedProdutoId)?.nome.replace('[FERRAMENTA] ', '').replace('[FERRAMENTA]', '')}
+                        {produtos.find((p: any) => p.id === selectedProdutoId)?.nome.startsWith('[FERRAMENTA]') && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">Ferramenta</span>}
                       </span>
                       <Button
                         type="button"
