@@ -251,7 +251,7 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1.5 min-w-0">
               <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold truncate">Métricas de Cobertura</p>
-              <h3 className="text-xl font-display font-bold text-[#f59e0b] truncate">{totalProdutosComCusto} / {produtos.length}</h3>
+              <h3 className="text-xl font-display font-bold text-[#f59e0b] truncate">{totalProdutosComCusto} / {activeProducts.length}</h3>
               <p className="text-xs text-white/50 truncate">Produtos com histórico de custo</p>
             </div>
             <div className="h-10 w-10 rounded-xl bg-[#f59e0b]/15 flex items-center justify-center border border-[#f59e0b]/20 shrink-0 ml-2">
