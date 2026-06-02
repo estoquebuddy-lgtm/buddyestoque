@@ -35,6 +35,8 @@ const CONSTRUCAO_CATEGORIES = [
   'Segurança (EPI)',
   'Marcenaria',
   'Serralheria',
+  'Disco',
+  'Insumos',
   'OUTROS'
 ];
 

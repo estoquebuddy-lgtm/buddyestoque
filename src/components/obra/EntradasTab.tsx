@@ -24,7 +24,8 @@ const emptyNewFerramenta = { nome: '', categoria: 'Ferramentas Elétricas', loca
 
 const CONSTRUCAO_CATEGORIES = [
   'Hidráulica', 'Elétrica', 'Esgoto', 'Estrutural', 'Alvenaria',
-  'Acabamento', 'Pintura', 'Ferramentas', 'Segurança (EPI)', 'Marcenaria', 'Serralheria', 'OUTROS'
+  'Acabamento', 'Pintura', 'Ferramentas', 'Segurança (EPI)', 'Marcenaria', 'Serralheria',
+  'Disco', 'Insumos', 'OUTROS'
 ];
 
 const FERRAMENTA_CATEGORIES = [
