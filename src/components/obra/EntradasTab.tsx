@@ -45,6 +45,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   // Entry type: 'material' or 'ferramenta'
   const [entryType, setEntryType] = useState<'material' | 'ferramenta'>('material');
   const [newFerramenta, setNewFerramenta] = useState(emptyNewFerramenta);
+  const [editingFerramenta, setEditingFerramenta] = useState<{ produtoId: string; nome: string } | null>(null);
 
   // New product inline state
   const [isNewProduct, setIsNewProduct] = useState(false);
@@ -166,13 +167,34 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Save entry for FERRAMENTA: creates N individual tools + 1 financial entry
+  // Save entry for FERRAMENTA: creates N individual tools + 1 financial entry (or just updates if editing)
   const saveFerramenta = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       const quantidade = Number(form.quantidade);
       const valorUnitario = Number(form.valor_unitario) || 0;
 
+      // ── EDIT MODE: only update the financial entry ──────────────────────
+      if (editingId) {
+        const payload = {
+          quantidade,
+          valor_unitario: valorUnitario,
+          fornecedor: form.fornecedor || null,
+          observacao: form.observacao ? `[FERRAMENTA] ${form.observacao}` : '[FERRAMENTA]',
+          nota_fiscal_url: form.nota_fiscal_url || null,
+        };
+        const { error } = await supabase.from('entradas').update(payload).eq('id', editingId);
+        if (error) throw error;
+
+        await supabase.from('logs_atividades' as any).insert({
+          obra_id: obraId, user_id: user?.id, user_email: user?.email,
+          acao: 'EDITAR', entidade: 'FERRAMENTA',
+          detalhes: `Editou lançamento financeiro da ferramenta: ${newFerramenta.nome}`
+        });
+        return;
+      }
+
+      // ── CREATE MODE ─────────────────────────────────────────────────────
       if (!newFerramenta.nome.trim()) throw new Error('Nome da ferramenta é obrigatório');
       if (!quantidade || quantidade < 1) throw new Error('Quantidade deve ser ao menos 1');
 
@@ -258,12 +280,28 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     mutationFn: async (id: string) => {
       const { data: { user } } = await supabase.auth.getUser();
       const ent = entradas.find((e: any) => e.id === id);
-      const { error } = await supabase.from('entradas').delete().eq('id', id); if (error) throw error;
+      const isTool = isFerramenta(ent);
+
+      const { error } = await supabase.from('entradas').delete().eq('id', id);
+      if (error) throw error;
+
+      // If it was a ferramenta entry, check if the virtual [FERRAMENTA] product
+      // has any remaining entries; if not, remove the virtual product too
+      if (isTool && ent?.produto_id) {
+        const { data: remaining } = await supabase
+          .from('entradas')
+          .select('id')
+          .eq('produto_id', ent.produto_id)
+          .limit(1);
+        if (!remaining || remaining.length === 0) {
+          await supabase.from('produtos').delete().eq('id', ent.produto_id);
+        }
+      }
 
       await supabase.from('logs_atividades' as any).insert({
         obra_id: obraId, user_id: user?.id, user_email: user?.email,
-        acao: 'EXCLUIR', entidade: 'ESTOQUE',
-        detalhes: `Excluiu entrada de: ${ent?.produtos?.nome || id}`
+        acao: 'EXCLUIR', entidade: isTool ? 'FERRAMENTA' : 'ESTOQUE',
+        detalhes: `Excluiu entrada de: ${ent?.produtos?.nome?.replace('[FERRAMENTA] ', '') || id}`
       });
     },
     onSuccess: () => {
@@ -271,7 +309,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
       queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
       setDeleteId(null);
-      toast.success('Entrada excluída! Estoque ajustado.');
+      toast.success('Entrada excluída! Estoque e financeiro ajustados.');
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -279,9 +317,22 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const startEdit = (e: any) => {
     setEditingId(e.id);
     setEntryType('material');
+    setEditingFerramenta(null);
     setForm({ produto_id: e.produto_id, quantidade: String(e.quantidade), valor_unitario: String(e.valor_unitario || ''), fornecedor: e.fornecedor || '', observacao: e.observacao || '', nota_fiscal_url: e.nota_fiscal_url || '' });
     setIsNewProduct(false);
     setNewProduct(emptyNewProduct);
+    setProductSearch('');
+    setDialogOpen(true);
+  };
+
+  const startEditFerramenta = (e: any) => {
+    const nomeSemTag = e.produtos?.nome?.replace('[FERRAMENTA] ', '') || '';
+    setEditingId(e.id);
+    setEntryType('ferramenta');
+    setEditingFerramenta({ produtoId: e.produto_id, nome: nomeSemTag });
+    setNewFerramenta({ nome: nomeSemTag, categoria: 'Ferramentas Elétricas', localizacao: '', codigoPrefixo: '' });
+    setForm({ produto_id: e.produto_id, quantidade: String(e.quantidade), valor_unitario: String(e.valor_unitario || ''), fornecedor: e.fornecedor || '', observacao: e.observacao?.replace('[FERRAMENTA] ', '').replace('[FERRAMENTA]', '').trim() || '', nota_fiscal_url: e.nota_fiscal_url || '' });
+    setIsNewProduct(false);
     setProductSearch('');
     setDialogOpen(true);
   };
@@ -303,6 +354,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const resetDialog = () => {
     setEditingId(null);
+    setEditingFerramenta(null);
     setForm(emptyForm);
     setEntryType('material');
     setIsNewProduct(false);
@@ -318,7 +370,9 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const isFerramenta = (e: any) => e.observacao?.startsWith('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
 
   const canSubmit = entryType === 'ferramenta'
-    ? !!newFerramenta.nome.trim() && !!form.quantidade && !!form.valor_unitario
+    ? (editingId
+        ? !!form.quantidade && !!form.valor_unitario
+        : !!newFerramenta.nome.trim() && !!form.quantidade && !!form.valor_unitario)
     : isNewProduct
       ? !!newProduct.nome.trim() && !!form.quantidade && !!form.valor_unitario
       : !!form.produto_id && !!form.quantidade && !!form.valor_unitario;
@@ -401,6 +455,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                   <div className="flex gap-1 ml-2">
                     {e.nota_fiscal_url && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewNota(e.nota_fiscal_url)}><Eye className="h-4 w-4 text-info" /></Button>}
                     {!isTool && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(e)}><Pencil className="h-3.5 w-3.5" /></Button>}
+                    {isTool && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEditFerramenta(e)}><Pencil className="h-3.5 w-3.5" /></Button>}
                     {isAdmin && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(e.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
                   </div>
                 </CardContent>
@@ -448,20 +503,31 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               </div>
             )}
 
-            {/* FERRAMENTA FIELDS */}
-            {entryType === 'ferramenta' && !editingId && (
+            {/* FERRAMENTA FIELDS - for new entries OR editing ferramenta entries */}
+            {entryType === 'ferramenta' && (
               <div className="space-y-4 p-4 bg-warning/5 border border-warning/20 rounded-xl">
                 <div className="flex items-center gap-2 pb-2 border-b border-warning/20">
                   <Wrench className="h-4 w-4 text-warning" />
-                  <p className="text-sm font-semibold text-warning">Dados da Ferramenta</p>
+                  <p className="text-sm font-semibold text-warning">{editingId ? 'Editar Entrada de Ferramenta' : 'Dados da Ferramenta'}</p>
                 </div>
 
-                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg flex gap-2">
-                  <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-blue-700 dark:text-blue-300">
-                    Cada unidade será criada individualmente na aba <strong>Ferramentas</strong>. O valor total será lançado no <strong>Financeiro</strong>.
-                  </p>
-                </div>
+                {!editingId && (
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg flex gap-2">
+                    <AlertCircle className="h-4 w-4 text-blue-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      Cada unidade será criada individualmente na aba <strong>Ferramentas</strong>. O valor total será lançado no <strong>Financeiro</strong>.
+                    </p>
+                  </div>
+                )}
+
+                {editingId && (
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg flex gap-2">
+                    <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                      Editando o <strong>lançamento financeiro</strong> desta entrada. As ferramentas individuais já criadas <strong>não serão alteradas</strong>.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground ml-1">Nome da Ferramenta *</label>
@@ -471,43 +537,49 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     onChange={e => setNewFerramenta(f => ({ ...f, nome: e.target.value }))}
                     className="h-11"
                     required
+                    disabled={!!editingId} // Can't rename the ferramenta via entry edit
                   />
+                  {editingId && <p className="text-[11px] text-muted-foreground ml-1">Para renomear a ferramenta, vá para a aba Ferramentas.</p>}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground ml-1">Categoria</label>
-                    <Select value={newFerramenta.categoria} onValueChange={v => setNewFerramenta(f => ({ ...f, categoria: v }))}>
-                      <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {FERRAMENTA_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                {!editingId && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground ml-1">Categoria</label>
+                      <Select value={newFerramenta.categoria} onValueChange={v => setNewFerramenta(f => ({ ...f, categoria: v }))}>
+                        <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {FERRAMENTA_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground ml-1">Localização</label>
+                      <Input
+                        placeholder="Ex: Armário 2"
+                        value={newFerramenta.localizacao}
+                        onChange={e => setNewFerramenta(f => ({ ...f, localizacao: e.target.value }))}
+                        className="h-10"
+                      />
+                    </div>
                   </div>
+                )}
+
+                {!editingId && (
                   <div className="space-y-1">
-                    <label className="text-xs text-muted-foreground ml-1">Localização</label>
+                    <label className="text-xs text-muted-foreground ml-1">Prefixo de Código (opcional)</label>
                     <Input
-                      placeholder="Ex: Armário 2"
-                      value={newFerramenta.localizacao}
-                      onChange={e => setNewFerramenta(f => ({ ...f, localizacao: e.target.value }))}
+                      placeholder="Ex: FUR → criará FUR-01, FUR-02..."
+                      value={newFerramenta.codigoPrefixo}
+                      onChange={e => setNewFerramenta(f => ({ ...f, codigoPrefixo: e.target.value.toUpperCase() }))}
                       className="h-10"
                     />
                   </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground ml-1">Prefixo de Código (opcional)</label>
-                  <Input
-                    placeholder="Ex: FUR → criará FUR-01, FUR-02..."
-                    value={newFerramenta.codigoPrefixo}
-                    onChange={e => setNewFerramenta(f => ({ ...f, codigoPrefixo: e.target.value.toUpperCase() }))}
-                    className="h-10"
-                  />
-                </div>
+                )}
               </div>
             )}
 
-            {/* MATERIAL FIELDS */}
+            {/* MATERIAL FIELDS - only when type is material */}
             {entryType === 'material' && (
               <div>
                 {/* Product selector */}

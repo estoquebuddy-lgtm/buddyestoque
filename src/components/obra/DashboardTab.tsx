@@ -30,11 +30,11 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
     },
   });
 
-  // Only consider items with a defined minimum (> 0) as low stock
-  const lowStock = produtos
-    .filter((p: any) => !p.nome?.startsWith('[FERRAMENTA]'))
+  // Only consider items with a defined minimum (> 0) as low stock, exclude [FERRAMENTA] virtual products
+  const produtosReais = produtos.filter((p: any) => !p.nome?.startsWith('[FERRAMENTA]'));
+  const lowStock = produtosReais
     .filter((p: any) => Number(p.estoque_minimo) > 0 && Number(p.estoque_atual) <= Number(p.estoque_minimo));
-  const totalProdutos = produtos.length;
+  const totalProdutos = produtosReais.length;
 
   // ─── Saídas / Entradas de hoje ────────────────────────────
   const { data: todaySaidas = [] } = useQuery({
