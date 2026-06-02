@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { FileUp, Loader2, Check, Package, Trash2, Plus, Wrench, AlertCircle } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery } from '@tanstack/react-query';
 import * as pdfjs from 'pdfjs-dist';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -42,6 +42,24 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'upload' | 'review'>('upload');
   const [descontoTotal, setDescontoTotal] = useState<number>(0);
+  const [fornecedor, setFornecedor] = useState<string>('');
+  const [showFornecedorList, setShowFornecedorList] = useState(false);
+
+  const { data: fornecedores = [] } = useQuery({
+    queryKey: ['fornecedores', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('entradas')
+        .select('fornecedor')
+        .eq('obra_id', obraId)
+        .not('fornecedor', 'is', null)
+        .neq('fornecedor', '');
+      if (!data) return [];
+      const unique = Array.from(new Set(data.map((d: any) => d.fornecedor.trim()))).filter(Boolean);
+      return unique.sort((a: any, b: any) => a.localeCompare(b));
+    },
+    enabled: !!obraId && open,
+  });
 
   const makeItem = (overrides: Partial<PdfItem> = {}): PdfItem => ({
     id: crypto.randomUUID(),
@@ -61,6 +79,8 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
     setStep('upload');
     setLoading(false);
     setDescontoTotal(0);
+    setFornecedor('');
+    setShowFornecedorList(false);
     if (fileRef.current) fileRef.current.value = '';
   };
 
@@ -192,6 +212,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
+            fornecedor: fornecedor || null,
           });
           if (entErr) throw entErr;
 
@@ -245,6 +266,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
+            fornecedor: fornecedor || null,
           });
           if (entErr) throw entErr;
 
@@ -457,7 +479,47 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
                 Resumo da Importação
               </h4>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                {/* Fornecedor Input */}
+                <div className="space-y-2 relative">
+                  <label className="text-xs font-medium text-muted-foreground ml-1">
+                    Fornecedor (opcional)
+                  </label>
+                  <Input 
+                    placeholder="De onde veio?" 
+                    value={fornecedor} 
+                    onChange={e => {
+                      setFornecedor(e.target.value);
+                      setShowFornecedorList(true);
+                    }} 
+                    onFocus={() => setShowFornecedorList(true)}
+                    onBlur={() => setTimeout(() => setShowFornecedorList(false), 200)}
+                    className="h-9 text-sm" 
+                    autoComplete="off"
+                  />
+                  {showFornecedorList && fornecedores.filter((f: any) => f.toLowerCase().includes(fornecedor.toLowerCase()) && f !== fornecedor).length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {fornecedores
+                        .filter((f: any) => f.toLowerCase().includes(fornecedor.toLowerCase()) && f !== fornecedor)
+                        .map((f: any) => (
+                          <button
+                            key={f}
+                            type="button"
+                            className="w-full text-left px-4 py-2 hover:bg-accent transition-colors flex items-center text-sm"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setFornecedor(f);
+                              setShowFornecedorList(false);
+                            }}
+                          >
+                            <span className="font-medium truncate text-foreground">{f}</span>
+                          </button>
+                        ))
+                      }
+                    </div>
+                  )}
+                </div>
+
                 {/* Desconto Input */}
                 <div className="space-y-2">
                   <label htmlFor="desconto-input" className="text-xs font-medium text-muted-foreground ml-1">

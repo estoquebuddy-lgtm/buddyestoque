@@ -53,6 +53,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [newProduct, setNewProduct] = useState(emptyNewProduct);
   const [productSearch, setProductSearch] = useState('');
   const [showProductList, setShowProductList] = useState(false);
+  const [showFornecedorList, setShowFornecedorList] = useState(false);
   const productInputRef = useRef<HTMLInputElement>(null);
   const productListRef = useRef<HTMLDivElement>(null);
 
@@ -78,6 +79,22 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome, unidade, categoria, estoque_atual, estoque_minimo').eq('obra_id', obraId).order('nome'); return data || []; } });
   const { data: entradas = [], isLoading } = useQuery({ queryKey: ['entradas', obraId], queryFn: async () => { const { data } = await supabase.from('entradas').select('*, produtos(nome, unidade)').eq('obra_id', obraId).order('data', { ascending: false }); return data || []; } });
+
+  const { data: fornecedores = [] } = useQuery({
+    queryKey: ['fornecedores', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('entradas')
+        .select('fornecedor')
+        .eq('obra_id', obraId)
+        .not('fornecedor', 'is', null)
+        .neq('fornecedor', '');
+      if (!data) return [];
+      const unique = Array.from(new Set(data.map((d: any) => d.fornecedor.trim()))).filter(Boolean);
+      return unique.sort((a: any, b: any) => a.localeCompare(b));
+    },
+    enabled: !!obraId,
+  });
 
   useEffect(() => {
     const channel = supabase.channel('entradas-changes')
@@ -762,7 +779,41 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground ml-1">Fornecedor (opcional)</label>
-                <Input placeholder="De onde veio?" value={form.fornecedor} onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))} className="h-12" />
+                <div className="relative">
+                  <Input 
+                    placeholder="De onde veio?" 
+                    value={form.fornecedor} 
+                    onChange={e => {
+                      setForm(f => ({ ...f, fornecedor: e.target.value }));
+                      setShowFornecedorList(true);
+                    }} 
+                    onFocus={() => setShowFornecedorList(true)}
+                    onBlur={() => setTimeout(() => setShowFornecedorList(false), 200)}
+                    className="h-12" 
+                    autoComplete="off"
+                  />
+                  {showFornecedorList && fornecedores.filter((f: any) => f.toLowerCase().includes(form.fornecedor.toLowerCase()) && f !== form.fornecedor).length > 0 && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {fornecedores
+                        .filter((f: any) => f.toLowerCase().includes(form.fornecedor.toLowerCase()) && f !== form.fornecedor)
+                        .map((f: any) => (
+                          <button
+                            key={f}
+                            type="button"
+                            className="w-full text-left px-4 py-2 hover:bg-accent transition-colors flex items-center text-sm"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setForm(prev => ({ ...prev, fornecedor: f }));
+                              setShowFornecedorList(false);
+                            }}
+                          >
+                            <span className="font-medium truncate text-foreground">{f}</span>
+                          </button>
+                        ))
+                      }
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-1">
