@@ -132,11 +132,13 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
   const totalEstoqueEstimadoObra = productsWithCosts.reduce((acc, p) => acc + p.valorEstoqueEstimado, 0);
   const totalProdutosComCusto = productsWithCosts.filter(p => p.custoMedio > 0).length;
 
-  // Filtered List
-  const filteredProducts = productsWithCosts.filter((p: any) =>
-    p.nome.toLowerCase().includes(search.toLowerCase()) ||
-    (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()))
-  );
+  // Filtered List — exclude products with zero entries and zero saídas (orphaned rows)
+  const filteredProducts = productsWithCosts
+    .filter((p: any) => p.allEntradas.length > 0 || p.allSaidas.length > 0)
+    .filter((p: any) =>
+      p.nome.toLowerCase().includes(search.toLowerCase()) ||
+      (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()))
+    );
 
   const formatCurrency = (val: number) => {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
