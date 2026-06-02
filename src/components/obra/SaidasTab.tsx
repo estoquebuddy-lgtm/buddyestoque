@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowUpFromLine, Pencil, Trash2 } from 'lucide-react';
+import { ArrowUpFromLine, Pencil, Trash2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
@@ -26,6 +26,16 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => { if (fabOpen) { setEditingId(null); setForm(emptyForm); setDialogOpen(true); onFabClose?.(); } }, [fabOpen]);
+
+  const [productSearch, setProductSearch] = useState('');
+  const [showProductList, setShowProductList] = useState(false);
+
+  useEffect(() => {
+    if (!dialogOpen) {
+      setProductSearch('');
+      setShowProductList(false);
+    }
+  }, [dialogOpen]);
 
   const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome, estoque_atual, unidade').eq('obra_id', obraId).order('nome'); return data || []; } });
   const { data: pessoas = [] } = useQuery({ queryKey: ['pessoas', obraId], queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome'); return data || []; } });
@@ -152,11 +162,78 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? 'Editar Saída' : 'Nova Saída'}</DialogTitle></DialogHeader>
           <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="space-y-3">
-            <Select value={form.produto_id} onValueChange={v => setForm(f => ({ ...f, produto_id: v }))}>
-              <SelectTrigger className="h-12"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
-              <SelectContent>{produtos.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome} (disp: {Number(p.estoque_atual)})</SelectItem>)}</SelectContent>
-            </Select>
-            {selectedProduct && <p className="text-xs text-muted-foreground">Disponível: {Number(selectedProduct.estoque_atual)} {selectedProduct.unidade}</p>}
+            <div className="relative">
+              {!form.produto_id ? (
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar produto no estoque..."
+                    value={productSearch}
+                    onChange={e => {
+                      setProductSearch(e.target.value);
+                      setShowProductList(true);
+                    }}
+                    onFocus={() => setShowProductList(true)}
+                    onBlur={() => setShowProductList(false)}
+                    className="h-12 pl-9 bg-background"
+                    autoComplete="off"
+                  />
+                  {showProductList && (
+                    <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      {produtos
+                        .filter((p: any) => !p.nome.startsWith('[FERRAMENTA]'))
+                        .filter((p: any) => p.nome.toLowerCase().includes(productSearch.toLowerCase()))
+                        .map((p: any) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors flex flex-col justify-center text-sm min-h-[44px]"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setForm(f => ({ ...f, produto_id: p.id }));
+                              setProductSearch('');
+                              setShowProductList(false);
+                            }}
+                          >
+                            <span className="font-medium truncate text-foreground">{p.nome}</span>
+                            <span className="text-[10px] text-muted-foreground">Disponível: {Number(p.estoque_atual)} {p.unidade}</span>
+                          </button>
+                        ))
+                      }
+                      {produtos
+                        .filter((p: any) => !p.nome.startsWith('[FERRAMENTA]'))
+                        .filter((p: any) => p.nome.toLowerCase().includes(productSearch.toLowerCase()))
+                        .length === 0 && (
+                        <p className="text-xs text-muted-foreground p-3 text-center">Nenhum produto encontrado</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center justify-between px-3 h-12 rounded-lg border bg-muted/40 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium truncate text-foreground">
+                      {produtos.find((p: any) => p.id === form.produto_id)?.nome}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Disponível: {Number(selectedProduct?.estoque_atual || 0)} {selectedProduct?.unidade || ''}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 text-xs text-muted-foreground hover:text-foreground hover:bg-muted ml-2"
+                    onClick={() => {
+                      setForm(f => ({ ...f, produto_id: '' }));
+                      setProductSearch('');
+                    }}
+                  >
+                    Trocar
+                  </Button>
+                </div>
+              )}
+            </div>
             <Input placeholder="Quantidade *" type="number" value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))} required className="h-12" />
             <Select value={form.pessoa_id} onValueChange={v => setForm(f => ({ ...f, pessoa_id: v }))}>
               <SelectTrigger className="h-12"><SelectValue placeholder="Pessoa (opcional)" /></SelectTrigger>
