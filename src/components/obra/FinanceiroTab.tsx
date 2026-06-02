@@ -126,19 +126,22 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     };
   });
 
-  // Summary Metrics
-  const totalInvestidoObra = productsWithCosts.reduce((acc, p) => acc + p.totalInvestido, 0);
-  const totalSaidasObra = productsWithCosts.reduce((acc, p) => acc + p.totalSaidasValor, 0);
-  const totalEstoqueEstimadoObra = productsWithCosts.reduce((acc, p) => acc + p.valorEstoqueEstimado, 0);
-  const totalProdutosComCusto = productsWithCosts.filter(p => p.custoMedio > 0).length;
+  // Base ativa: exclui produtos órfãos (sem entradas nem saídas) — igual ao que é exibido na lista
+  const activeProducts = productsWithCosts.filter(
+    (p: any) => p.allEntradas.length > 0 || p.allSaidas.length > 0
+  );
 
-  // Filtered List — exclude products with zero entries and zero saídas (orphaned rows)
-  const filteredProducts = productsWithCosts
-    .filter((p: any) => p.allEntradas.length > 0 || p.allSaidas.length > 0)
-    .filter((p: any) =>
-      p.nome.toLowerCase().includes(search.toLowerCase()) ||
-      (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()))
-    );
+  // Summary Metrics — calculadas sobre a base ativa (sem órfãos)
+  const totalInvestidoObra = activeProducts.reduce((acc, p) => acc + p.totalInvestido, 0);
+  const totalSaidasObra = activeProducts.reduce((acc, p) => acc + p.totalSaidasValor, 0);
+  const totalEstoqueEstimadoObra = activeProducts.reduce((acc, p) => acc + p.valorEstoqueEstimado, 0);
+  const totalProdutosComCusto = activeProducts.filter(p => p.custoMedio > 0).length;
+
+  // Filtered List — aplica busca sobre a base ativa
+  const filteredProducts = activeProducts.filter((p: any) =>
+    p.nome.toLowerCase().includes(search.toLowerCase()) ||
+    (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()))
+  );
 
   const formatCurrency = (val: number) => {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
