@@ -22,6 +22,16 @@ const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', forneced
 const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '', foto_url: '', localizacao: '' };
 const emptyNewFerramenta = { nome: '', categoria: 'Ferramentas Elétricas', localizacao: '', codigoPrefixo: '' };
 
+interface EntryItem {
+  id: string;
+  produto_id: string;
+  isNewProduct: boolean;
+  newProduct: typeof emptyNewProduct;
+  quantidade: string;
+  valor_unitario: string;
+  selectedProductName: string;
+}
+
 const CONSTRUCAO_CATEGORIES = [
   'Hidráulica', 'Elétrica', 'Esgoto', 'Estrutural', 'Alvenaria',
   'Acabamento', 'Pintura', 'Ferramentas', 'Segurança (EPI)', 'Marcenaria', 'Serralheria',
@@ -54,6 +64,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [productSearch, setProductSearch] = useState('');
   const [showProductList, setShowProductList] = useState(false);
   const [showFornecedorList, setShowFornecedorList] = useState(false);
+  const [entryItems, setEntryItems] = useState<EntryItem[]>([]);
   const productInputRef = useRef<HTMLInputElement>(null);
   const productListRef = useRef<HTMLDivElement>(null);
 
@@ -117,58 +128,75 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const saveMaterial = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
-      let produtoId = form.produto_id;
 
-      if (isNewProduct) {
-        if (!newProduct.nome.trim()) throw new Error('Nome do produto é obrigatório');
-        const { data: newProd, error: prodError } = await supabase
-          .from('produtos')
-          .insert({
-            obra_id: obraId,
-            nome: newProduct.nome.trim(),
-            unidade: newProduct.unidade || 'un',
-            categoria: newProduct.categoria || null,
-            localizacao: newProduct.localizacao || null,
-            foto_url: newProduct.foto_url || null,
-            estoque_minimo: Number(newProduct.estoque_minimo) || 0,
-            estoque_atual: 0,
-          })
-          .select('id')
-          .single();
-        if (prodError) throw prodError;
-        produtoId = newProd.id;
-
-        await supabase.from('logs_atividades' as any).insert({
-          obra_id: obraId, user_id: user?.id, user_email: user?.email,
-          acao: 'CADASTRAR', entidade: 'PRODUTO',
-          detalhes: `Cadastrou o produto: ${newProduct.nome.trim()}`
+      const itemsToSave = [...entryItems];
+      if (form.produto_id || isNewProduct) {
+        if (isNewProduct && !newProduct.nome.trim()) throw new Error('Nome do produto é obrigatório');
+        itemsToSave.push({
+          id: crypto.randomUUID(),
+          produto_id: form.produto_id,
+          isNewProduct,
+          newProduct: { ...newProduct },
+          quantidade: form.quantidade,
+          valor_unitario: form.valor_unitario,
+          selectedProductName: isNewProduct ? newProduct.nome : (produtos.find((p: any) => p.id === form.produto_id)?.nome || ''),
         });
       }
 
-      if (!produtoId) throw new Error('Selecione ou cadastre um produto');
-      const prod = produtos.find((p: any) => p.id === produtoId) || { nome: newProduct.nome };
+      if (itemsToSave.length === 0) throw new Error('Selecione ou cadastre ao menos um produto');
 
-      const payload = {
-        obra_id: obraId, produto_id: produtoId,
-        quantidade: Number(form.quantidade),
-        valor_unitario: Number(form.valor_unitario) || 0,
-        fornecedor: form.fornecedor || null,
-        observacao: form.observacao || null,
-        nota_fiscal_url: form.nota_fiscal_url || null,
-      };
+      for (const item of itemsToSave) {
+        let produtoId = item.produto_id;
 
-      let res;
-      if (editingId) { res = await supabase.from('entradas').update(payload).eq('id', editingId); }
-      else { res = await supabase.from('entradas').insert(payload); }
-      if (res.error) throw res.error;
+        if (item.isNewProduct) {
+          const { data: newProd, error: prodError } = await supabase
+            .from('produtos')
+            .insert({
+              obra_id: obraId,
+              nome: item.newProduct.nome.trim(),
+              unidade: item.newProduct.unidade || 'un',
+              categoria: item.newProduct.categoria || null,
+              localizacao: item.newProduct.localizacao || null,
+              foto_url: item.newProduct.foto_url || null,
+              estoque_minimo: Number(item.newProduct.estoque_minimo) || 0,
+              estoque_atual: 0,
+            })
+            .select('id')
+            .single();
+          if (prodError) throw prodError;
+          produtoId = newProd.id;
 
-      await supabase.from('logs_atividades' as any).insert({
-        obra_id: obraId, user_id: user?.id, user_email: user?.email,
-        acao: editingId ? 'EDITAR' : 'ENTRADA', entidade: 'ESTOQUE',
-        detalhes: editingId
-          ? `Editou entrada de: ${prod?.nome}`
-          : `Registrou entrada de ${form.quantidade} ${'unidade' in prod ? prod.unidade : ''} de ${prod?.nome}`
-      });
+          await supabase.from('logs_atividades' as any).insert({
+            obra_id: obraId, user_id: user?.id, user_email: user?.email,
+            acao: 'CADASTRAR', entidade: 'PRODUTO',
+            detalhes: `Cadastrou o produto: ${item.newProduct.nome.trim()}`
+          });
+        }
+
+        const prod = produtos.find((p: any) => p.id === produtoId) || { nome: item.newProduct.nome, unidade: item.newProduct.unidade || 'un' };
+
+        const payload = {
+          obra_id: obraId, produto_id: produtoId,
+          quantidade: Number(item.quantidade),
+          valor_unitario: Number(item.valor_unitario) || 0,
+          fornecedor: form.fornecedor || null,
+          observacao: form.observacao || null,
+          nota_fiscal_url: form.nota_fiscal_url || null,
+        };
+
+        let res;
+        if (editingId) { res = await supabase.from('entradas').update(payload).eq('id', editingId); }
+        else { res = await supabase.from('entradas').insert(payload); }
+        if (res.error) throw res.error;
+
+        await supabase.from('logs_atividades' as any).insert({
+          obra_id: obraId, user_id: user?.id, user_email: user?.email,
+          acao: editingId ? 'EDITAR' : 'ENTRADA', entidade: 'ESTOQUE',
+          detalhes: editingId
+            ? `Editou entrada de: ${prod?.nome}`
+            : `Registrou entrada de ${item.quantidade} ${'unidade' in prod ? prod.unidade : ''} de ${prod?.nome}`
+        });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
@@ -177,10 +205,11 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       setDialogOpen(false);
       setEditingId(null);
       setForm(emptyForm);
+      setEntryItems([]);
       setIsNewProduct(false);
       setNewProduct(emptyNewProduct);
       setProductSearch('');
-      toast.success(isNewProduct ? 'Produto cadastrado e entrada registrada!' : editingId ? 'Entrada atualizada!' : 'Entrada registrada!');
+      toast.success(editingId ? 'Entrada atualizada!' : 'Entrada registrada!');
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -757,7 +786,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                   step="0.001"
                   value={form.quantidade}
                   onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))}
-                  required
+                  required={entryItems.length === 0}
                   className="h-12"
                 />
                 {entryType === 'ferramenta' && form.quantidade && Number(form.quantidade) > 0 && (
@@ -769,13 +798,75 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground ml-1">Valor Unitário (R$) *</label>
-                <Input placeholder="R$ por unidade (ex: 2.50)" type="number" step="0.01" value={form.valor_unitario} onChange={e => setForm(f => ({ ...f, valor_unitario: e.target.value }))} required className="h-12" />
+                <Input placeholder="R$ por unidade (ex: 2.50)" type="number" step="0.01" value={form.valor_unitario} onChange={e => setForm(f => ({ ...f, valor_unitario: e.target.value }))} required={entryItems.length === 0} className="h-12" />
                 {form.quantidade && form.valor_unitario && Number(form.quantidade) > 0 && Number(form.valor_unitario) > 0 && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Valor Total: <span className="font-semibold text-foreground">R$ {(Number(form.quantidade) * Number(form.valor_unitario)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </p>
                 )}
               </div>
+
+              {entryType === 'material' && !editingId && (form.produto_id || isNewProduct) && (
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  className="w-full h-11 border-dashed border-2 mt-2 text-primary hover:bg-primary/5"
+                  onClick={() => {
+                    if (!form.quantidade || !form.valor_unitario) {
+                      toast.error('Preencha a quantidade e valor unitário do item');
+                      return;
+                    }
+                    if (isNewProduct && !newProduct.nome.trim()) {
+                      toast.error('Preencha o nome do novo produto');
+                      return;
+                    }
+                    setEntryItems(prev => [...prev, {
+                      id: crypto.randomUUID(),
+                      produto_id: form.produto_id,
+                      isNewProduct,
+                      newProduct: { ...newProduct },
+                      quantidade: form.quantidade,
+                      valor_unitario: form.valor_unitario,
+                      selectedProductName: isNewProduct ? newProduct.nome : (produtos.find((p: any) => p.id === form.produto_id)?.nome || ''),
+                    }]);
+                    setForm(f => ({ ...f, produto_id: '', quantidade: '', valor_unitario: '' }));
+                    setIsNewProduct(false);
+                    setNewProduct(emptyNewProduct);
+                    setProductSearch('');
+                  }}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Adicionar Item à Lista
+                </Button>
+              )}
+
+              {entryItems.length > 0 && (
+                <div className="bg-muted/40 border rounded-lg p-3 space-y-2 mt-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Itens na Lista ({entryItems.length})</p>
+                  {entryItems.map(item => (
+                    <div key={item.id} className="flex items-center justify-between bg-background border p-2 rounded-md text-sm">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <p className="font-medium truncate text-foreground flex items-center gap-2">
+                          {item.selectedProductName}
+                          {item.isNewProduct && <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">Novo</Badge>}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {item.quantidade} x R$ {Number(item.valor_unitario).toFixed(2)} = R$ {(Number(item.quantidade) * Number(item.valor_unitario)).toFixed(2)}
+                        </p>
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => setEntryItems(prev => prev.filter(i => i.id !== item.id))}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center border-t pt-2 mt-2 text-sm">
+                    <span className="font-semibold text-muted-foreground">Total da Lista:</span>
+                    <span className="font-bold text-foreground">
+                      R$ {entryItems.reduce((acc, item) => acc + (Number(item.quantidade) * Number(item.valor_unitario)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground ml-1">Fornecedor (opcional)</label>
@@ -833,7 +924,9 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 : entryType === 'ferramenta'
                   ? `Criar ${form.quantidade || 'N'} ferramenta(s) e registrar entrada`
                   : editingId ? 'Atualizar'
-                    : isNewProduct ? 'Cadastrar Produto e Registrar Entrada' : 'Registrar Entrada'}
+                    : (entryItems.length > 0 && !form.produto_id && !isNewProduct) 
+                      ? `Registrar Entrada (${entryItems.length} itens)` 
+                      : 'Registrar Entrada'}
             </Button>
           </form>
         </DialogContent>
