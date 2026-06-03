@@ -61,6 +61,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const [quickSaida, setQuickSaida] = useState<any>(null);
   const [quickQtd, setQuickQtd] = useState('');
   const [quickDestino, setQuickDestino] = useState('');
+  const [showDestinoList, setShowDestinoList] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [filterSemLocalizacao, setFilterSemLocalizacao] = useState(false);
@@ -79,6 +80,15 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       // Filter out virtual [FERRAMENTA] products — they exist only for financial tracking
       return (data || []).filter((p: any) => !p.nome?.startsWith('[FERRAMENTA]'));
     },
+  });
+
+  const { data: pessoas = [] } = useQuery({
+    queryKey: ['pessoas', obraId],
+    queryFn: async () => {
+      const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome');
+      return data || [];
+    },
+    enabled: !!obraId,
   });
 
   useEffect(() => {
@@ -476,14 +486,41 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
           <p className="text-sm text-muted-foreground">Disponível: {quickSaida && Number(quickSaida.estoque_atual)} {quickSaida?.unidade}</p>
           <form onSubmit={e => { e.preventDefault(); quickAction.mutate({ type: 'saida', produtoId: quickSaida.id }); }} className="space-y-3">
             <Input placeholder="Quantidade *" type="number" value={quickQtd} onChange={e => setQuickQtd(e.target.value)} required autoFocus className="h-12" />
-            <div className="space-y-1">
+            <div className="space-y-1 relative">
               <label className="text-xs text-muted-foreground ml-1">Para quem / destino (opcional)</label>
               <Input
-                placeholder="Ex: João da obra, Depósito B..."
+                placeholder="Buscar pessoa..."
                 value={quickDestino}
-                onChange={e => setQuickDestino(e.target.value)}
+                onChange={e => { setQuickDestino(e.target.value); setShowDestinoList(true); }}
+                onFocus={() => setShowDestinoList(true)}
+                onBlur={() => setTimeout(() => setShowDestinoList(false), 150)}
                 className="h-12"
+                autoComplete="off"
               />
+              {showDestinoList && (
+                <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                  {(pessoas as any[])
+                    .filter((p: any) => p.nome.toLowerCase().includes(quickDestino.toLowerCase()))
+                    .map((p: any) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors text-sm font-medium"
+                        onMouseDown={e => {
+                          e.preventDefault();
+                          setQuickDestino(p.nome);
+                          setShowDestinoList(false);
+                        }}
+                      >
+                        {p.nome}
+                      </button>
+                    ))
+                  }
+                  {(pessoas as any[]).filter((p: any) => p.nome.toLowerCase().includes(quickDestino.toLowerCase())).length === 0 && quickDestino && (
+                    <p className="text-xs text-muted-foreground p-3 text-center">Nenhuma pessoa encontrada</p>
+                  )}
+                </div>
+              )}
             </div>
             <Button type="submit" variant="destructive" className="w-full h-12" disabled={quickAction.isPending || !quickQtd}>
               {quickAction.isPending ? 'Registrando...' : 'Registrar Saída'}
