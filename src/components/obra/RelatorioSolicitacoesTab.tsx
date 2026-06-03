@@ -164,7 +164,7 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
       'Solicitante': s.solicitante_nome,
       'Destinatário': s.destinatario_nome,
       'Urgência': s.urgencia,
-      'Status': s.status,
+      'Status': s.status === 'APROVADO' ? 'EM COTAÇÃO' : s.status,
       'Arquivado': s.arquivado ? 'Sim' : 'Não',
       'Data Aprovado': s.data_aprovado ? new Date(s.data_aprovado).toLocaleString('pt-BR') : '-',
       'Data Comprado': s.data_comprado ? new Date(s.data_comprado).toLocaleString('pt-BR') : '-',
@@ -198,7 +198,7 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
          </div>
          <div className="bg-blue-50/50 border border-blue-100/50 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
             <span className="text-3xl font-display font-bold text-blue-600">{totalAprovados}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 mt-1">Aprovados</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 mt-1">Em Cotação</span>
          </div>
          <div className="bg-purple-50/50 border border-purple-100/50 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
             <span className="text-3xl font-display font-bold text-purple-600">{totalComprados}</span>
@@ -284,7 +284,7 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="SOLICITADO">Solicitado</SelectItem>
-                  <SelectItem value="APROVADO">Aprovado</SelectItem>
+                  <SelectItem value="APROVADO">Em Cotação</SelectItem>
                   <SelectItem value="COMPRADO">Comprado</SelectItem>
                   <SelectItem value="ENTREGUE">Entregue</SelectItem>
                 </SelectContent>
@@ -370,7 +370,7 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
                             s.status === 'COMPRADO' ? 'bg-purple-50 text-purple-600 border-purple-200' :
                             'bg-emerald-50 text-emerald-600 border-emerald-200'
                          }`}>
-                           {s.status}
+                           {s.status === 'APROVADO' ? 'EM COTAÇÃO' : s.status}
                          </span>
                       </TableCell>
                       <TableCell className="text-right">

@@ -622,7 +622,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               </div>
            </div>
            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 backdrop-blur-sm">
-              <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Aprovados</p>
+              <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Em Cotação</p>
               <div className="flex items-end gap-2">
                 <span className="text-3xl font-display font-bold text-blue-400 leading-none">{solicitacoes.filter((s: any) => s.status === 'APROVADO' && (showArchived ? s.arquivado : !s.arquivado)).length}</span>
               </div>
