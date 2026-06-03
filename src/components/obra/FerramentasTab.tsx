@@ -38,6 +38,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [retirarTipo, setRetirarTipo] = useState<'uso' | 'manutencao' | 'baixa'>('uso');
   const [retirarObservacao, setRetirarObservacao] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [showBaixadas, setShowBaixadas] = useState(false);
 
   // QR Code Generation State
   const [qrCodeOpen, setQrCodeOpen] = useState(false);
@@ -459,12 +460,17 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   };
 
   const filtered = ferramentas
-    .filter((f: any) => f.nome.toLowerCase().includes(search.toLowerCase()) || (f.codigo && f.codigo.toLowerCase().includes(search.toLowerCase())))
+    .filter((f: any) => {
+      if (!showBaixadas && f.estado === 'baixa') return false;
+      return f.nome.toLowerCase().includes(search.toLowerCase()) || (f.codigo && f.codigo.toLowerCase().includes(search.toLowerCase()));
+    })
     .sort((a: any, b: any) => {
       const nomeComp = (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' });
       if (nomeComp !== 0) return nomeComp;
       return (a.codigo || '').localeCompare(b.codigo || '', 'pt-BR', { numeric: true, sensitivity: 'base' });
     });
+
+  const totalBaixadas = ferramentas.filter((f: any) => f.estado === 'baixa').length;
 
   const estadoBadge = (estado: string) => {
     switch (estado?.toLowerCase()) {
@@ -509,6 +515,21 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               <span className="text-[10px] font-bold uppercase tracking-wider text-center">Histórico</span>
            </Button>
         </div>
+        {totalBaixadas > 0 && (
+          <div className="flex items-center gap-2 mt-3 select-none">
+            <button
+              onClick={() => setShowBaixadas(!showBaixadas)}
+              className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-all px-3 py-1.5 rounded-xl ${
+                showBaixadas
+                  ? 'bg-zinc-500/20 text-zinc-300 hover:bg-zinc-500/30'
+                  : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60'
+              }`}
+            >
+              <span className={`inline-block h-2 w-2 rounded-full ${showBaixadas ? 'bg-zinc-400' : 'bg-white/20'}`} />
+              {showBaixadas ? `Ocultando ferramentas baixadas (${totalBaixadas})` : `Ver ferramentas baixadas (${totalBaixadas})`}
+            </button>
+          </div>
+        )}
       </div>
 
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
