@@ -507,6 +507,7 @@ export type Database = {
       solicitacoes_material: {
         Row: {
           data_aprovado: string | null
+          aprovador_id: string | null
           data_comprado: string | null
           data_entregue: string | null
           data_necessidade: string | null
@@ -522,6 +523,7 @@ export type Database = {
         }
         Insert: {
           data_aprovado?: string | null
+          aprovador_id?: string | null
           data_comprado?: string | null
           data_entregue?: string | null
           data_necessidade?: string | null
@@ -537,6 +539,7 @@ export type Database = {
         }
         Update: {
           data_aprovado?: string | null
+          aprovador_id?: string | null
           data_comprado?: string | null
           data_entregue?: string | null
           data_necessidade?: string | null
@@ -551,6 +554,13 @@ export type Database = {
           urgencia?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "solicitacoes_material_aprovador_id_fkey"
+            columns: ["aprovador_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "solicitacoes_material_destinatario_id_fkey"
             columns: ["destinatario_id"]

@@ -34,7 +34,7 @@ const columnsList = [
   },
   { 
     id: 'APROVADO', 
-    label: 'APROVADO', 
+    label: 'EM COTAÇÃO', 
     dot: 'bg-blue-500',
     titleColor: 'text-blue-600',
     badgeColor: 'bg-blue-100/60 text-blue-700',
@@ -136,7 +136,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         .select(`
           *,
           solicitante:profiles!solicitacoes_material_solicitante_id_fkey(email, apelido),
-          destinatario:profiles!solicitacoes_material_destinatario_id_fkey(email, apelido)
+          destinatario:profiles!solicitacoes_material_destinatario_id_fkey(email, apelido),
+          aprovador:profiles!solicitacoes_material_aprovador_id_fkey(email, apelido)
         `)
         .eq('obra_id', obraId)
         .order('data_solicitacao', { ascending: false });
@@ -236,6 +237,34 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       setSelectedSolicitacao(null);
       setObservacao('');
       toast.success('Status atualizado!');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const toggleAprovacao = useMutation({
+    mutationFn: async ({ id, checked }: { id: string, checked: boolean }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const aprovador_id = checked ? user?.id : null;
+      
+      const { error } = await supabase
+        .from('solicitacoes_material' as any)
+        .update({ aprovador_id })
+        .eq('id', id);
+        
+      if (error) throw error;
+      
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EDITAR',
+        entidade: 'SOLICITACAO',
+        detalhes: checked ? 'Aprovou a solicitação' : 'Removeu a aprovação da solicitação'
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solicitacoes', obraId] });
+      toast.success('Aprovação atualizada!');
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -395,6 +424,32 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                           </div>
                         </div>
 
+                        {/* Checkbox de Aprovação */}
+                        {s.status === 'SOLICITADO' && (
+                          <div className="pt-2 mt-2 border-t border-slate-100 flex items-center gap-2">
+                            <input 
+                              type="checkbox" 
+                              id={`approve-${s.id}`}
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              checked={!!s.aprovador_id}
+                              onChange={(e) => {
+                                e.stopPropagation();
+                                toggleAprovacao.mutate({ id: s.id, checked: e.target.checked });
+                              }}
+                              disabled={toggleAprovacao.isPending}
+                            />
+                            <label htmlFor={`approve-${s.id}`} className="text-xs font-semibold text-slate-700 cursor-pointer select-none" onClick={e => e.stopPropagation()}>
+                              Aprovado
+                            </label>
+                          </div>
+                        )}
+                        {s.aprovador_id && (
+                          <div className="text-[10px] text-slate-500 flex items-center gap-1 mt-1">
+                            <CheckCircle2 className="h-3 w-3 text-blue-500 shrink-0" />
+                            <span className="truncate">Aprovado por: <strong>{formatUserDisplay(s.aprovador)}</strong></span>
+                          </div>
+                        )}
+
                         {/* Observação da resposta (se houver) */}
                         {s.observacao_resposta && (
                           <div className="bg-slate-50/70 border border-slate-100 rounded-xl p-2.5 text-[10px] text-slate-600 italic">
@@ -432,7 +487,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                               variant="ghost"
                               size="icon"
                               className="h-6 w-6 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-md disabled:opacity-20 transition-all"
-                              disabled={col.id === 'ENTREGUE'}
+                              disabled={col.id === 'ENTREGUE' || (col.id === 'SOLICITADO' && !s.aprovador_id)}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const nextStatus = columnsList[columnsList.findIndex(c => c.id === col.id) + 1].id;
@@ -808,7 +863,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                   </div>
                   {selectedSolicitacao.data_aprovado && (
                     <div className="flex justify-between items-center">
-                      <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-blue-400" /> Aprovado</span>
+                      <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5 text-blue-400" /> Em Cotação</span>
                       <span className="font-medium text-slate-700">{new Date(selectedSolicitacao.data_aprovado).toLocaleDateString('pt-BR')}</span>
                     </div>
                   )}
@@ -833,7 +888,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                   <SelectTrigger className="h-12"><SelectValue placeholder="Selecione o status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="SOLICITADO">Solicitado</SelectItem>
-                    <SelectItem value="APROVADO">Aprovado</SelectItem>
+                    <SelectItem value="APROVADO">Em Cotação</SelectItem>
                     <SelectItem value="COMPRADO">Comprado</SelectItem>
                     <SelectItem value="ENTREGUE">Entregue</SelectItem>
                   </SelectContent>
@@ -853,7 +908,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               <Button 
                 onClick={() => updateStatus.mutate({ id: selectedSolicitacao.id, status: newStatus, obs: observacao })} 
                 className="w-full h-12 text-sm font-bold" 
-                disabled={updateStatus.isPending}
+                disabled={updateStatus.isPending || (newStatus !== 'SOLICITADO' && !selectedSolicitacao.aprovador_id)}
               >
                 {updateStatus.isPending ? 'Salvando...' : 'Salvar Alterações'}
               </Button>
