@@ -40,6 +40,7 @@ interface PdfItem {
   valor: number;
   selected: boolean;
   tipo: 'material' | 'ferramenta';
+  unidade: string;
   // ferramenta-specific
   ferrCategoria: string;
   ferrLocalizacao: string;
@@ -88,6 +89,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
     valor: 0,
     selected: true,
     tipo: 'material',
+    unidade: 'un',
     ferrCategoria: 'Ferramentas Elétricas',
     ferrLocalizacao: '',
     ferrCodigoPrefixo: '',
@@ -142,12 +144,31 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
         if (match) {
           const rawNome = match[1].trim();
           const cleanNome = rawNome.replace(/\s+\d{4,10}(\s+\d+)*$/, '').trim();
+          const rawUnit = match[2].trim().toLowerCase();
           const qtyStr = match[3].replace(/\./g, '').replace(',', '.');
           const valStr = match[4].replace(/\./g, '').replace(',', '.');
           const quantidade = parseFloat(qtyStr);
           const valor = parseFloat(valStr);
           if (!isNaN(quantidade) && quantidade > 0) {
-            parsedItems.push(makeItem({ nome: cleanNome, quantidade, valor: isNaN(valor) ? 0 : valor }));
+            let unidade = 'un';
+            if (rawUnit === 'un') unidade = 'un';
+            else if (rawUnit === 'kg') unidade = 'kg';
+            else if (rawUnit === 'pc') unidade = 'pc';
+            else if (rawUnit === 'cx') unidade = 'cx';
+            else if (rawUnit === 'm') unidade = 'm';
+            else if (rawUnit === 'm2') unidade = 'm²';
+            else if (rawUnit === 'm3') unidade = 'm³';
+            else if (rawUnit === 'sc') unidade = 'sc';
+            else if (rawUnit === 'l') unidade = 'L';
+            else if (['pr', 'jg', 'pct', 'rl'].includes(rawUnit)) unidade = rawUnit;
+            else if (rawUnit === 'mt') unidade = 'm';
+
+            parsedItems.push(makeItem({ 
+              nome: cleanNome, 
+              quantidade, 
+              valor: isNaN(valor) ? 0 : valor,
+              unidade
+            }));
           }
         }
       }
@@ -270,7 +291,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
               .insert({ 
                 obra_id: obraId, 
                 nome: item.nome.trim(), 
-                unidade: 'un', 
+                unidade: item.unidade || 'un', 
                 estoque_atual: 0, 
                 estoque_minimo: 0,
                 categoria: item.matCategoria || 'OUTROS',
@@ -287,10 +308,11 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
               detalhes: `Cadastrou o produto via PDF: ${item.nome.trim()}`
             });
           } else {
-            // Update existing product's category and location if provided
+            // Update existing product's category, location, and unit if provided
             const updates: any = {};
             if (item.matCategoria) updates.categoria = item.matCategoria;
             if (item.matLocalizacao) updates.localizacao = item.matLocalizacao;
+            if (item.unidade) updates.unidade = item.unidade;
             if (Object.keys(updates).length > 0) {
               await supabase.from('produtos').update(updates).eq('id', produtoId);
             }
@@ -507,7 +529,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
 
                   {/* Row 2: material extra fields */}
                   {item.tipo === 'material' && item.selected && (
-                    <div className="ml-8 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="ml-8 grid grid-cols-1 sm:grid-cols-3 gap-2">
                       <div>
                         <label className="text-[10px] text-primary uppercase font-bold tracking-wider ml-1">Categoria</label>
                         <Select value={item.matCategoria} onValueChange={v => updateItem(item.id, 'matCategoria', v)}>
@@ -516,6 +538,40 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                             {MATERIAL_CATEGORIES.map(cat => <SelectItem key={cat} value={cat} className="text-xs">{cat}</SelectItem>)}
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-primary uppercase font-bold tracking-wider ml-1">Unidade</label>
+                        <div className="flex gap-1.5 items-center mt-1">
+                          <Select
+                            value={['un', 'kg', 'L', 'm', 'm²', 'm³', 'cx', 'pc', 'sc'].includes(item.unidade) ? item.unidade : 'Outro'}
+                            onValueChange={v => updateItem(item.id, 'unidade', v === 'Outro' ? '' : v)}
+                          >
+                            <SelectTrigger className="h-8 text-xs flex-1">
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="un" className="text-xs">Unidade (un)</SelectItem>
+                              <SelectItem value="kg" className="text-xs">Quilograma (kg)</SelectItem>
+                              <SelectItem value="L" className="text-xs">Litro (L)</SelectItem>
+                              <SelectItem value="m" className="text-xs">Metro (m)</SelectItem>
+                              <SelectItem value="m²" className="text-xs">Metro Quadrado (m²)</SelectItem>
+                              <SelectItem value="m³" className="text-xs">Metro Cúbico (m³)</SelectItem>
+                              <SelectItem value="cx" className="text-xs">Caixa (cx)</SelectItem>
+                              <SelectItem value="pc" className="text-xs">Pacote (pc)</SelectItem>
+                              <SelectItem value="sc" className="text-xs">Saco (sc)</SelectItem>
+                              <SelectItem value="Outro" className="text-xs">Outro...</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          {!['un', 'kg', 'L', 'm', 'm²', 'm³', 'cx', 'pc', 'sc'].includes(item.unidade) && (
+                            <Input
+                              placeholder="Qual?"
+                              value={item.unidade}
+                              onChange={e => updateItem(item.id, 'unidade', e.target.value)}
+                              className="h-8 w-16 text-xs"
+                              required
+                            />
+                          )}
+                        </div>
                       </div>
                       <div>
                         <label className="text-[10px] text-primary uppercase font-bold tracking-wider ml-1">Localização</label>
