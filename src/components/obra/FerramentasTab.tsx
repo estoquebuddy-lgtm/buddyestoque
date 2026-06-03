@@ -478,7 +478,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     <div className="space-y-4 animate-fade-in">
       <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
         <div className="text-white">
-          <PageHeader title="Ferramentas" count={ferramentas.length} search={search} onSearchChange={setSearch} searchPlaceholder="Buscar ferramenta..." actionLabel="Ferramenta" onAction={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }} />
+          <PageHeader title="Ferramentas" count={ferramentas.length} search={search} onSearchChange={setSearch} searchPlaceholder="Buscar ferramenta..." />
         </div>
         <div className="mt-4 grid grid-cols-2 md:flex md:flex-row gap-3">
            <div className="bg-white/5 border border-white/10 rounded-2xl p-4 md:p-5 md:flex-1 backdrop-blur-sm">
@@ -615,7 +615,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       </Dialog>
 
       {/* Create/Edit */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen && !!editingId} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? 'Editar Ferramenta' : 'Nova Ferramenta'}</DialogTitle></DialogHeader>
           <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="space-y-3">
