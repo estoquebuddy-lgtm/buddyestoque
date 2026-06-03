@@ -16,6 +16,23 @@ const FERRAMENTA_CATEGORIES = [
   'Ferramentas Manuais', 'Ferramentas Elétricas', 'Equipamentos de Proteção (EPI)', 'Equipamentos de Medição', 'OUTROS'
 ];
 
+const MATERIAL_CATEGORIES = [
+  'Hidráulica',
+  'Elétrica',
+  'Esgoto',
+  'Estrutural',
+  'Alvenaria',
+  'Acabamento',
+  'Pintura',
+  'Ferramentas',
+  'Segurança (EPI)',
+  'Marcenaria',
+  'Serralheria',
+  'Disco',
+  'Insumos',
+  'OUTROS'
+];
+
 interface PdfItem {
   id: string;
   nome: string;
@@ -27,6 +44,9 @@ interface PdfItem {
   ferrCategoria: string;
   ferrLocalizacao: string;
   ferrCodigoPrefixo: string;
+  // material-specific
+  matCategoria: string;
+  matLocalizacao: string;
 }
 
 interface Props {
@@ -71,6 +91,8 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
     ferrCategoria: 'Ferramentas Elétricas',
     ferrLocalizacao: '',
     ferrCodigoPrefixo: '',
+    matCategoria: 'OUTROS',
+    matLocalizacao: '',
     ...overrides,
   });
 
@@ -245,7 +267,15 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
           if (!produtoId) {
             const { data: newProd, error: prodErr } = await supabase
               .from('produtos')
-              .insert({ obra_id: obraId, nome: item.nome.trim(), unidade: 'un', estoque_atual: 0, estoque_minimo: 0 })
+              .insert({ 
+                obra_id: obraId, 
+                nome: item.nome.trim(), 
+                unidade: 'un', 
+                estoque_atual: 0, 
+                estoque_minimo: 0,
+                categoria: item.matCategoria || 'OUTROS',
+                localizacao: item.matLocalizacao || null
+              })
               .select('id').single();
             if (prodErr) throw prodErr;
             produtoId = newProd.id;
@@ -256,6 +286,14 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
               acao: 'CADASTRAR', entidade: 'PRODUTO',
               detalhes: `Cadastrou o produto via PDF: ${item.nome.trim()}`
             });
+          } else {
+            // Update existing product's category and location if provided
+            const updates: any = {};
+            if (item.matCategoria) updates.categoria = item.matCategoria;
+            if (item.matLocalizacao) updates.localizacao = item.matLocalizacao;
+            if (Object.keys(updates).length > 0) {
+              await supabase.from('produtos').update(updates).eq('id', produtoId);
+            }
           }
 
           const note = descontoTotal > 0
@@ -358,7 +396,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                   key={item.id}
                   className={`border rounded-xl p-3 space-y-3 transition-all ${
                     !item.selected ? 'opacity-40 bg-muted/20' :
-                    item.tipo === 'ferramenta' ? 'border-warning/30 bg-warning/5' : 'border-border bg-card'
+                    item.tipo === 'ferramenta' ? 'border-warning/30 bg-warning/5' : 'border-primary/20 bg-primary/[0.01]'
                   }`}
                 >
                   {/* Row 1: checkbox + tipo toggle + nome + qty + valor + delete */}
@@ -463,6 +501,30 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                           Serão criadas <strong>{Math.round(item.quantidade || 0)}</strong> ferramenta(s) individual(is) na aba Ferramentas + lançamento no Financeiro.
                         </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Row 2: material extra fields */}
+                  {item.tipo === 'material' && item.selected && (
+                    <div className="ml-8 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-[10px] text-primary uppercase font-bold tracking-wider ml-1">Categoria</label>
+                        <Select value={item.matCategoria} onValueChange={v => updateItem(item.id, 'matCategoria', v)}>
+                          <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {MATERIAL_CATEGORIES.map(cat => <SelectItem key={cat} value={cat} className="text-xs">{cat}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-primary uppercase font-bold tracking-wider ml-1">Localização</label>
+                        <Input
+                          value={item.matLocalizacao}
+                          onChange={e => updateItem(item.id, 'matLocalizacao', e.target.value)}
+                          className="h-8 text-xs mt-1"
+                          placeholder="Ex: Almoxarifado A"
+                        />
                       </div>
                     </div>
                   )}
