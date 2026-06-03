@@ -81,6 +81,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [showMyAssignedOnly, setShowMyAssignedOnly] = useState(false);
   const [selectedSolicitacao, setSelectedSolicitacao] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
@@ -295,7 +296,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     const matchesSearch = s.descricao_materiais.toLowerCase().includes(search.toLowerCase()) || 
       s.solicitante?.email?.toLowerCase().includes(search.toLowerCase());
     const matchesArchived = showArchived ? s.arquivado === true : !s.arquivado;
-    return matchesSearch && matchesArchived;
+    const matchesAssigned = showMyAssignedOnly ? s.destinatario_id === user?.id : true;
+    return matchesSearch && matchesArchived && matchesAssigned;
   });
 
   const statusBadge = (status: string) => {
@@ -523,16 +525,30 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
             actionLabel="Solicitar Material" 
             onAction={() => { setForm(emptyForm); setDialogOpen(true); }} 
           >
-            <div className="flex items-center gap-2 mt-2 select-none">
-              <Switch 
-                id="show-archived" 
-                checked={showArchived} 
-                onCheckedChange={setShowArchived} 
-                className="data-[state=checked]:bg-primary bg-white/20 border-none"
-              />
-              <label htmlFor="show-archived" className="text-xs font-bold text-white/75 cursor-pointer uppercase tracking-wider">
-                Ver Solicitações Arquivadas
-              </label>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mt-2 select-none">
+              <div className="flex items-center gap-2">
+                <Switch 
+                  id="show-archived" 
+                  checked={showArchived} 
+                  onCheckedChange={setShowArchived} 
+                  className="data-[state=checked]:bg-primary bg-white/20 border-none"
+                />
+                <label htmlFor="show-archived" className="text-xs font-bold text-white/75 cursor-pointer uppercase tracking-wider">
+                  Ver Solicitações Arquivadas
+                </label>
+              </div>
+              <Button
+                variant={showMyAssignedOnly ? "default" : "outline"}
+                size="sm"
+                onClick={() => setShowMyAssignedOnly(!showMyAssignedOnly)}
+                className={`text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+                  showMyAssignedOnly 
+                    ? 'bg-primary text-primary-foreground hover:bg-primary/95 border-none' 
+                    : 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {showMyAssignedOnly ? "Mostrando: Endereçadas a Mim" : "Ver Minhas Solicitações"}
+              </Button>
             </div>
           </PageHeader>
         </div>
