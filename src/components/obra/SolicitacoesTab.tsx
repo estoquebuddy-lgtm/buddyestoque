@@ -16,8 +16,10 @@ import ConfirmDialog from '@/components/ConfirmDialog';
 import { useAuth } from '@/hooks/useAuth';
 import { Switch } from '@/components/ui/switch';
 import { useProfile } from '@/hooks/useProfile';
+import ImageUpload from '@/components/ImageUpload';
+import ImageThumbnail from '@/components/ImageThumbnail';
 
-const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '' };
+const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '', foto_url: '' };
 
 const columnsList = [
   { 
@@ -161,7 +163,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         destinatario_id: form.destinatario_id,
         descricao_materiais: form.descricao,
         urgencia: form.urgencia,
-        status: 'SOLICITADO'
+        status: 'SOLICITADO',
+        foto_url: form.foto_url || null
       };
       
       const { error } = await supabase.from('solicitacoes_material' as any).insert(payload);
@@ -361,8 +364,13 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                       
                       <CardContent className="p-5 pl-6 space-y-3.5">
                         {/* Title and Urgency Badge */}
-                        <div className="flex justify-between items-start gap-2">
-                          <h4 className="font-bold text-base text-slate-800 leading-normal whitespace-pre-wrap">{s.descricao_materiais}</h4>
+                        <div className="flex justify-between items-start gap-4">
+                          <div className="flex gap-3 flex-1 min-w-0">
+                            {s.foto_url && (
+                              <ImageThumbnail src={s.foto_url} alt="Material solicitado" type="produto" size="sm" />
+                            )}
+                            <h4 className="font-bold text-base text-slate-800 leading-normal whitespace-pre-wrap flex-1 min-w-0">{s.descricao_materiais}</h4>
+                          </div>
                           {urgenciaBadge(s.urgencia)}
                         </div>
 
@@ -704,6 +712,18 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                Foto / Imagem de Referência (Opcional)
+              </label>
+              <ImageUpload
+                bucket="produtos"
+                currentUrl={form.foto_url}
+                onUpload={(url) => setForm(f => ({ ...f, foto_url: url }))}
+                label="Adicionar Foto"
+              />
+            </div>
+
             <Button type="submit" className="w-full h-12 text-sm font-bold" disabled={save.isPending || !user?.id || !form.destinatario_id || !form.descricao.trim()}>
               {save.isPending ? 'Enviando...' : 'Enviar Solicitação'}
             </Button>
@@ -719,7 +739,16 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
           </DialogHeader>
           {selectedSolicitacao && (
             <div className="space-y-4 pt-4">
-              <div className="bg-muted/30 p-4 rounded-xl text-sm mb-4">
+              <div className="bg-muted/30 p-4 rounded-xl text-sm mb-4 space-y-3">
+                {selectedSolicitacao.foto_url && (
+                  <div className="relative aspect-video rounded-xl overflow-hidden bg-black/5 flex items-center justify-center border border-border">
+                    <img 
+                      src={selectedSolicitacao.foto_url} 
+                      alt="Imagem do material solicitado" 
+                      className="max-h-[200px] w-full object-contain"
+                    />
+                  </div>
+                )}
                 <p className="font-bold text-base whitespace-pre-wrap">{selectedSolicitacao.descricao_materiais}</p>
                 <div className="flex flex-col gap-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
                   <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 shrink-0" /> De: <strong>{formatUserDisplay(selectedSolicitacao.solicitante)}</strong></span>
