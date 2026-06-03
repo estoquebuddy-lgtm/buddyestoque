@@ -60,7 +60,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const [quickEntrada, setQuickEntrada] = useState<any>(null);
   const [quickSaida, setQuickSaida] = useState<any>(null);
   const [quickQtd, setQuickQtd] = useState('');
-  const [quickDestino, setQuickDestino] = useState('');
+  const [quickPessoaId, setQuickPessoaId] = useState('');
+  const [quickPessoaSearch, setQuickPessoaSearch] = useState('');
   const [showDestinoList, setShowDestinoList] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
@@ -193,10 +194,11 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       const prod = produtos.find((p: any) => p.id === produtoId);
       const table = type === 'entrada' ? 'entradas' : 'saidas';
       const payload: any = { obra_id: obraId, produto_id: produtoId, quantidade: Number(quickQtd) };
-      if (type === 'saida' && quickDestino.trim()) payload.destino = quickDestino.trim();
+      if (type === 'saida' && quickPessoaId) payload.pessoa_id = quickPessoaId;
       const { error } = await supabase.from(table).insert(payload);
       if (error) throw error;
 
+      const pessoaNome = (pessoas as any[]).find((p: any) => p.id === quickPessoaId)?.nome;
       await supabase.from('logs_atividades' as any).insert({
         obra_id: obraId,
         user_id: user?.id,
@@ -204,7 +206,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         acao: type === 'entrada' ? 'ENTRADA' : 'SAIDA',
         entidade: 'ESTOQUE',
         detalhes: type === 'saida'
-          ? `Retirou ${quickQtd} ${prod?.unidade || ''} de ${prod?.nome || 'produto'}${quickDestino.trim() ? ` → ${quickDestino.trim()}` : ''}`
+          ? `Retirou ${quickQtd} ${prod?.unidade || ''} de ${prod?.nome || 'produto'}${pessoaNome ? ` → ${pessoaNome}` : ''}`
           : `Adicionou ${quickQtd} ${prod?.unidade || ''} de ${prod?.nome || 'produto'}`
       });
     },
@@ -212,7 +214,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
       queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
       queryClient.invalidateQueries({ queryKey: [vars.type === 'entrada' ? 'entradas' : 'saidas', obraId] });
-      setQuickEntrada(null); setQuickSaida(null); setQuickQtd(''); setQuickDestino('');
+      setQuickEntrada(null); setQuickSaida(null); setQuickQtd(''); setQuickPessoaId(''); setQuickPessoaSearch('');
       toast.success(vars.type === 'entrada' ? 'Entrada registrada!' : 'Saída registrada!');
     },
     onError: (e: any) => toast.error(e.message),
@@ -487,20 +489,30 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
           <form onSubmit={e => { e.preventDefault(); quickAction.mutate({ type: 'saida', produtoId: quickSaida.id }); }} className="space-y-3">
             <Input placeholder="Quantidade *" type="number" value={quickQtd} onChange={e => setQuickQtd(e.target.value)} required autoFocus className="h-12" />
             <div className="space-y-1 relative">
-              <label className="text-xs text-muted-foreground ml-1">Para quem / destino (opcional)</label>
-              <Input
-                placeholder="Buscar pessoa..."
-                value={quickDestino}
-                onChange={e => { setQuickDestino(e.target.value); setShowDestinoList(true); }}
-                onFocus={() => setShowDestinoList(true)}
-                onBlur={() => setTimeout(() => setShowDestinoList(false), 150)}
-                className="h-12"
-                autoComplete="off"
-              />
-              {showDestinoList && (
+              <label className="text-xs text-muted-foreground ml-1">Para quem (opcional)</label>
+              {quickPessoaId ? (
+                <div className="flex items-center justify-between px-3 h-12 rounded-lg border bg-muted/40 text-sm">
+                  <span className="font-medium text-foreground">{quickPessoaSearch}</span>
+                  <Button type="button" variant="ghost" size="sm" className="text-xs text-muted-foreground h-7"
+                    onClick={() => { setQuickPessoaId(''); setQuickPessoaSearch(''); }}>
+                    Trocar
+                  </Button>
+                </div>
+              ) : (
+                <Input
+                  placeholder="Buscar pessoa..."
+                  value={quickPessoaSearch}
+                  onChange={e => { setQuickPessoaSearch(e.target.value); setShowDestinoList(true); }}
+                  onFocus={() => setShowDestinoList(true)}
+                  onBlur={() => setTimeout(() => setShowDestinoList(false), 150)}
+                  className="h-12"
+                  autoComplete="off"
+                />
+              )}
+              {showDestinoList && !quickPessoaId && (
                 <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-44 overflow-y-auto">
                   {(pessoas as any[])
-                    .filter((p: any) => p.nome.toLowerCase().includes(quickDestino.toLowerCase()))
+                    .filter((p: any) => p.nome.toLowerCase().includes(quickPessoaSearch.toLowerCase()))
                     .map((p: any) => (
                       <button
                         key={p.id}
@@ -508,7 +520,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                         className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors text-sm font-medium"
                         onMouseDown={e => {
                           e.preventDefault();
-                          setQuickDestino(p.nome);
+                          setQuickPessoaId(p.id);
+                          setQuickPessoaSearch(p.nome);
                           setShowDestinoList(false);
                         }}
                       >
@@ -516,7 +529,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                       </button>
                     ))
                   }
-                  {(pessoas as any[]).filter((p: any) => p.nome.toLowerCase().includes(quickDestino.toLowerCase())).length === 0 && quickDestino && (
+                  {(pessoas as any[]).filter((p: any) => p.nome.toLowerCase().includes(quickPessoaSearch.toLowerCase())).length === 0 && (
                     <p className="text-xs text-muted-foreground p-3 text-center">Nenhuma pessoa encontrada</p>
                   )}
                 </div>
