@@ -35,7 +35,8 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [selectedTool, setSelectedTool] = useState<any>(null);
   const [retirarOpen, setRetirarOpen] = useState(false);
   const [retirarPessoaId, setRetirarPessoaId] = useState('');
-  const [retirarTipo, setRetirarTipo] = useState<'uso' | 'manutencao'>('uso');
+  const [retirarTipo, setRetirarTipo] = useState<'uso' | 'manutencao' | 'baixa'>('uso');
+  const [retirarObservacao, setRetirarObservacao] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
 
   // QR Code Generation State
@@ -324,14 +325,14 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   });
 
   const retirar = useMutation({
-    mutationFn: async ({ id, pessoaId, observacao, tipo = 'uso' }: { id: string; pessoaId: string; observacao?: string, tipo?: 'uso' | 'manutencao' }) => {
+    mutationFn: async ({ id, pessoaId, observacao, tipo = 'uso' }: { id: string; pessoaId: string; observacao?: string, tipo?: 'uso' | 'manutencao' | 'baixa' }) => {
       if (tipo === 'uso' && !pessoaId) throw new Error("É obrigatório selecionar um responsável para retirada de uso.");
       
       const timestamp = new Date().toISOString();
-      const novoEstado = tipo === 'manutencao' ? 'manutencao' : 'em_uso';
-      const novoStatus = tipo === 'manutencao' ? 'MANUTENCAO' : 'EM_USO';
-      const tipoHist = tipo === 'manutencao' ? 'manutencao' : 'retirada';
-      const tipoMov = tipo === 'manutencao' ? 'MANUTENCAO' : 'RETIRADA';
+      const novoEstado = tipo === 'manutencao' ? 'manutencao' : (tipo === 'baixa' ? 'baixa' : 'em_uso');
+      const novoStatus = tipo === 'manutencao' ? 'MANUTENCAO' : (tipo === 'baixa' ? 'BAIXA' : 'EM_USO');
+      const tipoHist = tipo === 'manutencao' ? 'manutencao' : (tipo === 'baixa' ? 'baixa' : 'retirada');
+      const tipoMov = tipo === 'manutencao' ? 'MANUTENCAO' : (tipo === 'baixa' ? 'BAIXA' : 'RETIRADA');
 
       const { error: updateError } = await supabase.from('ferramentas').update({ 
         estado: novoEstado, 
@@ -358,7 +359,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
           usuario_id: pessoaId || null,
           tipo: tipoMov,
           data_hora: timestamp,
-          observacao: observacao || null
+          observacao: observacao || (tipo === 'baixa' ? 'Ferramenta dada como baixa (descarte)' : null)
       });
       if (movError) console.error('Error saving movements:', movError);
     },
@@ -368,11 +369,12 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       queryClient.invalidateQueries({ queryKey: ['movimentacoes-ferramentas', obraId] }); 
       setRetirarOpen(false); 
       setSelectedTool(null); 
-      setRetirarPessoaId(''); 
+      setRetirarPessoaId('');
+      setRetirarObservacao('');
       setRetirarTipo('uso');
       setScanActionOpen(false);
       setScannedTool(null);
-      toast.success('Ferramenta retirada!'); 
+      toast.success(retirarTipo === 'baixa' ? 'Ferramenta baixada com sucesso!' : 'Ferramenta retirada!'); 
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -470,6 +472,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       case 'em_uso': return <Badge className="bg-warning/10 text-warning border-warning/20">Em uso</Badge>;
       case 'manutencao': return <Badge variant="destructive">Manutenção</Badge>;
       case 'extraviada': return <Badge className="bg-red-500/10 text-red-500 border-red-500/20">Extraviada</Badge>;
+      case 'baixa': return <Badge className="bg-zinc-500/10 text-zinc-500 border-zinc-500/20">Baixa</Badge>;
       default: return <Badge variant="secondary">{estado}</Badge>;
     }
   };
@@ -577,6 +580,11 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                     <RotateCcw className="h-4 w-4 mr-1.5" /> {devolver.isPending ? 'Devolvendo...' : 'Devolver'}
                   </Button>
                 )}
+                {selectedTool.estado === 'baixa' && (
+                  <div className="w-full rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-center text-xs text-zinc-500 font-medium">
+                    Esta ferramenta foi dada como baixa (descarte).
+                  </div>
+                )}
                 <Button variant="outline" className="w-full h-12 bg-[#0e1629] text-white hover:bg-white/10" onClick={() => setQrCodeOpen(true)}>
                   <QrCode className="h-4 w-4 mr-1.5 text-primary" /> Gerar QR Code
                 </Button>
@@ -593,23 +601,48 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       </Sheet>
 
       {/* Retirar Dialog */}
-      <Dialog open={retirarOpen} onOpenChange={setRetirarOpen}>
+      <Dialog open={retirarOpen} onOpenChange={(open) => { setRetirarOpen(open); if (!open) { setRetirarTipo('uso'); setRetirarPessoaId(''); setRetirarObservacao(''); }}}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Retirar Ferramenta</DialogTitle></DialogHeader>
-          <form onSubmit={e => { e.preventDefault(); selectedTool && retirar.mutate({ id: selectedTool.id, pessoaId: retirarPessoaId, tipo: retirarTipo }); }} className="space-y-3">
-            <Select value={retirarTipo} onValueChange={(v: 'uso' | 'manutencao') => setRetirarTipo(v)}>
+          <DialogHeader><DialogTitle>Retirar / Dar Baixa em Ferramenta</DialogTitle></DialogHeader>
+          <form onSubmit={e => { e.preventDefault(); selectedTool && retirar.mutate({ id: selectedTool.id, pessoaId: retirarPessoaId, observacao: retirarObservacao, tipo: retirarTipo }); }} className="space-y-3">
+            <Select value={retirarTipo} onValueChange={(v: 'uso' | 'manutencao' | 'baixa') => { setRetirarTipo(v); setRetirarPessoaId(''); }}>
               <SelectTrigger className="h-12"><SelectValue placeholder="Finalidade" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="uso">Retirar para Uso</SelectItem>
                 <SelectItem value="manutencao">Enviar para Manutenção</SelectItem>
+                <SelectItem value="baixa">Dar Baixa (Descarte / Lixo)</SelectItem>
               </SelectContent>
             </Select>
 
-            <Select value={retirarPessoaId} onValueChange={setRetirarPessoaId}>
-              <SelectTrigger className="h-12"><SelectValue placeholder={retirarTipo === 'uso' ? "Responsável *" : "Responsável (opcional)"} /></SelectTrigger>
-              <SelectContent>{pessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
-            </Select>
-            <Button type="submit" className="w-full h-12 bg-warning hover:bg-warning/90 text-warning-foreground" disabled={retirar.isPending || (retirarTipo === 'uso' && !retirarPessoaId)}>{retirar.isPending ? 'Registrando...' : 'Confirmar Retirada'}</Button>
+            {retirarTipo !== 'baixa' && (
+              <Select value={retirarPessoaId} onValueChange={setRetirarPessoaId}>
+                <SelectTrigger className="h-12"><SelectValue placeholder={retirarTipo === 'uso' ? "Responsável *" : "Responsável (opcional)"} /></SelectTrigger>
+                <SelectContent>{pessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+              </Select>
+            )}
+
+            {retirarTipo === 'baixa' && (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/5 p-3 text-xs text-destructive font-medium">
+                ⚠️ Esta ação marcará a ferramenta como <strong>BAIXA</strong>. Ela não aparecerá mais como disponível. Esta ação pode ser revertida manualmente editando a ferramenta.
+              </div>
+            )}
+
+            <input
+              className="w-full h-11 rounded-md border border-input bg-background px-3 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              placeholder={retirarTipo === 'baixa' ? 'Motivo da baixa (ex: quebrada, sem conserto...)' : 'Observação (opcional)'}
+              value={retirarObservacao}
+              onChange={e => setRetirarObservacao(e.target.value)}
+            />
+
+            {retirarTipo === 'baixa' ? (
+              <Button type="submit" className="w-full h-12 bg-destructive hover:bg-destructive/90 text-destructive-foreground" disabled={retirar.isPending}>
+                {retirar.isPending ? 'Registrando...' : '🗑️ Confirmar Baixa da Ferramenta'}
+              </Button>
+            ) : (
+              <Button type="submit" className="w-full h-12 bg-warning hover:bg-warning/90 text-warning-foreground" disabled={retirar.isPending || (retirarTipo === 'uso' && !retirarPessoaId)}>
+                {retirar.isPending ? 'Registrando...' : 'Confirmar Retirada'}
+              </Button>
+            )}
           </form>
         </DialogContent>
       </Dialog>
