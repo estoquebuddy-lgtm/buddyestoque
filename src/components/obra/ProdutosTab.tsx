@@ -60,6 +60,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const [quickEntrada, setQuickEntrada] = useState<any>(null);
   const [quickSaida, setQuickSaida] = useState<any>(null);
   const [quickQtd, setQuickQtd] = useState('');
+  const [quickDestino, setQuickDestino] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [filterSemLocalizacao, setFilterSemLocalizacao] = useState(false);
@@ -181,7 +182,9 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       const prod = produtos.find((p: any) => p.id === produtoId);
       const table = type === 'entrada' ? 'entradas' : 'saidas';
-      const { error } = await supabase.from(table).insert({ obra_id: obraId, produto_id: produtoId, quantidade: Number(quickQtd) });
+      const payload: any = { obra_id: obraId, produto_id: produtoId, quantidade: Number(quickQtd) };
+      if (type === 'saida' && quickDestino.trim()) payload.destino = quickDestino.trim();
+      const { error } = await supabase.from(table).insert(payload);
       if (error) throw error;
 
       await supabase.from('logs_atividades' as any).insert({
@@ -190,14 +193,16 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         user_email: user?.email,
         acao: type === 'entrada' ? 'ENTRADA' : 'SAIDA',
         entidade: 'ESTOQUE',
-        detalhes: `${type === 'entrada' ? 'Adicionou' : 'Retirou'} ${quickQtd} ${prod?.unidade || ''} de ${prod?.nome || 'produto'}`
+        detalhes: type === 'saida'
+          ? `Retirou ${quickQtd} ${prod?.unidade || ''} de ${prod?.nome || 'produto'}${quickDestino.trim() ? ` → ${quickDestino.trim()}` : ''}`
+          : `Adicionou ${quickQtd} ${prod?.unidade || ''} de ${prod?.nome || 'produto'}`
       });
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
       queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
       queryClient.invalidateQueries({ queryKey: [vars.type === 'entrada' ? 'entradas' : 'saidas', obraId] });
-      setQuickEntrada(null); setQuickSaida(null); setQuickQtd('');
+      setQuickEntrada(null); setQuickSaida(null); setQuickQtd(''); setQuickDestino('');
       toast.success(vars.type === 'entrada' ? 'Entrada registrada!' : 'Saída registrada!');
     },
     onError: (e: any) => toast.error(e.message),
@@ -471,6 +476,15 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
           <p className="text-sm text-muted-foreground">Disponível: {quickSaida && Number(quickSaida.estoque_atual)} {quickSaida?.unidade}</p>
           <form onSubmit={e => { e.preventDefault(); quickAction.mutate({ type: 'saida', produtoId: quickSaida.id }); }} className="space-y-3">
             <Input placeholder="Quantidade *" type="number" value={quickQtd} onChange={e => setQuickQtd(e.target.value)} required autoFocus className="h-12" />
+            <div className="space-y-1">
+              <label className="text-xs text-muted-foreground ml-1">Para quem / destino (opcional)</label>
+              <Input
+                placeholder="Ex: João da obra, Depósito B..."
+                value={quickDestino}
+                onChange={e => setQuickDestino(e.target.value)}
+                className="h-12"
+              />
+            </div>
             <Button type="submit" variant="destructive" className="w-full h-12" disabled={quickAction.isPending || !quickQtd}>
               {quickAction.isPending ? 'Registrando...' : 'Registrar Saída'}
             </Button>
