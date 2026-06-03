@@ -509,6 +509,7 @@ export type Database = {
           data_aprovado: string | null
           data_comprado: string | null
           data_entregue: string | null
+          data_necessidade: string | null
           data_solicitacao: string
           descricao_materiais: string
           destinatario_id: string
@@ -523,6 +524,7 @@ export type Database = {
           data_aprovado?: string | null
           data_comprado?: string | null
           data_entregue?: string | null
+          data_necessidade?: string | null
           data_solicitacao?: string
           descricao_materiais: string
           destinatario_id: string
@@ -537,6 +539,7 @@ export type Database = {
           data_aprovado?: string | null
           data_comprado?: string | null
           data_entregue?: string | null
+          data_necessidade?: string | null
           data_solicitacao?: string
           descricao_materiais?: string
           destinatario_id?: string

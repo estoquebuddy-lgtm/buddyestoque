@@ -19,7 +19,7 @@ import { useProfile } from '@/hooks/useProfile';
 import ImageUpload from '@/components/ImageUpload';
 import ImageThumbnail from '@/components/ImageThumbnail';
 
-const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '', foto_url: '' };
+const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '', foto_url: '', data_necessidade: '' };
 
 const columnsList = [
   { 
@@ -165,7 +165,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         descricao_materiais: form.descricao,
         urgencia: form.urgencia,
         status: 'SOLICITADO',
-        foto_url: form.foto_url || null
+        foto_url: form.foto_url || null,
+        data_necessidade: form.data_necessidade || null
       };
       
       const { error } = await supabase.from('solicitacoes_material' as any).insert(payload);
@@ -378,6 +379,12 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
 
                         {/* Metadata Rows (User & Calendar) */}
                         <div className="space-y-1.5 text-[10px] text-slate-500">
+                          {s.data_necessidade && (
+                            <div className="flex items-center gap-1.5">
+                              <Calendar className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                              <span className="truncate">Para: <strong className="text-blue-600 font-semibold">{new Date(s.data_necessidade).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</strong></span>
+                            </div>
+                          )}
                           <div className="flex items-center gap-1.5">
                             <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span className="truncate">De: <strong className="text-slate-700 font-semibold">{formatUserDisplay(s.solicitante)}</strong></span>
@@ -605,19 +612,33 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               </Select>
             </div>
 
-            <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                Grau de Urgência
-              </label>
-              <Select value={form.urgencia} onValueChange={v => setForm(f => ({ ...f, urgencia: v }))}>
-                <SelectTrigger className="h-12"><SelectValue placeholder="Urgência" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Baixa">Baixa (Pode esperar)</SelectItem>
-                  <SelectItem value="Normal">Normal (Rotina)</SelectItem>
-                  <SelectItem value="Alta">Alta (Precisa logo)</SelectItem>
-                  <SelectItem value="Urgente">Urgente (Obra parada)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  Grau de Urgência
+                </label>
+                <Select value={form.urgencia} onValueChange={v => setForm(f => ({ ...f, urgencia: v }))}>
+                  <SelectTrigger className="h-12"><SelectValue placeholder="Urgência" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Baixa">Baixa (Pode esperar)</SelectItem>
+                    <SelectItem value="Normal">Normal (Rotina)</SelectItem>
+                    <SelectItem value="Alta">Alta (Precisa logo)</SelectItem>
+                    <SelectItem value="Urgente">Urgente (Obra parada)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  Necessidade p/ quando?
+                </label>
+                <Input 
+                  type="date" 
+                  value={form.data_necessidade} 
+                  onChange={e => setForm(f => ({ ...f, data_necessidade: e.target.value }))}
+                  className="h-12 text-sm text-foreground bg-background"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -767,6 +788,11 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                 )}
                 <p className="font-bold text-base whitespace-pre-wrap">{selectedSolicitacao.descricao_materiais}</p>
                 <div className="flex flex-col gap-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
+                  {selectedSolicitacao.data_necessidade && (
+                    <span className="flex items-center gap-1.5 text-blue-600 mb-1">
+                      <Calendar className="h-3.5 w-3.5 shrink-0" /> Necessidade: <strong>{new Date(selectedSolicitacao.data_necessidade).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}</strong>
+                    </span>
+                  )}
                   <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 shrink-0" /> De: <strong>{formatUserDisplay(selectedSolicitacao.solicitante)}</strong></span>
                   <span className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 shrink-0" /> Para: <strong>{formatUserDisplay(selectedSolicitacao.destinatario)}</strong></span>
                 </div>
