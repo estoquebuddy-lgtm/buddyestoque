@@ -257,9 +257,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
       if (existingProd) {
         produtoId = existingProd.id;
-        // Update estoque_atual (sum)
-        const { data: prodData } = await supabase.from('produtos').select('estoque_atual').eq('id', produtoId).single();
-        await supabase.from('produtos').update({ estoque_atual: (prodData?.estoque_atual || 0) + quantidade }).eq('id', produtoId);
+        // Do NOT manually update estoque_atual here — the trigger on entradas INSERT handles it
       } else {
         const { data: newProd, error: prodError } = await supabase
           .from('produtos')
