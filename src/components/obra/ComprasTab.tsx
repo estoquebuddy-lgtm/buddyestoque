@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,7 +13,8 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { 
   Plus, Search, Download, FileSpreadsheet, FileText, Mail, Wrench, 
-  DollarSign, Clock, CheckCircle2, AlertTriangle, Edit, Trash2, Link, ArrowUpDown, RefreshCw 
+  DollarSign, Clock, CheckCircle2, AlertTriangle, Edit, Trash2, Link, ArrowUpDown, RefreshCw,
+  FileUp, Loader2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -21,7 +22,10 @@ import { toast } from 'sonner';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import * as pdfjs from 'pdfjs-dist';
 import GerarLivroFiscalDialog from './GerarLivroFiscalDialog';
+
+pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 interface ComprasTabProps {
   obraId: string;
@@ -70,6 +74,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   // NF Form states
   const [isNfFormOpen, setIsNfFormOpen] = useState(false);
   const [selectedNf, setSelectedNf] = useState<any | null>(null);
+  const [parsingPdf, setParsingPdf] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Form states for Compras
   const [formData, setFormData] = useState({
@@ -380,7 +386,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           bCalculo: nf.livro_base_calculo || nf.valor_nf || 0,
           pICMS: nf.livro_aliquota || 0,
           vICMS: nf.livro_imp_creditado || 0,
-          linhas_fiscais: []
+          linhas_fiscais: [],
+          observacoes: c.email_titulo || ''
         });
       });
     });
@@ -555,6 +562,119 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       livro_imp_creditado: nfFormData.livro_imp_creditado ? parseFloat(nfFormData.livro_imp_creditado) : null
     };
     saveNfMutation.mutate(payload);
+  };
+
+  const handleNfPdfImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.type !== 'application/pdf') {
+      toast.error('Por favor, selecione um arquivo PDF.');
+      return;
+    }
+
+    setParsingPdf(true);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+      let fullText = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+
+        const lineMap: Record<number, any[]> = {};
+        textContent.items.forEach((item: any) => {
+          if (!item.transform) return;
+          const y = Math.round(item.transform[5]);
+          const existingY = Object.keys(lineMap).find(key => Math.abs(Number(key) - y) <= 3);
+          if (existingY) { lineMap[Number(existingY)].push(item); }
+          else { lineMap[y] = [item]; }
+        });
+
+        const yKeys = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
+        for (const y of yKeys) {
+          const lineItems = lineMap[y].sort((a: any, b: any) => a.transform[4] - b.transform[4]);
+          const lineText = lineItems.map((item: any) => item.str).join(' ').trim();
+          if (lineText) fullText += lineText + '\n';
+        }
+      }
+
+      console.log('PDF Text extracted:', fullText);
+
+      // 1. CNPJ
+      const cnpjRegex = /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g;
+      const cnpjs = fullText.match(cnpjRegex) || [];
+      const emitCnpj = cnpjs[0] || '';
+
+      // 2. UF
+      let uf = 'SC';
+      const ufMatch = fullText.match(/uf\s*:\s*([a-z]{2})/i) || fullText.match(/([a-z]{2})\s+insc/i);
+      if (ufMatch) {
+        uf = ufMatch[1].toUpperCase();
+      } else {
+        const states = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+        const stateWord = fullText.split(/\s+/).find(w => states.includes(w.toUpperCase()));
+        if (stateWord) uf = stateWord.toUpperCase();
+      }
+
+      // 3. Número NF
+      let numeroNf = '';
+      const numMatch = fullText.match(/n[oº]\s*([\d.]+)/i) || fullText.match(/n[uú]mero\s*([\d.]+)/i) || fullText.match(/nf-e\s*n[oº]\s*([\d.]+)/i);
+      if (numMatch) {
+        numeroNf = numMatch[1].replace(/\./g, '');
+      }
+
+      // 4. Série
+      let serie = '1';
+      const serieMatch = fullText.match(/s[eé]rie\s*:\s*(\d+)/i) || fullText.match(/s[eé]rie\s+(\d+)/i);
+      if (serieMatch) {
+        serie = serieMatch[1];
+      }
+
+      // 5. Valor da NF
+      let valorNf = '';
+      const valRegex = /(?:valor(?:\s+total)?(?:\s+da)?(?:\s+nota|\s+dos\s+produtos)?|valor\s+liq\.)\s*(?:r\$)?\s*([\d.]+,\d{2})/i;
+      const valMatch = fullText.match(valRegex);
+      if (valMatch) {
+        valorNf = valMatch[1].replace(/\./g, '').replace(',', '.');
+      } else {
+        const valRegex2 = /(?:r\$)\s*([\d.]+,\d{2})/i;
+        const valMatch2 = fullText.match(valRegex2);
+        if (valMatch2) {
+          valorNf = valMatch2[1].replace(/\./g, '').replace(',', '.');
+        }
+      }
+
+      // 6. Data de Emissão (Data Doc)
+      let dataDoc = '';
+      const dates = fullText.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
+      if (dates.length > 0) {
+        const parts = dates[0].split('/');
+        dataDoc = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+
+      // Populate form data
+      setNfFormData(prev => ({
+        ...prev,
+        valor_nf: valorNf || prev.valor_nf,
+        livro_valor_contabil: valorNf || prev.livro_valor_contabil,
+        livro_base_calculo: valorNf || prev.livro_base_calculo,
+        livro_numero: numeroNf || prev.livro_numero,
+        livro_serie: serie || prev.livro_serie,
+        livro_cnpj_emitente: emitCnpj || prev.livro_cnpj_emitente || selectedCompra?.fornecedor_cnpj || '',
+        livro_uf: uf || prev.livro_uf,
+        livro_data_doc: dataDoc || prev.livro_data_doc,
+        livro_data_entrada: dataDoc || prev.livro_data_entrada || format(new Date(), 'yyyy-MM-dd')
+      }));
+
+      toast.success('Informações extraídas do PDF da NF com sucesso! Revise os campos.');
+    } catch (error) {
+      console.error('Error parsing PDF:', error);
+      toast.error('Erro ao processar o PDF. Você pode digitar os dados.');
+    } finally {
+      setParsingPdf(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handleStatusChange = (compraId: string, newStatus: string) => {
@@ -1474,6 +1594,32 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             /* ADD/EDIT NF SUB-FORM */
             <form onSubmit={handleNfSubmit} className="space-y-4 border border-white/5 p-4 rounded-2xl bg-[#070b15]/30">
               <h3 className="text-xs font-bold text-primary uppercase tracking-wider">{selectedNf ? 'Editar Nota Fiscal' : 'Cadastrar Nota Fiscal'}</h3>
+              
+              {/* PDF Import dropzone */}
+              <div 
+                onClick={() => fileInputRef.current?.click()}
+                className="flex flex-col items-center justify-center p-5 border-2 border-dashed border-primary/20 hover:border-primary/50 rounded-xl bg-[#070b15]/50 hover:bg-[#070b15]/80 transition-colors cursor-pointer text-center"
+              >
+                {parsingPdf ? (
+                  <>
+                    <Loader2 className="h-6 w-6 animate-spin text-primary mb-2" />
+                    <p className="text-xs font-semibold text-white">Lendo PDF da NF...</p>
+                  </>
+                ) : (
+                  <>
+                    <FileUp className="h-6 w-6 text-primary mb-2" />
+                    <p className="text-xs font-semibold text-white">Importar Informações do PDF da NF</p>
+                    <p className="text-[10px] text-white/40 mt-1">Lê os textos do PDF para preencher os campos abaixo. O arquivo NÃO é salvo na base.</p>
+                  </>
+                )}
+                <input 
+                  ref={fileInputRef} 
+                  type="file" 
+                  accept=".pdf" 
+                  className="hidden" 
+                  onChange={handleNfPdfImport} 
+                />
+              </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                 <div className="space-y-1">

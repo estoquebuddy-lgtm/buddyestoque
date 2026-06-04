@@ -33,6 +33,7 @@ interface FiscalRow {
   pICMS?: number;
   vICMS?: number;
   linhas_fiscais?: any[];
+  observacoes?: string;
 }
 
 export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows = [] }: Props) {
@@ -230,7 +231,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
             formatCurr(line.vBC || 0),
             line.vICMS > 0 ? (line.pICMS ? line.pICMS.toLocaleString('pt-BR') : '') : '',
             line.vICMS > 0 ? formatCurr(line.vICMS) : '',
-            ''
+            idx === 0 ? (r.observacoes || '') : ''
           ]);
         });
       } else {
@@ -250,7 +251,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
           formatCurr(r.bCalculo),
           r.pICMS ? r.pICMS.toLocaleString('pt-BR') : '',
           r.vICMS ? formatCurr(r.vICMS) : '',
-          ''
+          r.observacoes || ''
         ]);
       }
     });
