@@ -30,19 +30,54 @@ import {
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 
-const menuItems = [
-  { value: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { value: 'produtos', label: 'Estoque', icon: Package },
-  { value: 'entradas', label: 'Entradas', icon: ArrowDownToLine },
-  { value: 'saidas', label: 'Saídas', icon: ArrowUpFromLine },
-  { value: 'ferramentas', label: 'Ferramentas', icon: Wrench },
-  { value: 'ferramentas-funcionario', label: 'Ferr. por Funcionário', icon: Users2 },
-  { value: 'solicitacoes', label: 'Solicitações', icon: MessageSquarePlus },
-  { value: 'compras', label: 'Compras', icon: ShoppingCart },
-  { value: 'financeiro', label: 'Financeiro', icon: DollarSign },
-  { value: 'relatorios', label: 'Relatórios', icon: FileBarChart },
-  { value: 'atividades', label: 'Atividades', icon: ListTodo },
-  { value: 'pessoas', label: 'Equipe', icon: Users },
+const menuGroups = (isAdmin: boolean) => [
+  {
+    id: 'g-dashboard',
+    items: [
+      { value: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }
+    ]
+  },
+  { id: 'sep-1', type: 'separator' },
+  {
+    id: 'g-estoque',
+    items: [
+      { value: 'produtos', label: 'Estoque', icon: Package },
+      { value: 'entradas', label: 'Entradas', icon: ArrowDownToLine },
+      { value: 'saidas', label: 'Saídas', icon: ArrowUpFromLine }
+    ]
+  },
+  { id: 'space-1', type: 'spacing' },
+  {
+    id: 'g-ferramentas',
+    items: [
+      { value: 'ferramentas', label: 'Ferramentas', icon: Wrench },
+      { value: 'ferramentas-funcionario', label: 'Ferramentas em Uso', icon: Users2 }
+    ]
+  },
+  { id: 'sep-2', type: 'separator' },
+  {
+    id: 'g-solicitacoes',
+    items: [
+      { value: 'solicitacoes', label: 'Solicitações', icon: MessageSquarePlus },
+      { value: 'compras', label: 'Compras', icon: ShoppingCart },
+      { value: 'financeiro', label: 'Financeiro', icon: DollarSign }
+    ]
+  },
+  { id: 'sep-3', type: 'separator' },
+  {
+    id: 'g-equipe',
+    items: [
+      { value: 'pessoas', label: 'Equipe', icon: Users }
+    ]
+  },
+  { id: 'sep-4', type: 'separator' },
+  {
+    id: 'g-relatorios',
+    items: [
+      { value: 'relatorios', label: 'Relatórios', icon: FileBarChart },
+      ...(isAdmin ? [{ value: 'atividades', label: 'Atividades', icon: ListTodo }] : [])
+    ]
+  }
 ];
 
 interface ObraSidebarProps {
@@ -106,29 +141,38 @@ export default function ObraSidebar({ obraNome, obraEndereco, activeTab, onTabCh
       <Separator className="bg-sidebar-border" />
 
       <SidebarContent className="pt-2">
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item) => {
-                if (item.value === 'atividades' && !isAdmin) return null;
-                const isActive = activeTab === item.value;
-                return (
-                  <SidebarMenuItem key={item.value}>
-                    <SidebarMenuButton
-                      onClick={() => onTabChange(item.value)}
-                      isActive={isActive}
-                      tooltip={item.label}
-                      className="h-10"
-                    >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {menuGroups(isAdmin).map((group) => {
+          if (group.type === 'separator') {
+            return <Separator key={group.id} className="my-2 bg-sidebar-border" />;
+          }
+          if (group.type === 'spacing') {
+            return <div key={group.id} className="h-4" />;
+          }
+          return (
+            <SidebarGroup key={group.id} className="py-0">
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items?.map((item) => {
+                    const isActive = activeTab === item.value;
+                    return (
+                      <SidebarMenuItem key={item.value}>
+                        <SidebarMenuButton
+                          onClick={() => onTabChange(item.value)}
+                          isActive={isActive}
+                          tooltip={item.label}
+                          className="h-10"
+                        >
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          );
+        })}
       </SidebarContent>
 
       <SidebarFooter className="p-3">
