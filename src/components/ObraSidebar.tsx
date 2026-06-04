@@ -46,7 +46,7 @@ const menuGroups = (isAdmin: boolean) => [
       { value: 'saidas', label: 'Saídas', icon: ArrowUpFromLine }
     ]
   },
-  { id: 'space-1', type: 'spacing' },
+  { id: 'sep-1-5', type: 'separator' },
   {
     id: 'g-ferramentas',
     items: [
