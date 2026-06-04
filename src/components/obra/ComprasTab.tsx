@@ -668,15 +668,15 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       {/* Header and Action Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-5">
         <div>
-          <h1 className="font-display font-bold text-2xl tracking-tight text-white">Compras</h1>
-          <p className="text-sm text-white/50">Gerenciamento de solicitações de pagamento, fluxos de cotação e conciliação de Notas Fiscais.</p>
+          <h1 className="text-xl lg:text-2xl font-display font-bold">Compras</h1>
+          <p className="text-sm text-muted-foreground">Gerenciamento de solicitações de pagamento, fluxos de cotação e conciliação de Notas Fiscais.</p>
         </div>
         <div className="flex items-center gap-3">
           <Button onClick={() => setIsCreateOpen(true)} className="bg-primary hover:bg-primary/95 text-white font-bold h-10 px-4 rounded-xl flex items-center gap-1.5 shadow-md shadow-primary/10">
             <Plus className="h-4 w-4" />
             Novo Lançamento
           </Button>
-          <Button onClick={() => setIsLivroOpen(true)} variant="outline" className="border-white/10 hover:bg-white/5 text-white h-10 px-4 rounded-xl flex items-center gap-1.5">
+          <Button onClick={() => setIsLivroOpen(true)} variant="outline" className="h-10 px-4 rounded-xl flex items-center gap-1.5">
             <FileText className="h-4 w-4 text-primary" />
             Livro Fiscal de Entradas
           </Button>
@@ -684,13 +684,13 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       </div>
 
       {/* Filter Toolbar */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-[#0d1527]/50 p-3 rounded-2xl border border-white/5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-muted/40 p-3 rounded-2xl border">
         {/* Search */}
         <div className="relative md:col-span-2">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-white/40" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input 
             placeholder="Buscar por e-mail, fornecedor, material..." 
-            className="pl-9 h-10 bg-[#070b15]/50 border-white/10 text-white rounded-xl focus-visible:ring-primary"
+            className="pl-9 h-10 bg-background rounded-xl focus-visible:ring-primary"
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -698,10 +698,10 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         
         {/* Month Filter */}
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="h-10 bg-[#070b15]/50 border-white/10 text-white rounded-xl">
+          <SelectTrigger className="h-10 bg-background rounded-xl">
             <SelectValue placeholder="Filtrar por Mês" />
           </SelectTrigger>
-          <SelectContent className="bg-[#0e1629] border-white/10 text-white">
+          <SelectContent>
             <SelectItem value="all">Todos os Meses</SelectItem>
             {uniqueMonths.map(m => (
               <SelectItem key={m} value={m}>{monthLabel(m)}</SelectItem>
@@ -711,10 +711,10 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
         {/* Centro de Custo */}
         <Select value={selectedCentroCusto} onValueChange={setSelectedCentroCusto}>
-          <SelectTrigger className="h-10 bg-[#070b15]/50 border-white/10 text-white rounded-xl">
+          <SelectTrigger className="h-10 bg-background rounded-xl">
             <SelectValue placeholder="Centro de Custo" />
           </SelectTrigger>
-          <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-[300px]">
+          <SelectContent className="max-h-[300px]">
             <SelectItem value="all">Todos os CC</SelectItem>
             {CENTROS_CUSTO.map(cc => (
               <SelectItem key={cc} value={cc.toString()}>CC: {cc}</SelectItem>
@@ -724,10 +724,10 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
         {/* Tipo Solicitação */}
         <Select value={selectedTipoSolicitacao} onValueChange={setSelectedTipoSolicitacao}>
-          <SelectTrigger className="h-10 bg-[#070b15]/50 border-white/10 text-white rounded-xl">
+          <SelectTrigger className="h-10 bg-background rounded-xl">
             <SelectValue placeholder="Tipo de Solicitação" />
           </SelectTrigger>
-          <SelectContent className="bg-[#0e1629] border-white/10 text-white">
+          <SelectContent>
             <SelectItem value="all">Todos os Tipos</SelectItem>
             {SOLICITACAO_OPTIONS.map(opt => (
               <SelectItem key={opt} value={opt}>{opt}</SelectItem>
@@ -739,22 +739,22 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       {/* Tabs list with export actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <Tabs value={activeTab} onValueChange={(val: any) => setActiveTab(val)} className="w-full sm:w-auto">
-          <TabsList className="bg-[#0e1629] border border-white/5 p-1 rounded-xl">
-            <TabsTrigger value="ativas" className="rounded-lg text-xs font-semibold px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-white">Ativas</TabsTrigger>
-            <TabsTrigger value="geral" className="rounded-lg text-xs font-semibold px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-white">Geral</TabsTrigger>
-            <TabsTrigger value="kanban" className="rounded-lg text-xs font-semibold px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-white">Kanban</TabsTrigger>
-            <TabsTrigger value="dashboard" className="rounded-lg text-xs font-semibold px-3 py-1.5 data-[state=active]:bg-primary data-[state=active]:text-white">Dashboard</TabsTrigger>
+          <TabsList className="bg-muted/50 p-1 rounded-xl border">
+            <TabsTrigger value="ativas" className="rounded-lg text-xs font-semibold px-3 py-1.5">Ativas</TabsTrigger>
+            <TabsTrigger value="geral" className="rounded-lg text-xs font-semibold px-3 py-1.5">Geral</TabsTrigger>
+            <TabsTrigger value="kanban" className="rounded-lg text-xs font-semibold px-3 py-1.5">Kanban</TabsTrigger>
+            <TabsTrigger value="dashboard" className="rounded-lg text-xs font-semibold px-3 py-1.5">Dashboard</TabsTrigger>
           </TabsList>
         </Tabs>
 
         {activeTab !== 'dashboard' && (
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-            <Button onClick={exportToPdf} variant="outline" className="border-white/5 hover:bg-white/5 text-white/80 h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium">
-              <Download className="h-3.5 w-3.5 text-red-400" />
+            <Button onClick={exportToPdf} variant="outline" className="h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium">
+              <Download className="h-3.5 w-3.5 text-red-500" />
               Exportar PDF
             </Button>
-            <Button onClick={exportToExcel} variant="outline" className="border-white/5 hover:bg-white/5 text-white/80 h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium">
-              <FileSpreadsheet className="h-3.5 w-3.5 text-green-400" />
+            <Button onClick={exportToExcel} variant="outline" className="h-9 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium">
+              <FileSpreadsheet className="h-3.5 w-3.5 text-green-600" />
               Exportar Excel
             </Button>
           </div>
