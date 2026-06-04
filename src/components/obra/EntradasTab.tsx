@@ -59,6 +59,9 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [newFerramenta, setNewFerramenta] = useState(emptyNewFerramenta);
   const [editingFerramenta, setEditingFerramenta] = useState<{ produtoId: string; nome: string } | null>(null);
 
+  // Confirmar recebimento dialog
+  const [receberDialog, setReceberDialog] = useState<{ open: boolean; entradaId: string; produtoId: string; produtoNome: string; localizacao: string } | null>(null);
+
   // New product inline state
   const [isNewProduct, setIsNewProduct] = useState(false);
   const [newProduct, setNewProduct] = useState(emptyNewProduct);
@@ -386,7 +389,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   });
 
   const confirmarRecebimento = useMutation({
-    mutationFn: async (entradaId: string) => {
+    mutationFn: async ({ entradaId, localizacao, produtoId }: { entradaId: string; localizacao: string; produtoId: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
       
       const { data: ent, error: fetchErr } = await supabase
@@ -407,6 +410,11 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         .eq('id', entradaId);
       if (updateErr) throw updateErr;
 
+      // Update localizacao on the produto if provided
+      if (localizacao.trim()) {
+        await supabase.from('produtos').update({ localizacao: localizacao.trim() }).eq('id', produtoId);
+      }
+
       const prodName = (ent?.produtos as any)?.nome || 'Produto';
       await supabase.from('logs_atividades' as any).insert({
         obra_id: obraId,
@@ -414,13 +422,14 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         user_email: user?.email,
         acao: 'ENTRADA',
         entidade: 'ESTOQUE',
-        detalhes: `Confirmou recebimento de ${ent?.quantidade} ${(ent?.produtos as any)?.unidade || 'un'} de ${prodName} (via Compras)`
+        detalhes: `Confirmou recebimento de ${ent?.quantidade} ${(ent?.produtos as any)?.unidade || 'un'} de ${prodName}${localizacao.trim() ? ` → Loc: ${localizacao.trim()}` : ''} (via Compras)`
       });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
       queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
+      setReceberDialog(null);
       toast.success('Recebimento confirmado! O estoque foi atualizado.');
     },
     onError: (e: any) => toast.error(`Erro: ${e.message}`)
@@ -622,10 +631,10 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                           type="button"
                           size="sm"
                           className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold shadow-md transition-all border-none"
-                          disabled={confirmarRecebimento.isPending && confirmarRecebimento.variables === e.id}
-                          onClick={() => confirmarRecebimento.mutate(e.id)}
+                          disabled={confirmarRecebimento.isPending}
+                          onClick={() => setReceberDialog({ open: true, entradaId: e.id, produtoId: e.produto_id, produtoNome: e.produtos?.nome || 'Produto', localizacao: e.produtos?.localizacao || '' })}
                         >
-                          {confirmarRecebimento.isPending && confirmarRecebimento.variables === e.id ? (
+                          {confirmarRecebimento.isPending && receberDialog?.entradaId === e.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
                           ) : (
                             <ArrowDownToLine className="h-3.5 w-3.5" />
@@ -1159,6 +1168,72 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Entrada" description="A quantidade será subtraída do estoque automaticamente." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
 
       <ImportXmlDialog obraId={obraId} open={xmlOpen} onOpenChange={setXmlOpen} />
+
+      {/* ── Confirmar Recebimento Dialog ── */}
+      <Dialog open={!!receberDialog?.open} onOpenChange={(open) => !open && setReceberDialog(null)}>
+        <DialogContent className="bg-[#0e1629] border-white/10 text-white max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base font-bold">
+              <ArrowDownToLine className="h-5 w-5 text-emerald-400" />
+              Confirmar Recebimento
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Product name */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10">
+              <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold mb-0.5">Produto</p>
+              <p className="text-sm font-semibold text-white">{receberDialog?.produtoNome}</p>
+            </div>
+
+            {/* Location input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase tracking-wider text-white/40 font-bold flex items-center gap-1.5">
+                <Boxes className="h-3.5 w-3.5 text-primary" />
+                Localização no Estoque
+                <span className="text-white/25 normal-case font-normal">(opcional)</span>
+              </label>
+              <Input
+                autoFocus
+                placeholder="Ex: Prateleira A3, Armário 2, Depósito..."
+                value={receberDialog?.localizacao ?? ''}
+                onChange={e => setReceberDialog(d => d ? { ...d, localizacao: e.target.value } : d)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && receberDialog) {
+                    confirmarRecebimento.mutate({ entradaId: receberDialog.entradaId, localizacao: receberDialog.localizacao, produtoId: receberDialog.produtoId });
+                  }
+                }}
+                className="bg-[#0a1020] border-white/10 text-white placeholder:text-white/25 focus-visible:ring-primary rounded-xl h-11 text-sm"
+              />
+              {receberDialog?.localizacao && (
+                <p className="text-[10px] text-primary/70">📍 Será salvo no cadastro do produto</p>
+              )}
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2 pt-1">
+              <Button
+                variant="outline"
+                className="flex-1 bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl"
+                onClick={() => setReceberDialog(null)}
+                disabled={confirmarRecebimento.isPending}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold"
+                disabled={confirmarRecebimento.isPending}
+                onClick={() => receberDialog && confirmarRecebimento.mutate({ entradaId: receberDialog.entradaId, localizacao: receberDialog.localizacao, produtoId: receberDialog.produtoId })}
+              >
+                {confirmarRecebimento.isPending
+                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                  : <><ArrowDownToLine className="h-4 w-4 mr-1.5" />Confirmar</>
+                }
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

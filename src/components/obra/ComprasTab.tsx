@@ -64,6 +64,8 @@ const TIPO_BADGE: Record<string, string> = {
   'Outros':           'bg-zinc-500/15 text-zinc-300 border-zinc-500/20',
 };
 
+const PARCELA_PRESETS = ['ÚNICA', '50% INICIAL', '50% FINAL', '1/2', '2/2'];
+
 // ── Row conciliation state ────────────────────────────────────────────────────
 function getConf(c: any): 'ok' | 'warn' | 'missing' | 'estornado' {
   if (c.estornado) return 'estornado';
@@ -157,6 +159,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [selectedTipo, setSelectedTipo] = useState('all');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [sortBy, setSortBy] = useState<'envio'|'pagamento'>('envio');
+  const [parcelaOtros, setParcelaOtros] = useState<boolean[]>([false,false,false]);
 
   // Kanban drag-and-drop
   const [dragId, setDragId] = useState<string|null>(null);
@@ -1114,9 +1117,9 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                                     e.stopPropagation();
                                     setViewEstoqueCompra(c);
                                   }}
-                                  className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 text-[9px] font-bold uppercase shrink-0 cursor-pointer hover:bg-emerald-500/25 transition-colors"
+                                  className="bg-yellow-400/15 text-yellow-300 border-yellow-400/30 text-[9px] font-bold uppercase shrink-0 cursor-pointer hover:bg-yellow-400/25 transition-colors"
                                 >
-                                  Lançado
+                                  Estoque
                                 </Badge>
                               )}
                             </div>
@@ -1135,7 +1138,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                               <div className="space-y-0.5">
                                 <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 text-[9px]">✓ NF Anexada</Badge>
                                 {nfs.map((n:any)=><p key={n.id} className="text-[9px] text-white/60">{n.livro_especie||'NF'} {n.livro_numero||'S/N'} · {fmt(n.valor_nf)}</p>)}
-                                {Math.abs(totalNF-(c.valor_pago||0))>0.01&&<p className="text-[9px] text-amber-400">⚠ Dif: {fmt(Math.abs(totalNF-(c.valor_pago||0)))}</p>}
+                                {Math.abs(totalNF-(c.valor_pago||0))>0.01&&(()=>{const diff=totalNF-(c.valor_pago||0);return(<p className={`text-[9px] font-bold ${diff>0?'text-emerald-400':'text-red-400'}`}>⚠ Dif: {diff>0?'+':''}{fmt(diff)}</p>);})()}
                               </div>
                             ) : (
                               <Badge className="bg-orange-500/15 text-orange-300 border-orange-500/20 text-[9px]">NF Pendente</Badge>
@@ -1284,7 +1287,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                         <div className="mt-2.5 p-2 rounded-lg bg-black/40 border border-white/5 space-y-1.5 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
                           <div className="text-[8px] font-bold text-white/50 tracking-wide uppercase flex items-center gap-1">
                             <Boxes className="h-3 w-3 text-emerald-400" />
-                            Estoque Lançado
+                            Estoque
                           </div>
                           <div className="divide-y divide-white/5 max-h-[85px] overflow-y-auto pr-0.5">
                             {c.entradas.map((e: any) => {
@@ -1516,19 +1519,48 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                         Estornado
                       </label>
                     </div>
-                    <div className="grid grid-cols-5 gap-2">
-                      {[
-                        {label:'Parcela',field:'parcela',type:'text'},
-                        {label:'Envio',field:'data_envio',type:'date'},
-                        {label:'Solicitado',field:'valor_solicitado',type:'number'},
-                        {label:'Pago',field:'valor_pago',type:'number'},
-                        {label:'Dt. Pagamento',field:'data_pagamento',type:'date'},
-                      ].map(({label,field,type})=>(
-                        <div key={field} className="space-y-1">
-                          <Label className="text-[8px] uppercase tracking-wider text-white/40 font-bold">{label}</Label>
-                          <Input type={type} step={type==='number'?'0.01':undefined} value={(p as any)[field]} onChange={e=>updateParcela(i,field,e.target.value)} className="text-xs h-8 bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-lg"/>
+                    <div className="space-y-2">
+                      {/* Parcela quick-select */}
+                      <div className="space-y-1">
+                        <Label className="text-[8px] uppercase tracking-wider text-white/40 font-bold">Parcela</Label>
+                        <div className="flex flex-wrap gap-1.5">
+                          {PARCELA_PRESETS.map(preset=>(
+                            <button key={preset} type="button"
+                              onClick={()=>{updateParcela(i,'parcela',preset);setParcelaOtros(prev=>{const n=[...prev];n[i]=false;return n;});}}
+                              className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                                p.parcela===preset
+                                  ?'bg-primary text-white border-primary shadow-sm'
+                                  :'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'
+                              }`}
+                            >{preset}</button>
+                          ))}
+                          <button type="button"
+                            onClick={()=>{setParcelaOtros(prev=>{const n=[...prev];n[i]=true;return n;});if(PARCELA_PRESETS.includes(p.parcela))updateParcela(i,'parcela','');}}
+                            className={`px-2.5 py-1 rounded-full text-[10px] font-bold border transition-all ${
+                              (parcelaOtros[i]||(p.parcela!==''&&!PARCELA_PRESETS.includes(p.parcela)))
+                                ?'bg-primary text-white border-primary shadow-sm'
+                                :'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >Outros</button>
                         </div>
-                      ))}
+                        {(parcelaOtros[i]||(p.parcela!==''&&!PARCELA_PRESETS.includes(p.parcela)))&&(
+                          <Input value={p.parcela} onChange={e=>updateParcela(i,'parcela',e.target.value)} placeholder="Ex.: 3/4" className="text-xs h-8 bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-lg mt-1"/>
+                        )}
+                      </div>
+                      {/* Other payment fields */}
+                      <div className="grid grid-cols-4 gap-2">
+                        {[
+                          {label:'Envio',field:'data_envio',type:'date'},
+                          {label:'Solicitado',field:'valor_solicitado',type:'number'},
+                          {label:'Pago',field:'valor_pago',type:'number'},
+                          {label:'Dt. Pagamento',field:'data_pagamento',type:'date'},
+                        ].map(({label,field,type})=>(
+                          <div key={field} className="space-y-1">
+                            <Label className="text-[8px] uppercase tracking-wider text-white/40 font-bold">{label}</Label>
+                            <Input type={type} step={type==='number'?'0.01':undefined} value={(p as any)[field]} onChange={e=>updateParcela(i,field,e.target.value)} className="text-xs h-8 bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-lg"/>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -1567,8 +1599,34 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 <SelectContent>{TIPO_OPTIONS.map(t=><SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}</SelectContent>
               </Select>
             </div>
+            {/* Parcela quick-select – edit form */}
+            <div className="col-span-2 space-y-1">
+              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Parcela</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {PARCELA_PRESETS.map(preset=>(
+                  <button key={preset} type="button"
+                    onClick={()=>{updateParcela(0,'parcela',preset);setParcelaOtros(prev=>{const n=[...prev];n[0]=false;return n;});}}
+                    className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
+                      form.parcelas[0]?.parcela===preset
+                        ?'bg-primary text-white border-primary shadow-sm'
+                        :'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >{preset}</button>
+                ))}
+                <button type="button"
+                  onClick={()=>{setParcelaOtros(prev=>{const n=[...prev];n[0]=true;return n;});if(PARCELA_PRESETS.includes(form.parcelas[0]?.parcela||''))updateParcela(0,'parcela','');}}
+                  className={`px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${
+                    (parcelaOtros[0]||((form.parcelas[0]?.parcela||'')!==''&&!PARCELA_PRESETS.includes(form.parcelas[0]?.parcela||'')))
+                      ?'bg-primary text-white border-primary shadow-sm'
+                      :'bg-white/5 text-white/60 border-white/10 hover:bg-white/10 hover:text-white'
+                  }`}
+                >Outros</button>
+              </div>
+              {(parcelaOtros[0]||((form.parcelas[0]?.parcela||'')!==''&&!PARCELA_PRESETS.includes(form.parcelas[0]?.parcela||'')))&&(
+                <Input value={form.parcelas[0]?.parcela||''} onChange={e=>updateParcela(0,'parcela',e.target.value)} placeholder="Ex.: 3/4" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10 mt-1"/>
+              )}
+            </div>
             {[
-              {label:'Parcela',field:'parcela',type:'text',target:'parcelas[0].parcela'},
               {label:'Envio',field:'data_envio',type:'date',target:'parcelas[0].data_envio'},
               {label:'Valor Solicitado',field:'valor_solicitado',type:'number',target:'parcelas[0].valor_solicitado'},
               {label:'Valor Pago',field:'valor_pago',type:'number',target:'parcelas[0].valor_pago'},
@@ -1658,7 +1716,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           {selectedCompra&&(()=>{
             const nfs:any[]=selectedCompra.compras_nfs||[];
             const totalNF=nfs.reduce((s:number,n:any)=>s+(n.valor_nf||0),0);
-            const diff=(selectedCompra.valor_pago||0)-totalNF;
+            const diff=totalNF-(selectedCompra.valor_pago||0);
             return(
               <div className="flex flex-wrap gap-4 text-xs mb-2">
                 <span className="text-white/50">Valor pago: <span className="font-bold text-emerald-400">{fmt(selectedCompra.valor_pago)}</span></span>
@@ -1666,8 +1724,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 {Math.abs(diff)<0.01
                   ?<Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 text-[9px]">✓ 100% Conciliado</Badge>
                   :diff>0
-                  ?<Badge className="bg-orange-500/15 text-orange-300 border-orange-500/20 text-[9px]">⚠ Falta NF: {fmt(diff)}</Badge>
-                  :<Badge className="bg-blue-500/15 text-blue-300 border-blue-500/20 text-[9px]">NF excede: {fmt(Math.abs(diff))}</Badge>
+                  ?<Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 text-[9px] font-bold">⚠ Dif: +{fmt(diff)}</Badge>
+                  :<Badge className="bg-red-500/15 text-red-300 border-red-500/20 text-[9px] font-bold">⚠ Dif: {fmt(diff)}</Badge>
                 }
               </div>
             );
