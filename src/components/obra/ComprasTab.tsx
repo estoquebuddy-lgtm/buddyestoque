@@ -1116,7 +1116,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                                   }}
                                   className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 text-[9px] font-bold uppercase shrink-0 cursor-pointer hover:bg-emerald-500/25 transition-colors"
                                 >
-                                  Lançado no ESTOQUE
+                                  Lançado
                                 </Badge>
                               )}
                             </div>
