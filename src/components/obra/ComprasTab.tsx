@@ -156,6 +156,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedTipo, setSelectedTipo] = useState('all');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
+  const [sortBy, setSortBy] = useState<'envio'|'pagamento'>('envio');
 
   // Kanban drag-and-drop
   const [dragId, setDragId] = useState<string|null>(null);
@@ -483,9 +484,17 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     if(selectedMonth!=='all') r=r.filter((c:any)=>mesKey(c.data_envio)===selectedMonth||mesKey(c.data_pagamento)===selectedMonth);
     if(selectedTipo!=='all') r=r.filter((c:any)=>c.tipo_solicitacao===selectedTipo);
     if(search.trim()){const t=normal(search);r=r.filter((c:any)=>normal(c.email_titulo||'').includes(t)||normal(c.fornecedor_nome||'').includes(t)||normal(c.obs||'').includes(t));}
-    r.sort((a:any,b:any)=>{const da=a.data_envio||'',db=b.data_envio||'';if(!da)return 1;if(!db)return -1;return sortDir==='asc'?da.localeCompare(db):db.localeCompare(da);});
+    // Sorting
+    r.sort((a:any,b:any)=>{
+      const field = sortBy==='envio' ? 'data_envio' : 'data_pagamento';
+      const da = a[field]||'';
+      const db = b[field]||'';
+      if(!da) return 1;
+      if(!db) return -1;
+      return sortDir==='asc'?da.localeCompare(db):db.localeCompare(da);
+    });
     return r;
-  },[compras,activeTab,selectedMonth,selectedTipo,search,sortDir]);
+    },[compras,activeTab,selectedMonth,selectedTipo,search,sortBy,sortDir]);
 
   const months = useMemo(()=>{const s=new Set<string>();compras.forEach((c:any)=>{const k1=mesKey(c.data_envio);const k2=mesKey(c.data_pagamento);if(k1)s.add(k1);if(k2)s.add(k2);});return Array.from(s).sort((a,b)=>b.localeCompare(a));},[compras]);
 
@@ -913,9 +922,6 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             {TIPO_OPTIONS.map(t=><SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button size="sm" variant="ghost" className="h-8 text-xs px-2 text-white/70 hover:text-white hover:bg-white/10" onClick={()=>setSortDir(d=>d==='asc'?'desc':'asc')}>
-          Envio {sortDir==='asc'?'↑':'↓'}
-        </Button>
       </div>
 
       {/* ── Table view (ativas / geral) ── */}
@@ -937,9 +943,59 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-[#0a1020] text-white/60 uppercase tracking-wider text-[9px]">
-                      {['#','Status','Parcela','Envio','Solicitado','E-mail / Título','Tipo','Fornecedor','Pago','Dt. Pgto','NF / Livro','CC','Ações'].map(h=>(
-                        <th key={h} className="px-3 py-2.5 text-left whitespace-nowrap font-bold">{h}</th>
-                      ))}
+                      {['#','Status','Parcela','Envio','Solicitado','E-mail / Título','Tipo','Fornecedor','Pago','Dt. Pgto','NF / Livro','CC','Ações'].map(h=>{
+                        if (h === 'Envio') {
+                          const active = sortBy === 'envio';
+                          return (
+                            <th key={h} className="px-3 py-2 text-left whitespace-nowrap font-bold">
+                              <button
+                                onClick={() => {
+                                  if (active) {
+                                    setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setSortBy('envio');
+                                    setSortDir('desc');
+                                  }
+                                }}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full transition-all text-[10px] font-bold ${
+                                  active 
+                                    ? 'bg-white text-zinc-950 font-extrabold shadow-sm' 
+                                    : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                                }`}
+                              >
+                                Envio {active ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+                              </button>
+                            </th>
+                          );
+                        }
+                        if (h === 'Dt. Pgto') {
+                          const active = sortBy === 'pagamento';
+                          return (
+                            <th key={h} className="px-3 py-2 text-left whitespace-nowrap font-bold">
+                              <button
+                                onClick={() => {
+                                  if (active) {
+                                    setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setSortBy('pagamento');
+                                    setSortDir('desc');
+                                  }
+                                }}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full transition-all text-[10px] font-bold ${
+                                  active 
+                                    ? 'bg-white text-zinc-950 font-extrabold shadow-sm' 
+                                    : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                                }`}
+                              >
+                                Dt. Pgto {active ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+                              </button>
+                            </th>
+                          );
+                        }
+                        return (
+                          <th key={h} className="px-3 py-2.5 text-left whitespace-nowrap font-bold">{h}</th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
