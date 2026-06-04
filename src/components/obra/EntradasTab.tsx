@@ -6,13 +6,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ArrowDownToLine, Pencil, Trash2, FileText, Eye, Plus, Search, Package, Wrench, AlertCircle } from 'lucide-react';
+import { ArrowDownToLine, Pencil, Trash2, FileText, Eye, Plus, Search, Package, Wrench, AlertCircle, Boxes, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SkeletonList from '@/components/SkeletonList';
 import ImageUpload from '@/components/ImageUpload';
-import ImportPdfDialog from '@/components/obra/ImportPdfDialog';
+import ImportXmlDialog from '@/components/obra/ImportXmlDialog';
 import { useProfile } from '@/hooks/useProfile';
 import { Badge } from '@/components/ui/badge';
 
@@ -51,7 +51,8 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewNota, setViewNota] = useState<string | null>(null);
-  const [pdfOpen, setPdfOpen] = useState(false);
+  const [xmlOpen, setXmlOpen] = useState(false);
+  const [subTab, setSubTab] = useState<'almoxarifado' | 'comprados'>('almoxarifado');
 
   // Entry type: 'material' or 'ferramenta'
   const [entryType, setEntryType] = useState<'material' | 'ferramenta'>('material');
@@ -89,7 +90,32 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   }, []);
 
   const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome, unidade, categoria, estoque_atual, estoque_minimo').eq('obra_id', obraId).order('nome'); return data || []; } });
-  const { data: entradas = [], isLoading } = useQuery({ queryKey: ['entradas', obraId], queryFn: async () => { const { data } = await supabase.from('entradas').select('*, produtos(nome, unidade)').eq('obra_id', obraId).order('data', { ascending: false }); return data || []; } });
+  
+  const { data: entradas = [], isLoading } = useQuery({
+    queryKey: ['entradas', obraId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('entradas')
+        .select(`
+          *,
+          produtos(nome, unidade),
+          comprado_por:profiles!entradas_comprado_por_id_fkey(email, apelido),
+          responsavel:profiles!entradas_responsavel_id_fkey(email, apelido)
+        `)
+        .eq('obra_id', obraId)
+        .order('data', { ascending: false });
+      if (error) {
+        // Fallback query if migration has not been applied yet
+        const { data: fallbackData } = await supabase
+          .from('entradas')
+          .select('*, produtos(nome, unidade)')
+          .eq('obra_id', obraId)
+          .order('data', { ascending: false });
+        return fallbackData || [];
+      }
+      return data || [];
+    }
+  });
 
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
@@ -359,6 +385,47 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const confirmarRecebimento = useMutation({
+    mutationFn: async (entradaId: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { data: ent, error: fetchErr } = await supabase
+        .from('entradas')
+        .select('quantidade, produto_id, produtos(nome, unidade)')
+        .eq('id', entradaId)
+        .single();
+      if (fetchErr) throw fetchErr;
+
+      const { error: updateErr } = await supabase
+        .from('entradas')
+        .update({
+          status_entrega: 'REALIZADO',
+          responsavel_id: user?.id || null,
+          entregue_em: new Date().toISOString(),
+          data: new Date().toISOString()
+        })
+        .eq('id', entradaId);
+      if (updateErr) throw updateErr;
+
+      const prodName = (ent?.produtos as any)?.nome || 'Produto';
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'ENTRADA',
+        entidade: 'ESTOQUE',
+        detalhes: `Confirmou recebimento de ${ent?.quantidade} ${(ent?.produtos as any)?.unidade || 'un'} de ${prodName} (via Compras)`
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
+      toast.success('Recebimento confirmado! O estoque foi atualizado.');
+    },
+    onError: (e: any) => toast.error(`Erro: ${e.message}`)
+  });
+
   const startEdit = (e: any) => {
     setEditingId(e.id);
     setEntryType('material');
@@ -414,6 +481,15 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const isFerramenta = (e: any) => e.observacao?.startsWith('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
 
+  // Sub-tab lists: split by status_entrega
+  const almoxarifadoList = entradas.filter((e: any) => !e.status_entrega || e.status_entrega === 'REALIZADO');
+  const compradosList = entradas.filter((e: any) => e.status_entrega === 'PENDENTE');
+  const currentTabList = subTab === 'almoxarifado' ? almoxarifadoList : compradosList;
+  const currentFilteredList = currentTabList.filter((e: any) =>
+    e.produtos?.nome?.toLowerCase().includes(search.toLowerCase()) ||
+    (e.fornecedor && e.fornecedor.toLowerCase().includes(search.toLowerCase()))
+  );
+
   const canSubmit = entryType === 'ferramenta'
     ? (editingId
         ? !!form.quantidade && !!form.valor_unitario
@@ -431,7 +507,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const isPending = saveMaterial.isPending || saveFerramenta.isPending;
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-4 animate-fade-in text-white">
       <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
         <div className="text-white">
           <div className="flex items-start justify-between gap-4">
@@ -444,65 +520,203 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               />
             </div>
             <div className="flex flex-col gap-2 shrink-0 pt-1">
-              <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={resetDialog}>
+              <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" onClick={resetDialog}>
                 <ArrowDownToLine className="h-4 w-4 mr-1" /> Entrada
               </Button>
-              <Button size="sm" className="bg-info/20 hover:bg-info/30 text-info border border-info/50" onClick={() => setPdfOpen(true)}>
-                <FileText className="h-4 w-4 mr-1" /> Importar PDF
+              <Button size="sm" className="bg-info/20 hover:bg-info/30 text-info border border-info/50" onClick={() => setXmlOpen(true)}>
+                <FileText className="h-4 w-4 mr-1" /> Importar XML
               </Button>
             </div>
           </div>
         </div>
+
+        {/* Sub-tabs: Almoxarifado vs COMPRADOS */}
+        <div className="flex gap-2 p-1 bg-white/5 border border-white/10 rounded-xl mt-6 max-w-xs">
+          <button
+            type="button"
+            onClick={() => setSubTab('almoxarifado')}
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
+              subTab === 'almoxarifado'
+                ? 'bg-primary text-primary-foreground shadow-lg'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Package className="h-3.5 w-3.5" />
+            Almoxarifado
+          </button>
+          <button
+            type="button"
+            onClick={() => setSubTab('comprados')}
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold uppercase tracking-wider transition-all ${
+              subTab === 'comprados'
+                ? 'bg-primary text-primary-foreground shadow-lg'
+                : 'text-white/60 hover:text-white hover:bg-white/5'
+            }`}
+          >
+            <Boxes className="h-3.5 w-3.5" />
+            COMPRADOS
+          </button>
+        </div>
+
         <div className="flex gap-4 mt-6">
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
-            <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Total Entradas</p>
+            <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">
+              {subTab === 'almoxarifado' ? 'Total Recebido' : 'Aguardando Entrega'}
+            </p>
             <div className="flex items-end gap-2">
-              <span className="text-3xl font-display font-bold text-white leading-none">{entradas.length}</span>
+              <span className="text-3xl font-display font-bold text-white leading-none">
+                {currentTabList.length}
+              </span>
               <span className="text-xs text-white/30 mb-1">registros</span>
             </div>
           </div>
           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
             <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Volume Total</p>
             <div className="flex items-end gap-2">
-              <span className="text-3xl font-display font-bold text-primary-foreground leading-none">{entradas.reduce((acc: number, e: any) => acc + Number(e.quantidade), 0)}</span>
+              <span className="text-3xl font-display font-bold text-primary-foreground leading-none">
+                {currentTabList.reduce((acc: number, e: any) => acc + Number(e.quantidade), 0)}
+              </span>
               <span className="text-xs text-white/30 mb-1">unidades</span>
             </div>
           </div>
         </div>
       </div>
 
-      {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
-        <p className="text-center py-16 text-muted-foreground">{search ? 'Nenhuma entrada encontrada' : 'Nenhuma entrada registrada'}</p>
+      {isLoading ? (
+        <SkeletonList />
+      ) : currentFilteredList.length === 0 ? (
+        <p className="text-center py-16 text-white/40">
+          {search ? 'Nenhuma entrada encontrada' : 'Nenhum registro nesta aba'}
+        </p>
       ) : (
         <div className="space-y-2">
-          {filtered.map((e: any) => {
+          {currentFilteredList.map((e: any) => {
             const isTool = isFerramenta(e);
             const displayName = isTool
               ? e.produtos?.nome?.replace('[FERRAMENTA] ', '') || 'Ferramenta'
               : e.produtos?.nome;
-            return (
-              <Card key={e.id} className="border-primary/10 border shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
-                <CardContent className="p-4 flex items-center gap-4">
-                  <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${isTool ? 'bg-warning/20' : 'bg-primary'}`}>
-                    {isTool ? <Wrench className="h-5 w-5 text-warning" /> : <ArrowDownToLine className="h-5 w-5 text-primary-foreground" />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm truncate">{displayName}</p>
-                      {isTool && <Badge className="bg-warning/10 text-warning border-warning/20 text-[10px]">Ferramenta</Badge>}
+
+            if (subTab === 'comprados') {
+              return (
+                <Card key={e.id} className="bg-[#0e1629] border-white/5 border shadow-sm hover:shadow-md transition-all">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-4">
+                      <div className="h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                        <Boxes className="h-5 w-5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-semibold text-sm truncate text-white">{displayName}</p>
+                          <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] font-medium">COMPRADO (Aguardando)</Badge>
+                        </div>
+                        <p className="text-xs text-white/50 font-medium mt-0.5">
+                          Fornecedor: {e.fornecedor || 'Não informado'}
+                        </p>
+                      </div>
+                      <div className="text-right flex flex-col items-end mr-4">
+                        <span className="text-lg font-display font-bold text-amber-500">+{Number(e.quantidade)}</span>
+                        <span className="text-[10px] text-white/40 uppercase">{e.produtos?.unidade || 'un'}</span>
+                      </div>
+                      <div className="flex gap-2 shrink-0">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold shadow-md transition-all border-none"
+                          disabled={confirmarRecebimento.isPending && confirmarRecebimento.variables === e.id}
+                          onClick={() => confirmarRecebimento.mutate(e.id)}
+                        >
+                          {confirmarRecebimento.isPending && confirmarRecebimento.variables === e.id ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <ArrowDownToLine className="h-3.5 w-3.5" />
+                          )}
+                          Confirmar Recebimento
+                        </Button>
+                        
+                        {isAdmin && (
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => setDeleteId(e.id)}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-xs text-muted-foreground font-medium">{new Date(e.data).toLocaleDateString('pt-BR')}{e.fornecedor && ` • ${e.fornecedor}`}</p>
+
+                    {/* Buyer details */}
+                    {e.comprado_por && (
+                      <div className="mt-3 pt-2.5 border-t border-white/5 flex flex-wrap gap-x-6 gap-y-1 text-[10px] text-white/40">
+                        <span className="flex items-center gap-1">
+                          <span className="font-bold text-primary-foreground/60">Comprador:</span> 
+                          <span className="text-white/60">{e.comprado_por.apelido || e.comprado_por.email}</span> 
+                          {e.comprado_em && <span>({new Date(e.comprado_em).toLocaleDateString('pt-BR')})</span>}
+                        </span>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            }
+
+            return (
+              <Card key={e.id} className="bg-[#0e1629] border-white/5 border shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div className={`h-12 w-12 rounded-xl flex items-center justify-center shrink-0 shadow-sm ${isTool ? 'bg-warning/20 text-warning border border-warning/10' : 'bg-primary text-primary-foreground'}`}>
+                      {isTool ? <Wrench className="h-5 w-5" /> : <ArrowDownToLine className="h-5 w-5" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-sm truncate text-white">{displayName}</p>
+                        {isTool && <Badge className="bg-warning/10 text-warning border-warning/20 text-[10px]">Ferramenta</Badge>}
+                      </div>
+                      <p className="text-xs text-white/50 font-medium mt-0.5">
+                        {new Date(e.data).toLocaleDateString('pt-BR')}{e.fornecedor && ` • ${e.fornecedor}`}
+                      </p>
+                    </div>
+                    <div className="text-right flex flex-col items-end">
+                      <span className="text-lg font-display font-bold text-primary">+{Number(e.quantidade)}</span>
+                      <span className="text-[10px] text-white/40 uppercase">{e.produtos?.unidade || 'un'}</span>
+                    </div>
+                    <div className="flex gap-1 ml-2">
+                      {e.nota_fiscal_url && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-sky-400 hover:text-sky-300 hover:bg-sky-500/10" onClick={() => setViewNota(e.nota_fiscal_url)}>
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {!isTool && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-white/60 hover:text-white hover:bg-white/5" onClick={() => startEdit(e)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {isTool && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-white/60 hover:text-white hover:bg-white/5" onClick={() => startEditFerramenta(e)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                      {isAdmin && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => setDeleteId(e.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-right flex flex-col items-end">
-                    <span className="text-lg font-display font-bold text-primary">+{Number(e.quantidade)}</span>
-                    <span className="text-[10px] text-muted-foreground uppercase">{e.produtos?.unidade || 'un'}</span>
-                  </div>
-                  <div className="flex gap-1 ml-2">
-                    {e.nota_fiscal_url && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewNota(e.nota_fiscal_url)}><Eye className="h-4 w-4 text-info" /></Button>}
-                    {!isTool && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(e)}><Pencil className="h-3.5 w-3.5" /></Button>}
-                    {isTool && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEditFerramenta(e)}><Pencil className="h-3.5 w-3.5" /></Button>}
-                    {isAdmin && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(e.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
-                  </div>
+
+                  {/* Buyer and Receiver Details */}
+                  {e.comprado_por && (
+                    <div className="mt-3 pt-2.5 border-t border-white/5 flex flex-wrap gap-x-6 gap-y-1 text-[10px] text-white/40">
+                      <span className="flex items-center gap-1">
+                        <span className="font-bold text-primary-foreground/60">Comprador:</span> 
+                        <span className="text-white/60">{e.comprado_por.apelido || e.comprado_por.email}</span> 
+                        {e.comprado_em && <span>({new Date(e.comprado_em).toLocaleDateString('pt-BR')})</span>}
+                      </span>
+                      {e.responsavel && (
+                        <span className="flex items-center gap-1">
+                          <span className="font-bold text-emerald-400/60">Recebido por:</span> 
+                          <span className="text-white/60">{e.responsavel.apelido || e.responsavel.email}</span> 
+                          {e.entregue_em && <span>({new Date(e.entregue_em).toLocaleDateString('pt-BR')})</span>}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             );
@@ -512,27 +726,27 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
       {/* View Nota */}
       <Dialog open={!!viewNota} onOpenChange={(open) => !open && setViewNota(null)}>
-        <DialogContent className="max-w-lg max-h-[80vh]">
-          <DialogHeader><DialogTitle>Nota Fiscal</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg max-h-[80vh] bg-[#161f30] text-white border-white/10">
+          <DialogHeader><DialogTitle className="text-white">Nota Fiscal</DialogTitle></DialogHeader>
           {viewNota && (viewNota.endsWith('.pdf') ? <iframe src={viewNota} className="w-full h-[60vh] rounded-lg" /> : <img src={viewNota} alt="Nota Fiscal" className="w-full rounded-lg" />)}
         </DialogContent>
       </Dialog>
 
       {/* Create/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] overflow-y-auto bg-[#161f30] text-white border-white/10">
           <DialogHeader>
-            <DialogTitle>{editingId ? 'Editar Entrada' : 'Nova Entrada'}</DialogTitle>
+            <DialogTitle className="text-white">{editingId ? 'Editar Entrada' : 'Nova Entrada'}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4 [&_input]:bg-[#0e1629] [&_input]:border-white/10 [&_input]:text-white [&_input]:placeholder:text-white/30 [&_textarea]:bg-[#0e1629] [&_textarea]:border-white/10 [&_textarea]:text-white [&_textarea]:placeholder:text-white/30 [&_button[role=combobox]]:bg-[#0e1629] [&_button[role=combobox]]:border-white/10 [&_button[role=combobox]]:text-white [&_label]:text-white/60">
 
             {/* Entry Type Selector - only for new entries */}
             {!editingId && (
-              <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl">
+              <div className="grid grid-cols-2 gap-2 p-1 bg-white/5 border border-white/10 rounded-xl">
                 <button
                   type="button"
                   onClick={() => { setEntryType('material'); setNewFerramenta(emptyNewFerramenta); }}
-                  className={`flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold transition-all ${entryType === 'material' ? 'bg-white text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold transition-all ${entryType === 'material' ? 'bg-[#0e1629] text-white shadow-sm' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
                 >
                   <Package className="h-4 w-4" />
                   Material / Estoque
@@ -540,7 +754,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 <button
                   type="button"
                   onClick={() => { setEntryType('ferramenta'); setForm(emptyForm); setIsNewProduct(false); setProductSearch(''); }}
-                  className={`flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold transition-all ${entryType === 'ferramenta' ? 'bg-[#0e1629] text-white shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                  className={`flex items-center justify-center gap-2 rounded-lg py-3 text-sm font-semibold transition-all ${entryType === 'ferramenta' ? 'bg-[#0e1629] text-white shadow-sm' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
                 >
                   <Wrench className="h-4 w-4" />
                   Ferramenta
@@ -839,27 +1053,27 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               )}
 
               {entryItems.length > 0 && (
-                <div className="bg-muted/40 border rounded-lg p-3 space-y-2 mt-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Itens na Lista ({entryItems.length})</p>
+                <div className="bg-black/25 border border-white/5 rounded-lg p-3 space-y-2 mt-2">
+                  <p className="text-xs font-semibold text-white/50 uppercase tracking-wider">Itens na Lista ({entryItems.length})</p>
                   {entryItems.map(item => (
-                    <div key={item.id} className="flex items-center justify-between bg-background border p-2 rounded-md text-sm">
+                    <div key={item.id} className="flex items-center justify-between bg-[#0e1629] border border-white/5 p-2 rounded-md text-sm">
                       <div className="min-w-0 flex-1 pr-2">
-                        <p className="font-medium truncate text-foreground flex items-center gap-2">
+                        <p className="font-medium truncate text-white flex items-center gap-2">
                           {item.selectedProductName}
-                          {item.isNewProduct && <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4">Novo</Badge>}
+                          {item.isNewProduct && <Badge variant="secondary" className="text-[9px] px-1 py-0 h-4 bg-white/10 text-white border-white/10">Novo</Badge>}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                        <p className="text-xs text-white/50 mt-0.5">
                           {item.quantidade} x R$ {Number(item.valor_unitario).toFixed(2)} = R$ {(Number(item.quantidade) * Number(item.valor_unitario)).toFixed(2)}
                         </p>
                       </div>
-                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => setEntryItems(prev => prev.filter(i => i.id !== item.id))}>
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-500/10 shrink-0" onClick={() => setEntryItems(prev => prev.filter(i => i.id !== item.id))}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   ))}
-                  <div className="flex justify-between items-center border-t pt-2 mt-2 text-sm">
-                    <span className="font-semibold text-muted-foreground">Total da Lista:</span>
-                    <span className="font-bold text-foreground">
+                  <div className="flex justify-between items-center border-t border-white/10 pt-2 mt-2 text-sm">
+                    <span className="font-semibold text-white/50">Total da Lista:</span>
+                    <span className="font-bold text-white">
                       R$ {entryItems.reduce((acc, item) => acc + (Number(item.quantidade) * Number(item.valor_unitario)), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -944,7 +1158,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Entrada" description="A quantidade será subtraída do estoque automaticamente." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
 
-      <ImportPdfDialog obraId={obraId} open={pdfOpen} onOpenChange={setPdfOpen} />
+      <ImportXmlDialog obraId={obraId} open={xmlOpen} onOpenChange={setXmlOpen} />
     </div>
   );
 }

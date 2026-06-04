@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,11 +6,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { FileUp, Loader2, Check, Package, Trash2, Plus, Wrench, AlertCircle } from 'lucide-react';
+import { FileUp, Loader2, Check, Package, Trash2, Plus, Wrench } from 'lucide-react';
 import { useQueryClient, useQuery } from '@tanstack/react-query';
-import * as pdfjs from 'pdfjs-dist';
-
-pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
 const FERRAMENTA_CATEGORIES = [
   'Ferramentas Manuais', 'Ferramentas Elétricas', 'Equipamentos de Proteção (EPI)', 'Equipamentos de Medição', 'OUTROS'
@@ -33,7 +30,7 @@ const MATERIAL_CATEGORIES = [
   'OUTROS'
 ];
 
-interface PdfItem {
+interface XmlItem {
   id: string;
   nome: string;
   quantidade: number;
@@ -54,17 +51,25 @@ interface Props {
   obraId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  compraToLink?: any;
+  onCancel?: () => void;
 }
 
-export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
+export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, compraToLink, onCancel }: Props) {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [items, setItems] = useState<PdfItem[]>([]);
+  const [items, setItems] = useState<XmlItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<'upload' | 'review'>('upload');
   const [descontoTotal, setDescontoTotal] = useState<number>(0);
   const [fornecedor, setFornecedor] = useState<string>('');
   const [showFornecedorList, setShowFornecedorList] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setFornecedor(compraToLink?.fornecedor_nome || '');
+    }
+  }, [open, compraToLink]);
 
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
@@ -82,7 +87,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
     enabled: !!obraId && open,
   });
 
-  const makeItem = (overrides: Partial<PdfItem> = {}): PdfItem => ({
+  const makeItem = (overrides: Partial<XmlItem> = {}): XmlItem => ({
     id: crypto.randomUUID(),
     nome: '',
     quantidade: 1,
@@ -98,7 +103,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
     ...overrides,
   });
 
-  const reset = () => {
+  const reset = (isSuccess = false) => {
     setItems([]);
     setStep('upload');
     setLoading(false);
@@ -106,96 +111,101 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
     setFornecedor('');
     setShowFornecedorList(false);
     if (fileRef.current) fileRef.current.value = '';
+    if (!isSuccess && onCancel) {
+      onCancel();
+    }
   };
 
-  const loadPdf = async (file: File) => {
+  const loadXml = async (file: File) => {
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const pdf = await pdfjs.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
-      let fullText = '';
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const text = e.target?.result as string;
+        if (!text) throw new Error('Não foi possível ler o arquivo.');
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const textContent = await page.getTextContent();
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(text, 'text/xml');
 
-        const lineMap: Record<number, any[]> = {};
-        textContent.items.forEach((item: any) => {
-          if (!item.transform) return;
-          const y = Math.round(item.transform[5]);
-          const existingY = Object.keys(lineMap).find(key => Math.abs(Number(key) - y) <= 3);
-          if (existingY) { lineMap[Number(existingY)].push(item); }
-          else { lineMap[y] = [item]; }
-        });
-
-        const yKeys = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
-        for (const y of yKeys) {
-          const lineItems = lineMap[y].sort((a: any, b: any) => a.transform[4] - b.transform[4]);
-          const lineText = lineItems.map((item: any) => item.str).join(' ').trim();
-          if (lineText) fullText += lineText + '\n';
+        const parserError = xmlDoc.getElementsByTagName('parsererror');
+        if (parserError.length > 0) {
+          throw new Error('Formato XML inválido.');
         }
-      }
 
-      const parsedItems: PdfItem[] = [];
-      const lines = fullText.split('\n');
+        // 1. Emitter Fornecedor (emit > xNome)
+        const emitNode = xmlDoc.getElementsByTagName('emit')[0];
+        const xNomeNode = emitNode?.getElementsByTagName('xNome')[0];
+        const supplierName = xNomeNode ? xNomeNode.textContent || '' : '';
+        setFornecedor(supplierName.trim());
 
-      for (const line of lines) {
-        const regex = /(.+?)\s+(UN|KG|PC|CX|M|M2|M3|SC|L|PR|JG|MT|PCT|RL)\s+([\d.,]+)\s+([\d.,]+)/i;
-        const match = line.match(regex);
-        if (match) {
-          const rawNome = match[1].trim();
-          const cleanNome = rawNome.replace(/\s+\d{4,10}(\s+\d+)*$/, '').trim();
-          const rawUnit = match[2].trim().toLowerCase();
-          const qtyStr = match[3].replace(/\./g, '').replace(',', '.');
-          const valStr = match[4].replace(/\./g, '').replace(',', '.');
-          const quantidade = parseFloat(qtyStr);
-          const valor = parseFloat(valStr);
-          if (!isNaN(quantidade) && quantidade > 0) {
-            let unidade = 'un';
-            if (rawUnit === 'un') unidade = 'un';
-            else if (rawUnit === 'kg') unidade = 'kg';
-            else if (rawUnit === 'pc') unidade = 'pc';
-            else if (rawUnit === 'cx') unidade = 'cx';
-            else if (rawUnit === 'm') unidade = 'm';
-            else if (rawUnit === 'm2') unidade = 'm²';
-            else if (rawUnit === 'm3') unidade = 'm³';
-            else if (rawUnit === 'sc') unidade = 'sc';
-            else if (rawUnit === 'l') unidade = 'L';
-            else if (['pr', 'jg', 'pct', 'rl'].includes(rawUnit)) unidade = rawUnit;
-            else if (rawUnit === 'mt') unidade = 'm';
+        // 2. Discount (vDesc)
+        const vDescNode = xmlDoc.getElementsByTagName('vDesc')[0];
+        const totalDiscount = vDescNode ? parseFloat(vDescNode.textContent || '0') || 0 : 0;
+        setDescontoTotal(totalDiscount);
 
-            parsedItems.push(makeItem({ 
-              nome: cleanNome, 
-              quantidade, 
-              valor: isNaN(valor) ? 0 : valor,
-              unidade
-            }));
-          }
+        // 3. Items (det)
+        const detNodes = xmlDoc.getElementsByTagName('det');
+        const parsedItems: XmlItem[] = [];
+
+        for (let i = 0; i < detNodes.length; i++) {
+          const det = detNodes[i];
+          const prodNode = det.getElementsByTagName('prod')[0];
+          if (!prodNode) continue;
+
+          const xProd = prodNode.getElementsByTagName('xProd')[0]?.textContent || '';
+          const uCom = (prodNode.getElementsByTagName('uCom')[0]?.textContent || '').trim().toLowerCase();
+          const qCom = parseFloat(prodNode.getElementsByTagName('qCom')[0]?.textContent || '1') || 1;
+          const vUnCom = parseFloat(prodNode.getElementsByTagName('vUnCom')[0]?.textContent || '0') || 0;
+
+          let unidade = 'un';
+          if (uCom === 'un' || uCom === 'und') unidade = 'un';
+          else if (uCom === 'kg') unidade = 'kg';
+          else if (uCom === 'pc' || uCom === 'pç') unidade = 'pc';
+          else if (uCom === 'cx') unidade = 'cx';
+          else if (uCom === 'm') unidade = 'm';
+          else if (uCom === 'm2' || uCom === 'm²') unidade = 'm²';
+          else if (uCom === 'm3' || uCom === 'm³') unidade = 'm³';
+          else if (uCom === 'sc') unidade = 'sc';
+          else if (uCom === 'l') unidade = 'L';
+          else if (['pr', 'jg', 'pct', 'rl'].includes(uCom)) unidade = uCom;
+          else unidade = uCom;
+
+          parsedItems.push(makeItem({
+            nome: xProd.trim(),
+            quantidade: qCom,
+            valor: vUnCom,
+            unidade
+          }));
         }
-      }
 
-      if (parsedItems.length === 0) {
-        parsedItems.push(makeItem());
-        toast.info('Não foi possível extrair itens automaticamente. Você pode preenchê-los manualmente.');
-      } else {
-        toast.success(`${parsedItems.length} itens encontrados. Classifique cada um como Material ou Ferramenta.`);
-      }
+        if (parsedItems.length === 0) {
+          parsedItems.push(makeItem());
+          toast.info('Não foi possível encontrar itens de produtos no XML. Você pode preenchê-los manualmente.');
+        } else {
+          toast.success(`${parsedItems.length} itens extraídos do XML com sucesso!`);
+        }
 
-      setItems(parsedItems);
-      setStep('review');
-    } catch (error) {
+        setItems(parsedItems);
+        setStep('review');
+      };
+
+      reader.onerror = () => {
+        toast.error('Erro ao ler o arquivo físico.');
+      };
+
+      reader.readAsText(file);
+    } catch (error: any) {
       console.error(error);
-      toast.error('Erro ao processar o PDF. Tente novamente ou adicione manualmente.');
+      toast.error(error.message || 'Erro ao processar o XML. Certifique-se de que é uma NF-e válida.');
     }
   };
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.type !== 'application/pdf') { toast.error('Por favor, selecione um arquivo PDF.'); return; }
-    loadPdf(file);
+    loadXml(file);
   };
 
-  const updateItem = (id: string, field: keyof PdfItem, value: any) => {
+  const updateItem = (id: string, field: keyof XmlItem, value: any) => {
     setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
   };
 
@@ -213,7 +223,34 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
     try {
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Get existing products
+      const subtotal = itemsToImport.reduce((acc, item) => acc + (item.quantidade * item.valor), 0);
+      const appliedDiscount = Math.min(descontoTotal, subtotal);
+      const totalComDesconto = Math.max(0, subtotal - descontoTotal);
+
+      let compraId = compraToLink?.id;
+
+      if (!compraId) {
+        const { data: newCompra, error: compraErr } = await supabase
+          .from('compras')
+          .insert({
+            obra_id: obraId,
+            status: 'PAGO',
+            email_titulo: `NF Importada - ${fornecedor || 'Sem Fornecedor'} - R$ ${totalComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            valor_solicitado: totalComDesconto,
+            valor_pago: totalComDesconto,
+            data_envio: new Date().toISOString().split('T')[0],
+            data_pagamento: new Date().toISOString().split('T')[0],
+            fornecedor_nome: fornecedor || null,
+            tipo_solicitacao: 'Materiais',
+            obs: 'Importado via XML (Entrada de estoque vinculada)'
+          })
+          .select('id')
+          .single();
+
+        if (compraErr) throw compraErr;
+        compraId = newCompra.id;
+      }
+
       const { data: existingProducts } = await supabase.from('produtos').select('id, nome').eq('obra_id', obraId);
       const productMap = new Map<string, string>();
       (existingProducts || []).forEach(p => productMap.set(p.nome.toLowerCase().trim(), p.id));
@@ -221,17 +258,12 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
       let ferramentasCreated = 0;
       let materiaisCreated = 0;
 
-      const subtotal = itemsToImport.reduce((acc, item) => acc + (item.quantidade * item.valor), 0);
-      const appliedDiscount = Math.min(descontoTotal, subtotal);
-
       for (const item of itemsToImport) {
         const itemTotal = item.quantidade * item.valor;
         const itemDiscount = subtotal > 0 ? (itemTotal / subtotal) * appliedDiscount : 0;
         const finalUnitValue = item.quantidade > 0 ? Math.max(0, itemTotal - itemDiscount) / item.quantidade : 0;
 
         if (item.tipo === 'ferramenta') {
-          // --- FERRAMENTA FLOW ---
-          // 1. Find or create the virtual [FERRAMENTA] product for financial tracking
           const virtualName = `[FERRAMENTA] ${item.nome.trim()}`;
           const virtualKey = virtualName.toLowerCase();
           let produtoId = productMap.get(virtualKey);
@@ -246,20 +278,22 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
             productMap.set(virtualKey, produtoId);
           }
 
-          // 2. Register the financial entry
           const note = descontoTotal > 0
-            ? `[FERRAMENTA] Importado via PDF (Com desconto de R$ ${itemDiscount.toFixed(2)} proporcional de R$ ${descontoTotal.toFixed(2)})`
-            : '[FERRAMENTA] Importado via PDF';
+            ? `[FERRAMENTA] Importado via XML (Com desconto de R$ ${itemDiscount.toFixed(2)} proporcional)`
+            : '[FERRAMENTA] Importado via XML';
 
           const { error: entErr } = await supabase.from('entradas').insert({
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
             fornecedor: fornecedor || null,
+            status_entrega: 'PENDENTE',
+            comprado_por_id: user?.id || null,
+            comprado_em: new Date().toISOString(),
+            compra_id: compraId
           });
           if (entErr) throw entErr;
 
-          // 3. Create individual ferramentas (one per unit)
           const ferramentasToInsert = Array.from({ length: Math.round(item.quantidade) }, (_, i) => ({
             obra_id: obraId,
             nome: item.nome.trim(),
@@ -272,16 +306,9 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
           const { error: ferrErr } = await supabase.from('ferramentas').insert(ferramentasToInsert);
           if (ferrErr) throw ferrErr;
 
-          await supabase.from('logs_atividades' as any).insert({
-            obra_id: obraId, user_id: user?.id, user_email: user?.email,
-            acao: 'ENTRADA', entidade: 'FERRAMENTA',
-            detalhes: `Entrada via PDF: ${Math.round(item.quantidade)} unidade(s) de "${item.nome.trim()}" como ferramentas individuais`
-          });
-
           ferramentasCreated += Math.round(item.quantidade);
 
         } else {
-          // --- MATERIAL FLOW ---
           const key = item.nome.toLowerCase().trim();
           let produtoId = productMap.get(key);
 
@@ -305,10 +332,9 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
             await supabase.from('logs_atividades' as any).insert({
               obra_id: obraId, user_id: user?.id, user_email: user?.email,
               acao: 'CADASTRAR', entidade: 'PRODUTO',
-              detalhes: `Cadastrou o produto via PDF: ${item.nome.trim()}`
+              detalhes: `Cadastrou o produto via XML: ${item.nome.trim()}`
             });
           } else {
-            // Update existing product's category, location, and unit if provided
             const updates: any = {};
             if (item.matCategoria) updates.categoria = item.matCategoria;
             if (item.matLocalizacao) updates.localizacao = item.matLocalizacao;
@@ -319,40 +345,50 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
           }
 
           const note = descontoTotal > 0
-            ? `Importado via PDF (Com desconto de R$ ${itemDiscount.toFixed(2)} proporcional de R$ ${descontoTotal.toFixed(2)})`
-            : 'Importado via PDF';
+            ? `Importado via XML (Com desconto de R$ ${itemDiscount.toFixed(2)} proporcional)`
+            : 'Importado via XML';
 
           const { error: entErr } = await supabase.from('entradas').insert({
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
             fornecedor: fornecedor || null,
+            status_entrega: 'PENDENTE',
+            comprado_por_id: user?.id || null,
+            comprado_em: new Date().toISOString(),
+            compra_id: compraId
           });
           if (entErr) throw entErr;
-
-          await supabase.from('logs_atividades' as any).insert({
-            obra_id: obraId, user_id: user?.id, user_email: user?.email,
-            acao: 'ENTRADA', entidade: 'ESTOQUE',
-            detalhes: `Entrada via PDF: ${item.quantidade} de ${item.nome.trim()}`
-          });
 
           materiaisCreated++;
         }
       }
 
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId, user_id: user?.id, user_email: user?.email,
+        acao: 'ENTRADA', entidade: 'ESTOQUE',
+        detalhes: compraToLink
+          ? `Importou XML para estoque pendente vinculado à compra "${compraToLink.email_titulo}": ${itemsToImport.length} itens`
+          : `Importou XML para compra e pendente: ${itemsToImport.length} itens do fornecedor ${fornecedor || 'Sem Fornecedor'}`
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['compras', obraId] });
       queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
       queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
 
       const msgs = [];
-      if (materiaisCreated > 0) msgs.push(`${materiaisCreated} material(is) no estoque`);
-      if (ferramentasCreated > 0) msgs.push(`${ferramentasCreated} ferramenta(s) individual(is) criada(s)`);
-      toast.success(`Importado com sucesso! ${msgs.join(' • ')}`);
-      reset();
+      if (materiaisCreated > 0) msgs.push(`${materiaisCreated} material(is) pendente(s)`);
+      if (ferramentasCreated > 0) msgs.push(`${ferramentasCreated} ferramenta(s) individual(is)`);
+      toast.success(compraToLink 
+        ? `Materiais lançados no estoque com sucesso para esta compra!`
+        : `Importado com sucesso! Lançamento criado e ${msgs.join(' • ')}`
+      );
+      reset(true);
       onOpenChange(false);
     } catch (err: any) {
-      toast.error(err.message || 'Erro ao importar PDF');
+      toast.error(err.message || 'Erro ao importar XML');
     } finally {
       setLoading(false);
     }
@@ -366,10 +402,15 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
   const materialCount = items.filter(i => i.selected && i.tipo === 'material').length;
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(); onOpenChange(v); }}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={(v) => { if (!v) reset(false); onOpenChange(v); }}>
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-[#161f30] text-white border-white/10">
         <DialogHeader>
-          <DialogTitle>Importar PDF de Nota Fiscal</DialogTitle>
+          <DialogTitle className="text-white font-display font-bold font-mono text-base">
+            {compraToLink 
+              ? `Importar XML para Lançamento: ${compraToLink.email_titulo}`
+              : 'Importar XML de Nota Fiscal (NF-e)'
+            }
+          </DialogTitle>
         </DialogHeader>
 
         {step === 'upload' && (
@@ -378,33 +419,36 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
               <FileUp className="h-10 w-10 text-primary" />
             </div>
             <div className="text-center space-y-2">
-              <h3 className="text-lg font-semibold">Selecione o PDF da Nota</h3>
-              <p className="text-sm text-muted-foreground max-w-md">
-                Nosso sistema extrai os itens automaticamente. Você poderá classificar cada um como <strong>Material de Estoque</strong> ou <strong>Ferramenta</strong> antes de confirmar.
+              <h3 className="text-lg font-semibold text-white">Selecione o XML da Nota</h3>
+              <p className="text-sm text-white/60 max-w-md">
+                {compraToLink 
+                  ? `Os itens extraídos do XML serão lançados no estoque como "Entrada Pendente" vinculados à compra "${compraToLink.email_titulo}".`
+                  : 'O sistema extrai os itens automaticamente do arquivo XML (.xml) da nota fiscal eletrônica.'
+                }
               </p>
             </div>
-            <Button className="h-12 mt-4" onClick={() => fileRef.current?.click()}>
-              Selecionar arquivo PDF
+            <Button className="h-12 mt-4 bg-primary hover:bg-primary/90 text-white rounded-xl" onClick={() => fileRef.current?.click()}>
+              Selecionar arquivo XML
             </Button>
-            <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
+            <input ref={fileRef} type="file" accept=".xml" className="hidden" onChange={handleFile} />
           </div>
         )}
 
         {step === 'review' && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <p className="text-sm text-muted-foreground">
-                Classifique cada item como <strong>Material</strong> (vai pro estoque) ou <strong>Ferramenta</strong> (cria unidades individuais na aba Ferramentas).
+              <p className="text-xs text-white/60">
+                Classifique cada item como <strong>Material</strong> (vai pro estoque pendente) ou <strong>Ferramenta</strong> (cria unidades individuais).
               </p>
               {(materialCount > 0 || ferramentaCount > 0) && (
                 <div className="flex gap-2 shrink-0">
                   {materialCount > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-primary/10 text-primary px-2.5 py-1 rounded-full">
-                      <Package className="h-3 w-3" /> {materialCount} material(is)
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-primary/20 text-primary-foreground border border-primary/35 px-2.5 py-1 rounded-full">
+                      <Package className="h-3 w-3 text-primary" /> {materialCount} material(is)
                     </span>
                   )}
                   {ferramentaCount > 0 && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-warning/10 text-warning px-2.5 py-1 rounded-full">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-full">
                       <Wrench className="h-3 w-3" /> {ferramentaCount} ferramenta(s)
                     </span>
                   )}
@@ -417,26 +461,24 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                 <div
                   key={item.id}
                   className={`border rounded-xl p-3 space-y-3 transition-all ${
-                    !item.selected ? 'opacity-40 bg-muted/20' :
-                    item.tipo === 'ferramenta' ? 'border-warning/30 bg-warning/5' : 'border-primary/20 bg-primary/[0.01]'
+                    !item.selected ? 'opacity-40 bg-white/5 border-white/5' :
+                    item.tipo === 'ferramenta' ? 'border-amber-500/30 bg-amber-500/5' : 'border-primary/20 bg-primary/5'
                   }`}
                 >
-                  {/* Row 1: checkbox + tipo toggle + nome + qty + valor + delete */}
                   <div className="flex items-center gap-2">
                     <Checkbox
                       checked={item.selected}
                       onCheckedChange={(c) => updateItem(item.id, 'selected', !!c)}
-                      className="shrink-0"
+                      className="shrink-0 border-white/20 data-[state=checked]:bg-primary"
                     />
 
-                    {/* Tipo toggle */}
-                    <div className="flex rounded-lg border overflow-hidden shrink-0">
+                    <div className="flex rounded-lg border border-white/10 overflow-hidden shrink-0">
                       <button
                         type="button"
                         onClick={() => updateItem(item.id, 'tipo', 'material')}
                         disabled={!item.selected}
                         className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-all ${
-                          item.tipo === 'material' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                          item.tipo === 'material' ? 'bg-primary text-white' : 'text-white/40 hover:bg-white/5'
                         }`}
                       >
                         <Package className="h-3 w-3" /> Material
@@ -446,7 +488,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                         onClick={() => updateItem(item.id, 'tipo', 'ferramenta')}
                         disabled={!item.selected}
                         className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold transition-all ${
-                          item.tipo === 'ferramenta' ? 'bg-warning text-warning-foreground' : 'text-muted-foreground hover:bg-muted'
+                          item.tipo === 'ferramenta' ? 'bg-amber-500 text-black' : 'text-white/40 hover:bg-white/5'
                         }`}
                       >
                         <Wrench className="h-3 w-3" /> Ferramenta
@@ -456,7 +498,7 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                     <Input
                       value={item.nome}
                       onChange={(e) => updateItem(item.id, 'nome', e.target.value)}
-                      className="h-9 flex-1 min-w-0"
+                      className="h-9 flex-1 min-w-0 bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 rounded-xl"
                       placeholder="Nome do produto / ferramenta"
                       disabled={!item.selected}
                     />
@@ -464,92 +506,87 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                       type="number" step="0.01"
                       value={item.quantidade || ''}
                       onChange={(e) => updateItem(item.id, 'quantidade', parseFloat(e.target.value) || 0)}
-                      className="h-9 w-24 shrink-0"
+                      className="h-9 w-20 shrink-0 bg-[#0e1629] border-white/10 text-white rounded-xl text-center font-mono"
                       placeholder="Qtd"
                       disabled={!item.selected}
                     />
                     <div className="flex flex-col gap-1 shrink-0">
-                      <Input
-                        type="number" step="0.01"
-                        value={item.valor || ''}
-                        onChange={(e) => updateItem(item.id, 'valor', parseFloat(e.target.value) || 0)}
-                        className="h-9 w-28 text-right"
-                        placeholder="R$ unit."
-                        disabled={!item.selected}
-                      />
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-2 text-[10px] text-white/30 font-mono">R$</span>
+                        <Input
+                          type="number" step="0.01"
+                          value={item.valor || ''}
+                          onChange={(e) => updateItem(item.id, 'valor', parseFloat(e.target.value) || 0)}
+                          className="pl-7 h-9 w-28 text-right bg-[#0e1629] border-white/10 text-white rounded-xl font-mono"
+                          placeholder="0,00"
+                          disabled={!item.selected}
+                        />
+                      </div>
                       {descontoTotal > 0 && subtotal > 0 && item.selected && item.valor > 0 && (
-                        <span className="text-[10px] text-green-600 dark:text-green-400 font-semibold text-right pr-1">
+                        <span className="text-[9px] text-emerald-400 font-semibold text-right pr-1">
                           Desc: R$ {((item.valor * (1 - Math.min(descontoTotal, subtotal) / subtotal))).toFixed(2)}
                         </span>
                       )}
                     </div>
-                    <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)} className="h-8 w-8 text-destructive shrink-0 mt-0.5">
+                    <Button variant="ghost" size="icon" onClick={() => removeItem(item.id)} className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-400/10 shrink-0 rounded-lg">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
 
-                  {/* Row 2: ferramenta extra fields */}
                   {item.tipo === 'ferramenta' && item.selected && (
-                    <div className="ml-8 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="ml-8 grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-white/5">
                       <div>
-                        <label className="text-[10px] text-warning uppercase font-bold tracking-wider ml-1">Categoria</label>
+                        <label className="text-[9px] text-amber-400 uppercase font-bold tracking-wider ml-1">Categoria</label>
                         <Select value={item.ferrCategoria} onValueChange={v => updateItem(item.id, 'ferrCategoria', v)}>
-                          <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
+                          <SelectTrigger className="h-8 text-xs mt-1 bg-[#0e1629] border-white/10 text-white rounded-xl"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-[#0e1629] text-white border-white/10">
                             {FERRAMENTA_CATEGORIES.map(cat => <SelectItem key={cat} value={cat} className="text-xs">{cat}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <label className="text-[10px] text-warning uppercase font-bold tracking-wider ml-1">Localização</label>
+                        <label className="text-[9px] text-amber-400 uppercase font-bold tracking-wider ml-1">Localização</label>
                         <Input
                           value={item.ferrLocalizacao}
                           onChange={e => updateItem(item.id, 'ferrLocalizacao', e.target.value)}
-                          className="h-8 text-xs mt-1"
+                          className="h-8 text-xs mt-1 bg-[#0e1629] border-white/10 text-white rounded-xl"
                           placeholder="Ex: Armário 2"
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] text-warning uppercase font-bold tracking-wider ml-1">Prefixo Código</label>
+                        <label className="text-[9px] text-amber-400 uppercase font-bold tracking-wider ml-1">Prefixo Código</label>
                         <Input
                           value={item.ferrCodigoPrefixo}
                           onChange={e => updateItem(item.id, 'ferrCodigoPrefixo', e.target.value.toUpperCase())}
-                          className="h-8 text-xs mt-1"
-                          placeholder="Ex: FUR → FUR-01, FUR-02..."
+                          className="h-8 text-xs mt-1 bg-[#0e1629] border-white/10 text-white rounded-xl"
+                          placeholder="Ex: FUR"
                         />
-                      </div>
-                      <div className="sm:col-span-3">
-                        <div className="flex items-center gap-1.5 text-xs text-warning/80 bg-warning/10 rounded-lg px-3 py-1.5">
-                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                          Serão criadas <strong>{Math.round(item.quantidade || 0)}</strong> ferramenta(s) individual(is) na aba Ferramentas + lançamento no Financeiro.
-                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Row 2: material extra fields */}
                   {item.tipo === 'material' && item.selected && (
-                    <div className="ml-8 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <div className="ml-8 grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2 border-t border-white/5">
                       <div>
-                        <label className="text-[10px] text-primary uppercase font-bold tracking-wider ml-1">Categoria</label>
+                        <label className="text-[9px] text-primary uppercase font-bold tracking-wider ml-1">Categoria</label>
                         <Select value={item.matCategoria} onValueChange={v => updateItem(item.id, 'matCategoria', v)}>
-                          <SelectTrigger className="h-8 text-xs mt-1"><SelectValue /></SelectTrigger>
-                          <SelectContent>
+                          <SelectTrigger className="h-8 text-xs mt-1 bg-[#0e1629] border-white/10 text-white rounded-xl"><SelectValue /></SelectTrigger>
+                          <SelectContent className="bg-[#0e1629] text-white border-white/10">
                             {MATERIAL_CATEGORIES.map(cat => <SelectItem key={cat} value={cat} className="text-xs">{cat}</SelectItem>)}
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <label className="text-[10px] text-primary uppercase font-bold tracking-wider ml-1">Unidade</label>
+                        <label className="text-[9px] text-primary uppercase font-bold tracking-wider ml-1">Unidade</label>
                         <div className="flex gap-1.5 items-center mt-1">
                           <Select
                             value={['un', 'kg', 'L', 'm', 'm²', 'm³', 'cx', 'pc', 'sc'].includes(item.unidade) ? item.unidade : 'Outro'}
                             onValueChange={v => updateItem(item.id, 'unidade', v === 'Outro' ? '' : v)}
                           >
-                            <SelectTrigger className="h-8 text-xs flex-1">
+                            <SelectTrigger className="h-8 text-xs flex-1 bg-[#0e1629] border-white/10 text-white rounded-xl">
                               <SelectValue placeholder="Selecione" />
                             </SelectTrigger>
-                            <SelectContent>
+                            <SelectContent className="bg-[#0e1629] text-white border-white/10">
                               <SelectItem value="un" className="text-xs">Unidade (un)</SelectItem>
                               <SelectItem value="kg" className="text-xs">Quilograma (kg)</SelectItem>
                               <SelectItem value="L" className="text-xs">Litro (L)</SelectItem>
@@ -567,18 +604,18 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                               placeholder="Qual?"
                               value={item.unidade}
                               onChange={e => updateItem(item.id, 'unidade', e.target.value)}
-                              className="h-8 w-16 text-xs"
+                              className="h-8 w-16 text-xs bg-[#0e1629] border-white/10 text-white rounded-xl"
                               required
                             />
                           )}
                         </div>
                       </div>
                       <div>
-                        <label className="text-[10px] text-primary uppercase font-bold tracking-wider ml-1">Localização</label>
+                        <label className="text-[9px] text-primary uppercase font-bold tracking-wider ml-1">Localização</label>
                         <Input
                           value={item.matLocalizacao}
                           onChange={e => updateItem(item.id, 'matLocalizacao', e.target.value)}
-                          className="h-8 text-xs mt-1"
+                          className="h-8 text-xs mt-1 bg-[#0e1629] border-white/10 text-white rounded-xl"
                           placeholder="Ex: Almoxarifado A"
                         />
                       </div>
@@ -588,23 +625,21 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
               ))}
             </div>
 
-            <Button variant="outline" size="sm" onClick={addItem} className="mt-2 h-9 border-dashed border-2">
+            <Button variant="outline" size="sm" onClick={addItem} className="mt-2 h-9 border-dashed border-2 bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl">
               <Plus className="h-4 w-4 mr-2" /> Adicionar Linha Manualmente
             </Button>
 
-            {/* Resumo da Nota e Desconto */}
-            <div className="bg-muted/30 border border-border/60 rounded-xl p-4 mt-4 space-y-4">
-              <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                Resumo da Importação
+            <div className="bg-[#0e1629] border border-white/5 rounded-xl p-4 mt-4 space-y-4">
+              <h4 className="text-xs font-bold text-white/50 uppercase tracking-wide">
+                Resumo da Importação (Financeiro + Estoque)
               </h4>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
-                {/* Fornecedor Input */}
                 <div className="space-y-2 relative">
-                  <label className="text-xs font-medium text-muted-foreground ml-1">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">
                     Fornecedor (opcional)
                   </label>
                   <Input 
-                    placeholder="De onde veio?" 
+                    placeholder="Fornecedor da compra..." 
                     value={fornecedor} 
                     onChange={e => {
                       setFornecedor(e.target.value);
@@ -612,25 +647,25 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                     }} 
                     onFocus={() => setShowFornecedorList(true)}
                     onBlur={() => setTimeout(() => setShowFornecedorList(false), 200)}
-                    className="h-9 text-sm" 
+                    className="h-9 text-sm bg-[#161f30] border-white/10 text-white placeholder:text-white/30 rounded-xl" 
                     autoComplete="off"
                   />
                   {showFornecedorList && fornecedores.filter((f: any) => f.toLowerCase().includes(fornecedor.toLowerCase()) && f !== fornecedor).length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-[#161f30] border border-white/10 rounded-xl shadow-xl max-h-48 overflow-y-auto">
                       {fornecedores
                         .filter((f: any) => f.toLowerCase().includes(fornecedor.toLowerCase()) && f !== fornecedor)
                         .map((f: any) => (
                           <button
                             key={f}
                             type="button"
-                            className="w-full text-left px-4 py-2 hover:bg-accent transition-colors flex items-center text-sm"
+                            className="w-full text-left px-4 py-2 hover:bg-white/5 transition-colors flex items-center text-sm text-white"
                             onMouseDown={(e) => {
                               e.preventDefault();
                               setFornecedor(f);
                               setShowFornecedorList(false);
                             }}
                           >
-                            <span className="font-medium truncate text-foreground">{f}</span>
+                            <span className="font-semibold truncate">{f}</span>
                           </button>
                         ))
                       }
@@ -638,13 +673,12 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                   )}
                 </div>
 
-                {/* Desconto Input */}
                 <div className="space-y-2">
-                  <label htmlFor="desconto-input" className="text-xs font-medium text-muted-foreground ml-1">
+                  <label htmlFor="desconto-input" className="text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">
                     Desconto Total da Nota (R$)
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-2 text-sm text-muted-foreground font-medium">R$</span>
+                    <span className="absolute left-3 top-2 text-sm text-white/30 font-semibold font-mono">R$</span>
                     <Input
                       id="desconto-input"
                       type="number"
@@ -652,33 +686,32 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
                       min="0"
                       value={descontoTotal || ''}
                       onChange={(e) => setDescontoTotal(Math.max(0, parseFloat(e.target.value) || 0))}
-                      className="pl-9 h-9 text-sm"
+                      className="pl-9 h-9 text-sm bg-[#161f30] border-white/10 text-white rounded-xl font-mono"
                       placeholder="0,00"
                     />
                   </div>
                 </div>
 
-                {/* Valores */}
-                <div className="md:col-span-2 flex flex-col sm:flex-row justify-end items-start sm:items-center gap-6 text-sm">
+                <div className="md:col-span-2 flex flex-col sm:flex-row justify-end items-start sm:items-center gap-6 text-sm pt-2">
                   <div className="space-y-1 text-right">
-                    <span className="text-xs text-muted-foreground block">Subtotal</span>
-                    <span className="font-semibold text-base text-foreground">
+                    <span className="text-[10px] uppercase font-bold text-white/40 block">Subtotal</span>
+                    <span className="font-semibold text-base text-white/95 font-mono">
                       R$ {subtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                   
                   {descontoTotal > 0 && (
-                    <div className="space-y-1 text-right text-green-600 dark:text-green-400">
-                      <span className="text-xs text-muted-foreground block">Desconto</span>
-                      <span className="font-semibold text-base font-medium">
+                    <div className="space-y-1 text-right text-emerald-400">
+                      <span className="text-[10px] uppercase font-bold text-white/40 block">Desconto</span>
+                      <span className="font-semibold text-base font-mono">
                         - R$ {Math.min(descontoTotal, subtotal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   )}
 
-                  <div className="space-y-1 text-right border-t sm:border-t-0 sm:border-l pt-2 sm:pt-0 sm:pl-6 border-border/85">
-                    <span className="text-xs text-muted-foreground block font-medium">Total com Desconto</span>
-                    <span className="font-bold text-lg text-primary block">
+                  <div className="space-y-1 text-right border-t sm:border-t-0 sm:border-l pt-2 sm:pt-0 sm:pl-6 border-white/10">
+                    <span className="text-[10px] uppercase font-bold text-white/40 block">Total do Lançamento</span>
+                    <span className="font-bold text-lg text-emerald-400 block font-mono">
                       R$ {totalComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
@@ -686,20 +719,22 @@ export default function ImportPdfDialog({ obraId, open, onOpenChange }: Props) {
               </div>
 
               {descontoTotal > 0 && subtotal > 0 && (
-                <p className="text-xs text-muted-foreground bg-green-500/5 border border-green-500/10 rounded-lg p-2.5">
-                  💡 O desconto de <strong>R$ {Math.min(descontoTotal, subtotal).toFixed(2)}</strong> será distribuído proporcionalmente ao valor total de cada item. O valor unitário final de cada item inserido já refletirá essa redução.
+                <p className="text-xs text-white/50 bg-[#161f30] border border-white/5 rounded-xl p-2.5">
+                  💡 O desconto de <strong>R$ {Math.min(descontoTotal, subtotal).toFixed(2)}</strong> será distribuído proporcionalmente ao valor de cada item. O valor unitário de cada produto no estoque será reduzido proporcionalmente.
                 </p>
               )}
             </div>
 
-            <div className="flex gap-3 pt-4 border-t mt-6">
-              <Button variant="outline" className="flex-1 h-12" onClick={reset} disabled={loading}>
+            <div className="flex gap-3 pt-4 border-t border-white/10 mt-6">
+              <Button variant="outline" className="flex-1 h-12 bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl font-semibold" onClick={() => { reset(false); onOpenChange(false); }} disabled={loading}>
                 Cancelar / Voltar
               </Button>
-              <Button className="flex-1 h-12" onClick={handleConfirm} disabled={loading}>
+              <Button className="flex-1 h-12 bg-primary hover:bg-primary/90 text-white rounded-xl font-semibold" onClick={handleConfirm} disabled={loading}>
                 {loading
-                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Importando...</>
-                  : <><Check className="h-4 w-4 mr-2" /> Confirmar e Salvar</>
+                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Processando...</>
+                  : compraToLink
+                    ? <><Check className="h-4 w-4 mr-2" /> Confirmar e Lançar no Estoque</>
+                    : <><Check className="h-4 w-4 mr-2" /> Confirmar e Criar Lançamento</>
                 }
               </Button>
             </div>

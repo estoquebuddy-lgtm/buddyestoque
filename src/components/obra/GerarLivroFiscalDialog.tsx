@@ -318,51 +318,51 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if(!v) setRows([]); onOpenChange(v); }}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-[#161f30] text-white border-white/10">
         <DialogHeader>
-          <DialogTitle>Gerador de Livro Fiscal - Estilo Oficial</DialogTitle>
+          <DialogTitle className="text-white font-display">Gerador de Livro Fiscal - Estilo Oficial</DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-4 border-b pb-4 mb-2">
+        <div className="grid grid-cols-2 gap-4 border-b border-white/5 pb-4 mb-2">
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">Nome Empresa</label>
-            <Input className="h-9 text-sm" value={empresa} onChange={e => setEmpresa(e.target.value)} />
+            <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1">Nome Empresa</label>
+            <Input className="h-9 text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl" value={empresa} onChange={e => setEmpresa(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">CNPJ da Empresa</label>
-            <Input className="h-9 text-sm" value={cnpjEmpresa} onChange={e => setCnpjEmpresa(e.target.value)} />
+            <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1">CNPJ da Empresa</label>
+            <Input className="h-9 text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl" value={cnpjEmpresa} onChange={e => setCnpjEmpresa(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">Insc. Estadual</label>
-            <Input className="h-9 text-sm" value={inscEst} onChange={e => setInscEst(e.target.value)} />
+            <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1">Insc. Estadual</label>
+            <Input className="h-9 text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl" value={inscEst} onChange={e => setInscEst(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">Livro Nº</label>
-              <Input className="h-9 text-sm" value={livroNo} onChange={e => setLivroNo(e.target.value)} />
+              <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1">Livro Nº</label>
+              <Input className="h-9 text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl" value={livroNo} onChange={e => setLivroNo(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <label className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">Pág / Folha</label>
-              <Input className="h-9 text-sm" value={folha} onChange={e => setFolha(e.target.value)} />
+              <label className="text-[9px] font-bold text-white/40 uppercase tracking-wider flex items-center gap-1">Pág / Folha</label>
+              <Input className="h-9 text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl" value={folha} onChange={e => setFolha(e.target.value)} />
             </div>
           </div>
         </div>
 
         <div className="flex flex-col gap-4">
-          <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-primary/20 rounded-2xl bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer" onClick={() => fileRef.current?.click()}>
+          <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/10 rounded-2xl bg-[#0e1629]/50 hover:bg-[#121c33] hover:border-primary/30 transition-all cursor-pointer text-white/70" onClick={() => fileRef.current?.click()}>
             <FileUp className="h-8 w-8 text-primary mb-2" />
             <p className="text-xs font-semibold">Subir XMLs do Período</p>
             <input ref={fileRef} type="file" accept=".xml" multiple className="hidden" onChange={handleFiles} />
           </div>
 
           {rows.length > 0 && (
-            <div className="space-y-4 pt-2 border-t">
-              <div className="bg-muted/30 p-2 text-[11px] font-mono space-y-1 rounded-xl max-h-[160px] overflow-y-auto border border-border/50">
+            <div className="space-y-4 pt-2 border-t border-white/5">
+              <div className="bg-[#0e1629]/50 p-2 text-[11px] font-mono space-y-1 rounded-xl max-h-[160px] overflow-y-auto border border-white/5">
                 {rows.map((r, i) => (
-                  <div key={i} className="flex items-center gap-2 p-1.5 hover:bg-white/50 rounded border-b border-border/20 last:border-0">
-                    <span className="bg-primary/10 text-primary px-1.5 rounded text-[9px] font-bold h-4 flex items-center">XML</span>
+                  <div key={i} className="flex items-center gap-2 p-1.5 hover:bg-white/5 rounded border-b border-white/5 last:border-0 text-white/80">
+                    <span className="bg-primary/20 text-primary px-1.5 rounded text-[9px] font-bold h-4 flex items-center border border-primary/20">XML</span>
                     <span className="truncate flex-1 font-medium">{r.nNF} - {r.cnpjEmit.substring(0,8)}...</span>
-                    <span className="text-muted-foreground shrink-0 font-bold">R$ {r.vNF.toLocaleString('pt-BR')}</span>
+                    <span className="text-white/60 shrink-0 font-bold">R$ {r.vNF.toLocaleString('pt-BR')}</span>
                   </div>
                 ))}
               </div>

@@ -26,6 +26,12 @@ export type Database = {
           produto_id: string
           quantidade: number
           valor_unitario: number | null
+          status_entrega: string
+          comprado_por_id: string | null
+          comprado_em: string | null
+          responsavel_id: string | null
+          entregue_em: string | null
+          compra_id: string | null
         }
         Insert: {
           created_at?: string
@@ -38,6 +44,12 @@ export type Database = {
           produto_id: string
           quantidade: number
           valor_unitario?: number | null
+          status_entrega?: string
+          comprado_por_id?: string | null
+          comprado_em?: string | null
+          responsavel_id?: string | null
+          entregue_em?: string | null
+          compra_id?: string | null
         }
         Update: {
           created_at?: string
@@ -50,6 +62,12 @@ export type Database = {
           produto_id?: string
           quantidade?: number
           valor_unitario?: number | null
+          status_entrega?: string
+          comprado_por_id?: string | null
+          comprado_em?: string | null
+          responsavel_id?: string | null
+          entregue_em?: string | null
+          compra_id?: string | null
         }
         Relationships: [
           {
@@ -64,6 +82,13 @@ export type Database = {
             columns: ["produto_id"]
             isOneToOne: false
             referencedRelation: "produtos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "entradas_compra_id_fkey"
+            columns: ["compra_id"]
+            isOneToOne: false
+            referencedRelation: "compras"
             referencedColumns: ["id"]
           },
         ]
@@ -88,6 +113,12 @@ export type Database = {
           tipo_solicitacao: string
           obs: string | null
           created_by: string | null
+          parcela: string | null
+          conta: string | null
+          estornado: boolean | null
+          data_estorno: string | null
+          cc_desc: string | null
+          updated_at: string
         }
         Insert: {
           id?: string
@@ -108,6 +139,12 @@ export type Database = {
           tipo_solicitacao?: string
           obs?: string | null
           created_by?: string | null
+          parcela?: string | null
+          conta?: string | null
+          estornado?: boolean | null
+          data_estorno?: string | null
+          cc_desc?: string | null
+          updated_at?: string
         }
         Update: {
           id?: string
@@ -128,6 +165,12 @@ export type Database = {
           tipo_solicitacao?: string
           obs?: string | null
           created_by?: string | null
+          parcela?: string | null
+          conta?: string | null
+          estornado?: boolean | null
+          data_estorno?: string | null
+          cc_desc?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -149,7 +192,7 @@ export type Database = {
       compras_nfs: {
         Row: {
           id: string
-          compra_id: string
+          compra_id: string | null
           valor_nf: number
           link_nf: string | null
           livro_data_entrada: string | null
@@ -167,10 +210,11 @@ export type Database = {
           livro_aliquota: number | null
           livro_imp_creditado: number | null
           created_at: string
+          vinculo: string | null
         }
         Insert: {
           id?: string
-          compra_id: string
+          compra_id?: string | null
           valor_nf?: number
           link_nf?: string | null
           livro_data_entrada?: string | null
@@ -188,10 +232,11 @@ export type Database = {
           livro_aliquota?: number | null
           livro_imp_creditado?: number | null
           created_at?: string
+          vinculo?: string | null
         }
         Update: {
           id?: string
-          compra_id?: string
+          compra_id?: string | null
           valor_nf?: number
           link_nf?: string | null
           livro_data_entrada?: string | null
@@ -209,6 +254,7 @@ export type Database = {
           livro_aliquota?: number | null
           livro_imp_creditado?: number | null
           created_at?: string
+          vinculo?: string | null
         }
         Relationships: [
           {
@@ -216,6 +262,42 @@ export type Database = {
             columns: ["compra_id"]
             isOneToOne: false
             referencedRelation: "compras"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      compras_nfs_vinculos: {
+        Row: {
+          id: string
+          nf_id: string
+          compra_id: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          nf_id: string
+          compra_id: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          nf_id?: string
+          compra_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compras_nfs_vinculos_compra_id_fkey"
+            columns: ["compra_id"]
+            isOneToOne: false
+            referencedRelation: "compras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compras_nfs_vinculos_nf_id_fkey"
+            columns: ["nf_id"]
+            isOneToOne: false
+            referencedRelation: "compras_nfs"
             referencedColumns: ["id"]
           }
         ]
