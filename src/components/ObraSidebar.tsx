@@ -12,7 +12,8 @@ import {
   ChevronLeft,
   ListTodo,
   MessageSquarePlus,
-  DollarSign
+  DollarSign,
+  ShoppingCart
 } from 'lucide-react';
 import {
   Sidebar,
@@ -37,10 +38,11 @@ const menuItems = [
   { value: 'ferramentas', label: 'Ferramentas', icon: Wrench },
   { value: 'ferramentas-funcionario', label: 'Ferr. por Funcionário', icon: Users2 },
   { value: 'solicitacoes', label: 'Solicitações', icon: MessageSquarePlus },
+  { value: 'compras', label: 'Compras', icon: ShoppingCart },
+  { value: 'financeiro', label: 'Financeiro', icon: DollarSign },
   { value: 'relatorios', label: 'Relatórios', icon: FileBarChart },
   { value: 'atividades', label: 'Atividades', icon: ListTodo },
   { value: 'pessoas', label: 'Equipe', icon: Users },
-  { value: 'financeiro', label: 'Financeiro', icon: DollarSign },
 ];
 
 interface ObraSidebarProps {

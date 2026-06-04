@@ -15,6 +15,7 @@ import AtividadesTab from '@/components/obra/AtividadesTab';
 import SolicitacoesTab from '@/components/obra/SolicitacoesTab';
 import FinanceiroTab from '@/components/obra/FinanceiroTab';
 import FerramentasFuncionarioTab from '@/components/obra/FerramentasFuncionarioTab';
+import ComprasTab from '@/components/obra/ComprasTab';
 import SkeletonList from '@/components/SkeletonList';
 import { useProfile } from '@/hooks/useProfile';
 
@@ -66,6 +67,7 @@ export default function ObraDetail() {
             {activeTab === 'dashboard' && <DashboardTab obraId={id!} onTabChange={setActiveTab} />}
             {activeTab === 'produtos' && <ProdutosTab obraId={id!} />}
             {activeTab === 'financeiro' && <FinanceiroTab obraId={id!} />}
+            {activeTab === 'compras' && <ComprasTab obraId={id!} />}
             {activeTab === 'ferramentas' && <FerramentasTab obraId={id!} />}
             {activeTab === 'relatorios' && <RelatoriosTab obraId={id!} />}
             {activeTab === 'entradas' && <EntradasTab obraId={id!} />}

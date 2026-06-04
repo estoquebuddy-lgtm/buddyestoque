@@ -68,6 +68,158 @@ export type Database = {
           },
         ]
       }
+      compras: {
+        Row: {
+          id: string
+          obra_id: string
+          created_at: string
+          status: string
+          data_envio: string | null
+          valor_solicitado: number | null
+          email_titulo: string | null
+          email_link: string | null
+          fornecedor_nome: string | null
+          fornecedor_cnpj: string | null
+          fornecedor_dados: string | null
+          valor_pago: number | null
+          data_pagamento: string | null
+          centro_custo: number | null
+          tipo_material: string | null
+          tipo_solicitacao: string
+          obs: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          obra_id: string
+          created_at?: string
+          status?: string
+          data_envio?: string | null
+          valor_solicitado?: number | null
+          email_titulo?: string | null
+          email_link?: string | null
+          fornecedor_nome?: string | null
+          fornecedor_cnpj?: string | null
+          fornecedor_dados?: string | null
+          valor_pago?: number | null
+          data_pagamento?: string | null
+          centro_custo?: number | null
+          tipo_material?: string | null
+          tipo_solicitacao?: string
+          obs?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          obra_id?: string
+          created_at?: string
+          status?: string
+          data_envio?: string | null
+          valor_solicitado?: number | null
+          email_titulo?: string | null
+          email_link?: string | null
+          fornecedor_nome?: string | null
+          fornecedor_cnpj?: string | null
+          fornecedor_dados?: string | null
+          valor_pago?: number | null
+          data_pagamento?: string | null
+          centro_custo?: number | null
+          tipo_material?: string | null
+          tipo_solicitacao?: string
+          obs?: string | null
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compras_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "compras_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      compras_nfs: {
+        Row: {
+          id: string
+          compra_id: string
+          valor_nf: number
+          link_nf: string | null
+          livro_data_entrada: string | null
+          livro_especie: string | null
+          livro_numero: string | null
+          livro_serie: string | null
+          livro_data_doc: string | null
+          livro_cnpj_emitente: string | null
+          livro_uf: string | null
+          livro_valor_contabil: number | null
+          livro_cfop: string | null
+          livro_icms_iss: number | null
+          livro_cod_fiscal: string | null
+          livro_base_calculo: number | null
+          livro_aliquota: number | null
+          livro_imp_creditado: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          compra_id: string
+          valor_nf?: number
+          link_nf?: string | null
+          livro_data_entrada?: string | null
+          livro_especie?: string | null
+          livro_numero?: string | null
+          livro_serie?: string | null
+          livro_data_doc?: string | null
+          livro_cnpj_emitente?: string | null
+          livro_uf?: string | null
+          livro_valor_contabil?: number | null
+          livro_cfop?: string | null
+          livro_icms_iss?: number | null
+          livro_cod_fiscal?: string | null
+          livro_base_calculo?: number | null
+          livro_aliquota?: number | null
+          livro_imp_creditado?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          compra_id?: string
+          valor_nf?: number
+          link_nf?: string | null
+          livro_data_entrada?: string | null
+          livro_especie?: string | null
+          livro_numero?: string | null
+          livro_serie?: string | null
+          livro_data_doc?: string | null
+          livro_cnpj_emitente?: string | null
+          livro_uf?: string | null
+          livro_valor_contabil?: number | null
+          livro_cfop?: string | null
+          livro_icms_iss?: number | null
+          livro_cod_fiscal?: string | null
+          livro_base_calculo?: number | null
+          livro_aliquota?: number | null
+          livro_imp_creditado?: number | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "compras_nfs_compra_id_fkey"
+            columns: ["compra_id"]
+            isOneToOne: false
+            referencedRelation: "compras"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       ferramentas: {
         Row: {
           codigo: string | null
