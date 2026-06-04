@@ -1014,7 +1014,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                           <td className="px-3 py-2.5 text-white/60 whitespace-nowrap">{fmtDate(c.data_envio)}</td>
                           <td className="px-3 py-2.5 text-right font-mono font-bold text-white whitespace-nowrap">{fmt(c.valor_solicitado)}</td>
                           <td className="px-3 py-2.5 max-w-[200px]">
-                            <p className="font-semibold text-white/90 truncate">{c.email_titulo||'—'}</p>
+                            <p className="font-semibold text-white/90 break-words whitespace-normal">{c.email_titulo||'—'}</p>
                             {c.email_link&&<a href={c.email_link} target="_blank" rel="noreferrer" className="text-[9px] text-primary hover:underline">🔗 Link</a>}
                             {c.entradas && c.entradas.length > 0 && (
                               <div className="mt-2 p-2 rounded-lg bg-black/40 border border-white/5 space-y-1.5" onClick={(e) => e.stopPropagation()}>
