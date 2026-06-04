@@ -770,8 +770,52 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       else { const sw = txt.split(/\s+/).find(w => states.includes(w.toUpperCase())); if (sw) uf = sw.toUpperCase(); }
       let num = ''; const numM = txt.match(/n[oº]\s*([\d.]+)/i); if (numM) num = numM[1].replace(/\./g, '');
       let serie = '1'; const serM = txt.match(/s[eé]rie\s*:\s*(\d+)/i); if (serM) serie = serM[1];
-      let val = ''; const valM = txt.match(/valor\s+total[\s\S]{0,20}?r?\$?\s*([\d.]+,\d{2})/i) || txt.match(/R\$\s*([\d.]+,\d{2})/i);
-      if (valM) val = valM[1].replace(/\./g, '').replace(',', '.');
+      let val = '';
+      const nfPatterns = [
+        /valor\s+total\s+da\s+nota[\s\S]{0,50}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /valor\s+total\s+dos\s+produtos[\s\S]{0,50}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /valor\s+total\s+dos\s+serviços[\s\S]{0,50}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /valor\s+líquido[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /total\s+a\s+pagar[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /total\s+geral[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /valor\s+total[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /total[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+      ];
+      for (const pattern of nfPatterns) {
+        const match = txt.match(pattern);
+        if (match) {
+          const cleaned = match[1].replace(/\./g, '').replace(',', '.');
+          if (parseFloat(cleaned) > 0) {
+            val = cleaned;
+            break;
+          }
+        }
+      }
+      if (!val) {
+        const allR$Matches = txt.matchAll(/R\$\s*([\d.]+,\d{2})/gi);
+        for (const match of allR$Matches) {
+          const cleaned = match[1].replace(/\./g, '').replace(',', '.');
+          const num = parseFloat(cleaned);
+          if (num > 0) {
+            if (!val || num > parseFloat(val)) {
+              val = cleaned;
+            }
+          }
+        }
+      }
+      if (!val) {
+        const allMatches = txt.matchAll(/\b([\d.]+,\d{2})\b/g);
+        for (const match of allMatches) {
+          const cleaned = match[1].replace(/\./g, '').replace(',', '.');
+          const num = parseFloat(cleaned);
+          if (num > 0) {
+            if (!val || num > parseFloat(val)) {
+              val = cleaned;
+            }
+          }
+        }
+      }
+
       let dDoc = ''; const dates = txt.match(/\b\d{2}\/\d{2}\/\d{4}\b/g) || [];
       if (dates[0]) { const [dd, mm, yy] = dates[0].split('/'); dDoc = `${yy}-${mm}-${dd}`; }
       setNfForm(f => ({ ...f, valor_nf: val || f.valor_nf, livro_valor_contabil: val || f.livro_valor_contabil, livro_base_calculo: val || f.livro_base_calculo, livro_numero: num || f.livro_numero, livro_serie: serie || f.livro_serie, livro_cnpj_emitente: cnpjs[0] || f.livro_cnpj_emitente, livro_uf: uf || f.livro_uf, livro_data_doc: dDoc || f.livro_data_doc, livro_data_entrada: dDoc || f.livro_data_entrada || format(new Date(), 'yyyy-MM-dd') }));
@@ -807,8 +851,51 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       }
       // Extrair valor total
       let val = '';
-      const valM = txt.match(/valor\s+total[\s\S]{0,20}?r?\$?\s*([\d.]+,\d{2})/i) || txt.match(/total\s+(?:a\s+pagar|geral|nf)[\s\S]{0,10}?R?\$?\s*([\d.]+,\d{2})/i) || txt.match(/R\$\s*([\d.]+,\d{2})/i);
-      if (valM) val = valM[1].replace(/\./g, '').replace(',', '.');
+      const nfPatterns = [
+        /valor\s+total\s+da\s+nota[\s\S]{0,50}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /valor\s+total\s+dos\s+produtos[\s\S]{0,50}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /valor\s+total\s+dos\s+serviços[\s\S]{0,50}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /valor\s+líquido[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /total\s+a\s+pagar[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /total\s+geral[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /valor\s+total[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+        /total[\s\S]{0,30}?(?:R\$)?\s*([\d.]+,\d{2})/i,
+      ];
+      for (const pattern of nfPatterns) {
+        const match = txt.match(pattern);
+        if (match) {
+          const cleaned = match[1].replace(/\./g, '').replace(',', '.');
+          if (parseFloat(cleaned) > 0) {
+            val = cleaned;
+            break;
+          }
+        }
+      }
+      if (!val) {
+        const allR$Matches = txt.matchAll(/R\$\s*([\d.]+,\d{2})/gi);
+        for (const match of allR$Matches) {
+          const cleaned = match[1].replace(/\./g, '').replace(',', '.');
+          const num = parseFloat(cleaned);
+          if (num > 0) {
+            if (!val || num > parseFloat(val)) {
+              val = cleaned;
+            }
+          }
+        }
+      }
+      if (!val) {
+        const allMatches = txt.matchAll(/\b([\d.]+,\d{2})\b/g);
+        for (const match of allMatches) {
+          const cleaned = match[1].replace(/\./g, '').replace(',', '.');
+          const num = parseFloat(cleaned);
+          if (num > 0) {
+            if (!val || num > parseFloat(val)) {
+              val = cleaned;
+            }
+          }
+        }
+      }
+
       if (val) {
         setEstoqueForm(f => ({ ...f, valor_unitario: val }));
         toast.success(`Valor R$ ${Number(val).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} extraído do PDF. Ajuste a quantidade se necessário.`);
