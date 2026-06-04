@@ -171,6 +171,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [xmlOpen, setXmlOpen] = useState(false);
   const [selectedCompra, setSelectedCompra] = useState<any|null>(null);
   const [selectedNf, setSelectedNf] = useState<any|null>(null);
+  const [viewEstoqueCompra, setViewEstoqueCompra] = useState<any|null>(null);
   const [isNfFormOpen, setIsNfFormOpen] = useState(false);
   const [parsingNfXml, setParsingNfXml] = useState(false);
   const nfXmlInputRef = useRef<HTMLInputElement>(null);
@@ -1105,7 +1106,20 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                             {c.email_link&&<a href={c.email_link} target="_blank" rel="noreferrer" className="text-[9px] text-primary hover:underline">🔗 Link</a>}
                           </td>
                           <td className="px-3 py-2.5">
-                            <Badge className={`text-[9px] font-bold uppercase border ${TIPO_BADGE[c.tipo_solicitacao]||TIPO_BADGE['Outros']}`}>{c.tipo_solicitacao||'—'}</Badge>
+                            <div className="flex flex-col gap-1 items-start">
+                              <Badge className={`text-[9px] font-bold uppercase border ${TIPO_BADGE[c.tipo_solicitacao]||TIPO_BADGE['Outros']}`}>{c.tipo_solicitacao||'—'}</Badge>
+                              {c.entradas && c.entradas.length > 0 && (
+                                <Badge 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setViewEstoqueCompra(c);
+                                  }}
+                                  className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 text-[9px] font-bold uppercase shrink-0 cursor-pointer hover:bg-emerald-500/25 transition-colors"
+                                >
+                                  Lançado no ESTOQUE
+                                </Badge>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-2.5">
                             <p className="font-semibold text-white/80">{c.fornecedor_nome||'—'}</p>
@@ -1135,16 +1149,9 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                             {c.cc_desc&&<p className="text-[9px] text-white/60 truncate max-w-[100px]">{c.cc_desc}</p>}
                           </td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
-                            <div className="flex items-center gap-1.5">
-                              {c.entradas && c.entradas.length > 0 && (
-                                <Badge className="bg-emerald-500/15 text-emerald-300 border-emerald-500/20 text-[9px] font-bold uppercase shrink-0">
-                                  Lançado no ESTOQUE
-                                </Badge>
-                              )}
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-400 hover:bg-emerald-400/10" onClick={()=>{setSelectedCompra(c);setEstoqueForm(f=>({...f,quantidade:'1',valor_unitario:c.valor_pago?c.valor_pago.toString():(c.valor_solicitado?c.valor_solicitado.toString():'')}));setIsEstoqueOpen(true);}} title="Entrar em estoque"><Boxes className="h-3.5 w-3.5"/></Button>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-amber-400 hover:bg-amber-400/10" onClick={()=>openEdit(c)}><Edit className="h-3.5 w-3.5"/></Button>
-                              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:bg-red-400/10" onClick={()=>{if(confirm('Excluir?'))deleteMut.mutate(c.id);}}><Trash2 className="h-3.5 w-3.5"/></Button>
-                            </div>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-400 hover:bg-emerald-400/10" onClick={()=>{setSelectedCompra(c);setEstoqueForm(f=>({...f,quantidade:'1',valor_unitario:c.valor_pago?c.valor_pago.toString():(c.valor_solicitado?c.valor_solicitado.toString():'')}));setIsEstoqueOpen(true);}} title="Entrar em estoque"><Boxes className="h-3.5 w-3.5"/></Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-amber-400 hover:bg-amber-400/10" onClick={()=>openEdit(c)}><Edit className="h-3.5 w-3.5"/></Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:bg-red-400/10" onClick={()=>{if(confirm('Excluir?'))deleteMut.mutate(c.id);}}><Trash2 className="h-3.5 w-3.5"/></Button>
                           </td>
                         </tr>
                       );
@@ -1357,6 +1364,56 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           </Card>
         </div>
       )}
+
+      {/* ══════ DIALOG: Visualizar Lançamento no Estoque ══════ */}
+      <Dialog open={!!viewEstoqueCompra} onOpenChange={(v) => { if(!v) setViewEstoqueCompra(null); }}>
+        <DialogContent className="max-w-md bg-[#161f30] text-white border-white/10 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white font-display font-bold">
+              <Boxes className="h-5 w-5 text-emerald-400"/>
+              Materiais no Estoque
+            </DialogTitle>
+          </DialogHeader>
+          {viewEstoqueCompra && (
+            <div className="space-y-4 pt-2">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-white/40 font-semibold">Lançamento</p>
+                <p className="text-xs font-semibold text-white/90 mt-0.5">{viewEstoqueCompra.email_titulo || 'Sem título'}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-black/40 border border-white/5 space-y-2">
+                <div className="divide-y divide-white/5 max-h-[200px] overflow-y-auto pr-1">
+                  {viewEstoqueCompra.entradas?.map((e: any) => {
+                    const itemTotal = (e.valor_unitario || 0) * e.quantidade;
+                    return (
+                      <div key={e.id} className="py-2 text-xs text-white/80 flex justify-between items-start gap-3">
+                        <span className="font-medium text-white/90">
+                          {e.produtos?.nome || 'Produto'}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0 text-right font-mono">
+                          <span className="text-white/40">{e.quantidade}x</span>
+                          <span className="text-white/60 text-[11px]">{fmt(e.valor_unitario)}</span>
+                          <span className="font-semibold text-white">{fmt(itemTotal)}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-xs text-right border-t border-white/10 pt-2 font-bold flex justify-between items-center">
+                  <span className="text-white/40 text-[9px] uppercase tracking-wider">Total Lançado:</span>
+                  <span className="text-emerald-400 font-mono text-sm">
+                    {fmt(viewEstoqueCompra.entradas?.reduce((acc: number, cur: any) => acc + ((cur.valor_unitario || 0) * cur.quantidade), 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button size="sm" variant="outline" className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl" onClick={() => setViewEstoqueCompra(null)}>
+              Fechar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ══════ DIALOG: Colar E-mail ══════ */}
       <Dialog open={isColarOpen} onOpenChange={setIsColarOpen}>
