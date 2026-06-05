@@ -1593,10 +1593,6 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               <Input value={form.conta} onChange={e=>setForm(f=>({...f,conta:e.target.value}))} placeholder="Ag. / Conta / Banco" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
             </div>
             <div className="space-y-1">
-              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Link do E-mail</Label>
-              <Input value={form.email_link} onChange={e=>setForm(f=>({...f,email_link:e.target.value}))} placeholder="https://..." className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
-            </div>
-            <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Centro de Custo</Label>
               <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
                 const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(val));
@@ -1617,10 +1613,6 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Descrição do CC</Label>
-              <Input value={form.cc_desc} onChange={e=>setForm(f=>({...f,cc_desc:e.target.value}))} placeholder="Não previsto em orçamento" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
             </div>
             <div className="col-span-2 space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Observações</Label>
@@ -1769,7 +1761,6 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               {label:'Fornecedor',field:'fornecedor_nome',type:'text',target:'form'},
               {label:'CNPJ/CPF',field:'fornecedor_cnpj',type:'text',target:'form'},
               {label:'Conta / Banco',field:'conta',type:'text',target:'form'},
-              {label:'Link E-mail',field:'email_link',type:'text',target:'form'},
             ].map(({label,field,type,target})=>{
               const isParc=target.startsWith('parcelas');
               const val=isParc?(form.parcelas[0] as any)?.[field]||'':(form as any)[field]||'';
@@ -1805,10 +1796,6 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Desc. CC</Label>
-              <Input value={form.cc_desc} onChange={e=>setForm(f=>({...f,cc_desc:e.target.value}))} className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
             </div>
             {/* Estorno parcial – edit form */}
             <div className="space-y-1">
