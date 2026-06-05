@@ -1578,7 +1578,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           <Textarea value={emailText} onChange={e=>setEmailText(e.target.value)} className="min-h-[160px] text-xs font-mono bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl" placeholder="Cole aqui o texto completo do e-mail..."/>
           <div className="flex gap-2">
             <Button size="sm" className="bg-primary hover:bg-primary/90 text-white rounded-xl" onClick={handleAnalisarEmail}><Search className="h-4 w-4 mr-1.5"/>Analisar</Button>
-            <Button size="sm" variant="outline" className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl" onClick={()=>{setIsColarOpen(false);setEmailText('');setEmailResult(null);}}>Fechar</Button>
+            <Button size="sm" variant="outline" className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl" onClick={()=>{setEmailText('');setEmailResult(null);}}>Limpar</Button>
+            <Button size="sm" variant="outline" className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl ml-auto" onClick={()=>{setIsColarOpen(false);setEmailText('');setEmailResult(null);}}>Fechar</Button>
           </div>
           {emailResult&&(
             <Card className="bg-[#0a1020] border-white/5 text-white">
