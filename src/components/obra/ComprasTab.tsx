@@ -428,6 +428,22 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   });
   const deleteMut = useMutation({
     mutationFn: async (id: string) => {
+      // Fetch all entries associated with this purchase to find their IDs
+      const { data: entriesToDelete } = await supabase
+        .from('entradas')
+        .select('id')
+        .eq('compra_id', id);
+
+      if (entriesToDelete && entriesToDelete.length > 0) {
+        const entryIds = entriesToDelete.map(e => e.id);
+        for (const entryId of entryIds) {
+          await supabase
+            .from('ferramentas')
+            .delete()
+            .like('observacoes', `%[ENTRADA_ID:${entryId}]%`);
+        }
+      }
+
       // 1. Deletar entradas correspondentes no estoque (comprados)
       const { error: entError } = await supabase.from('entradas').delete().eq('compra_id', id);
       if (entError) throw entError;
@@ -535,6 +551,12 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
   const deleteEntradaMut = useMutation({
     mutationFn: async (entradaId: string) => {
+      // Deletar ferramentas associadas a esta entrada
+      await supabase
+        .from('ferramentas')
+        .delete()
+        .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
+
       const { error } = await supabase.from('entradas').delete().eq('id', entradaId);
       if (error) throw error;
       return entradaId;

@@ -492,6 +492,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       case 'manutencao': return <Badge variant="destructive">Manutenção</Badge>;
       case 'extraviada': return <Badge className="bg-red-500/10 text-red-500 border-red-500/20">Extraviada</Badge>;
       case 'baixa': return <Badge className="bg-zinc-500/10 text-zinc-500 border-zinc-500/20">Baixa</Badge>;
+      case 'comprado': return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20">A Receber</Badge>;
       default: return <Badge variant="secondary">{estado}</Badge>;
     }
   };
@@ -706,6 +707,11 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                     {selectedTool.data_retirada && <p className="text-xs text-muted-foreground">Retirada: {new Date(selectedTool.data_retirada).toLocaleDateString('pt-BR')}</p>}
                   </div>
                 </div>
+                 {selectedTool.estado === 'comprado' && (
+                  <div className="w-full rounded-xl border border-blue-200 bg-blue-50 p-3 text-center text-xs text-blue-500 font-medium dark:bg-blue-950/20 dark:border-blue-900/30 dark:text-blue-400">
+                    Esta ferramenta foi comprada, mas ainda não foi entregue (Aguardando Entrada Real na aba Entradas).
+                  </div>
+                )}
                 {selectedTool.estado === 'disponivel' && (
                   <Button className="w-full h-12 bg-warning hover:bg-warning/90 text-warning-foreground" onClick={() => setRetirarOpen(true)}>
                     <Hand className="h-4 w-4 mr-1.5" /> Retirar

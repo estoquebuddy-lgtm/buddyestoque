@@ -499,26 +499,34 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
             ? `[FERRAMENTA] Importado via Nota (Com desconto de R$ ${itemDiscount.toFixed(2)} proporcional)`
             : '[FERRAMENTA] Importado via Nota';
 
-          const { error: entErr } = await supabase.from('entradas').insert({
-            obra_id: obraId, produto_id: produtoId,
-            quantidade: item.quantidade, valor_unitario: finalUnitValue,
-            observacao: note,
-            fornecedor: fornecedor || null,
-            status_entrega: 'PENDENTE',
-            comprado_por_id: user?.id || null,
-            comprado_em: new Date().toISOString(),
-            compra_id: compraId
-          });
+          const { data: entData, error: entErr } = await supabase
+            .from('entradas')
+            .insert({
+              obra_id: obraId,
+              produto_id: produtoId,
+              quantidade: item.quantidade,
+              valor_unitario: finalUnitValue,
+              observacao: note,
+              fornecedor: fornecedor || null,
+              status_entrega: 'PENDENTE',
+              comprado_por_id: user?.id || null,
+              comprado_em: new Date().toISOString(),
+              compra_id: compraId
+            })
+            .select('id')
+            .single();
           if (entErr) throw entErr;
+
+          const entradaId = entData?.id;
 
           const ferramentasToInsert = Array.from({ length: Math.round(item.quantidade) }, (_, i) => ({
             obra_id: obraId,
             nome: item.nome.trim(),
             codigo: item.ferrCodigoPrefixo ? `${item.ferrCodigoPrefixo}-${String(i + 1).padStart(2, '0')}` : null,
-            estado: 'disponivel',
-            status: 'DISPONIVEL',
+            estado: 'comprado',
+            status: 'COMPRADO',
             qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            observacoes: `[CAT:${item.ferrCategoria || 'OUTROS'}] [LOC:${item.ferrLocalizacao || ''}]`,
+            observacoes: `[CAT:${item.ferrCategoria || 'OUTROS'}] [LOC:${item.ferrLocalizacao || ''}]${entradaId ? ` [ENTRADA_ID:${entradaId}]` : ''}`,
           }));
           const { error: ferrErr } = await supabase.from('ferramentas').insert(ferramentasToInsert);
           if (ferrErr) throw ferrErr;

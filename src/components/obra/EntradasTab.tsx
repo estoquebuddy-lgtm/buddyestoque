@@ -463,6 +463,29 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         .eq('id', entradaId);
       if (updateErr) throw updateErr;
 
+      // Update status of associated tools from 'comprado' to 'disponivel'
+      const { data: toolsToUpdate } = await supabase
+        .from('ferramentas')
+        .select('id, observacoes')
+        .eq('obra_id', obraId)
+        .eq('estado', 'comprado')
+        .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
+
+      if (toolsToUpdate && toolsToUpdate.length > 0) {
+        for (const tool of toolsToUpdate) {
+          const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
+          await supabase
+            .from('ferramentas')
+            .update({
+              estado: 'disponivel',
+              status: 'DISPONIVEL',
+              observacoes: cleanObs,
+              ultima_movimentacao: new Date().toISOString()
+            })
+            .eq('id', tool.id);
+        }
+      }
+
       // Update localizacao on the produto if provided
       if (localizacao.trim()) {
         await supabase.from('produtos').update({ localizacao: localizacao.trim() }).eq('id', produtoId);
