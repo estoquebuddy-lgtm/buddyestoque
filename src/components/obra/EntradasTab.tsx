@@ -486,7 +486,14 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     setDialogOpen(true);
   };
 
-  const filtered = entradas.filter((e: any) => e.produtos?.nome?.toLowerCase().includes(search.toLowerCase()) || (e.fornecedor && e.fornecedor.toLowerCase().includes(search.toLowerCase())));
+  const searchTerms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const matchesSearch = (e: any) => searchTerms.every(term =>
+    (e.produtos?.nome && e.produtos.nome.toLowerCase().includes(term)) ||
+    (e.fornecedor && e.fornecedor.toLowerCase().includes(term)) ||
+    (e.observacao && e.observacao.toLowerCase().includes(term))
+  );
+
+  const filtered = entradas.filter(matchesSearch);
 
   const isFerramenta = (e: any) => e.observacao?.startsWith('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
 
@@ -494,10 +501,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const almoxarifadoList = entradas.filter((e: any) => !e.status_entrega || e.status_entrega === 'REALIZADO');
   const compradosList = entradas.filter((e: any) => e.status_entrega === 'PENDENTE');
   const currentTabList = subTab === 'almoxarifado' ? almoxarifadoList : compradosList;
-  const currentFilteredList = currentTabList.filter((e: any) =>
-    e.produtos?.nome?.toLowerCase().includes(search.toLowerCase()) ||
-    (e.fornecedor && e.fornecedor.toLowerCase().includes(search.toLowerCase()))
-  );
+  const currentFilteredList = currentTabList.filter(matchesSearch);
 
   const canSubmit = entryType === 'ferramenta'
     ? (editingId

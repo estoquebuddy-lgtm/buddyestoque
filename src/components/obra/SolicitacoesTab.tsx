@@ -322,9 +322,13 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const searchTerms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
   const filtered = solicitacoes.filter((s: any) => {
-    const matchesSearch = s.descricao_materiais.toLowerCase().includes(search.toLowerCase()) || 
-      s.solicitante?.email?.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = searchTerms.every(term =>
+      s.descricao_materiais.toLowerCase().includes(term) || 
+      (s.solicitante?.email && s.solicitante.email.toLowerCase().includes(term)) ||
+      (s.solicitante?.apelido && s.solicitante.apelido.toLowerCase().includes(term))
+    );
     const matchesArchived = showArchived ? s.arquivado === true : !s.arquivado;
     const matchesAssigned = showMyAssignedOnly ? s.destinatario_id === user?.id : true;
     return matchesSearch && matchesArchived && matchesAssigned;

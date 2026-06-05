@@ -227,7 +227,12 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   };
 
   const filtered = produtos.filter((p: any) => {
-    const matchSearch = p.nome.toLowerCase().includes(search.toLowerCase()) || (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()));
+    const searchTerms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    const matchSearch = searchTerms.every(term => 
+      p.nome.toLowerCase().includes(term) ||
+      (p.categoria && p.categoria.toLowerCase().includes(term)) ||
+      (p.localizacao && p.localizacao.toLowerCase().includes(term))
+    );
     const matchLocation = filterSemLocalizacao ? !p.localizacao?.trim() : true;
     const matchZerado = filterOcultarZerados ? Number(p.estoque_atual) > 0 : true;
     return matchSearch && matchLocation && matchZerado;

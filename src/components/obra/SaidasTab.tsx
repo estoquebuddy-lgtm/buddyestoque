@@ -97,7 +97,14 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const startEdit = (s: any) => { setEditingId(s.id); setForm({ produto_id: s.produto_id, quantidade: String(s.quantidade), pessoa_id: s.pessoa_id || '', observacao: s.observacao || '' }); setDialogOpen(true); };
   const selectedProduct = produtos.find((p: any) => p.id === form.produto_id);
-  const filtered = saidas.filter((s: any) => s.produtos?.nome?.toLowerCase().includes(search.toLowerCase()) || (s.pessoas?.nome && s.pessoas.nome.toLowerCase().includes(search.toLowerCase())));
+  const searchTerms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  const filtered = saidas.filter((s: any) =>
+    searchTerms.every(term =>
+      (s.produtos?.nome && s.produtos.nome.toLowerCase().includes(term)) ||
+      (s.pessoas?.nome && s.pessoas.nome.toLowerCase().includes(term)) ||
+      (s.observacao && s.observacao.toLowerCase().includes(term))
+    )
+  );
 
   return (
     <div className="space-y-4 animate-fade-in">
