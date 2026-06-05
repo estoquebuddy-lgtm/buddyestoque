@@ -922,12 +922,56 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
   // Exports
   const exportExcel = () => {
-    const data=processed.map((c:any)=>({'Status':c.status,'Estornado':c.estornado?'Sim':'Não','Parcela':c.parcela||'','Envio':fmtDate(c.data_envio),'Valor Solicitado':c.valor_solicitado||0,'E-mail':c.email_titulo||'','Fornecedor':c.fornecedor_nome||'','CNPJ':c.fornecedor_cnpj||'','Conta':c.conta||'','Valor Pago':c.valor_pago||0,'Data Pagamento':fmtDate(c.data_pagamento),'Centro Custo':c.centro_custo||'','Desc CC':c.cc_desc||'','Tipo':c.tipo_solicitacao||'','NFs':(c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),'Total NF':(c.compras_nfs||[]).reduce((s:number,n:any)=>s+(n.valor_nf||0),0),'Obs':c.obs||''}));
-    const ws=XLSX.utils.json_to_sheet(data);const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Compras');XLSX.writeFile(wb,`compras-${format(new Date(),'dd-MM-yyyy')}.xlsx`);toast.success('Excel exportado!');
+    const data=processed.map((c:any)=>{
+      const valPago = c.valor_pago||0;
+      const valEst  = c.valor_estornado||0;
+      return {
+        'Status':          c.status,
+        'Estornado (total)': c.estornado?'Sim':'Não',
+        'Parcela':         c.parcela||'',
+        'Envio':           fmtDate(c.data_envio),
+        'Valor Solicitado': valPago ? valPago : (c.valor_solicitado||0),
+        'E-mail':          c.email_titulo||'',
+        'Fornecedor':      c.fornecedor_nome||'',
+        'CNPJ':            c.fornecedor_cnpj||'',
+        'Conta':           c.conta||'',
+        'Valor Pago':      valPago,
+        'Valor Estornado': valEst,
+        'Líquido (Pago-Est.)': valPago - valEst,
+        'Data Pagamento':  fmtDate(c.data_pagamento),
+        'Centro Custo':    c.centro_custo||'',
+        'Desc CC':         c.cc_desc||'',
+        'Tipo':            c.tipo_solicitacao||'',
+        'NFs':             (c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),
+        'Total NF':        (c.compras_nfs||[]).reduce((s:number,n:any)=>s+(n.valor_nf||0),0),
+        'Obs':             c.obs||'',
+      };
+    });
+    const ws=XLSX.utils.json_to_sheet(data);
+    // Formata colunas numéricas como moeda
+    const numCols=['E','J','K','L','R'];
+    const range=XLSX.utils.decode_range(ws['!ref']||'A1');
+    for(let R=range.s.r+1;R<=range.e.r;R++){
+      numCols.forEach(col=>{
+        const cell=ws[`${col}${R+1}`];
+        if(cell&&typeof cell.v==='number') cell.z='#,##0.00';
+      });
+    }
+    const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Compras');XLSX.writeFile(wb,`compras-${format(new Date(),'dd-MM-yyyy')}.xlsx`);toast.success('Excel exportado!');
   };
   const exportPdf = () => {
     const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
-    autoTable(doc,{head:[['#','Status','Parcela','Envio','Solicitado','E-mail','Fornecedor','Pago','Dt.Pgto','CC','Tipo','NFs','Obs']],body:processed.map((c:any,i:number)=>[i+1,c.status,c.parcela||'',fmtDate(c.data_envio),fmt(c.valor_solicitado),c.email_titulo||'',c.fornecedor_nome||'',fmt(c.valor_pago),fmtDate(c.data_pagamento),`${c.centro_custo||''} ${c.cc_desc||''}`.trim(),c.tipo_solicitacao||'',(c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),c.obs||'']),styles:{fontSize:7,cellPadding:1.5},headStyles:{fillColor:[14,22,41]}});
+    autoTable(doc,{
+      head:[['#','Status','Parcela','Envio','Solicitado','E-mail','Fornecedor','Pago','Estornado','Líquido','Dt.Pgto','CC','Tipo','NFs','Obs']],
+      body:processed.map((c:any,i:number)=>{
+        const valPago=c.valor_pago||0;
+        const valEst=c.valor_estornado||0;
+        return [i+1,c.status,c.parcela||'',fmtDate(c.data_envio),fmt(c.valor_solicitado),c.email_titulo||'',c.fornecedor_nome||'',fmt(valPago),valEst>0?fmt(valEst):'—',fmt(valPago-valEst),fmtDate(c.data_pagamento),`${c.centro_custo||''} ${c.cc_desc||''}`.trim(),c.tipo_solicitacao||'',(c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),c.obs||''];
+      }),
+      styles:{fontSize:7,cellPadding:1.5},
+      headStyles:{fillColor:[14,22,41]},
+      columnStyles:{8:{textColor:[147,197,253]},9:{fontStyle:'bold'}},
+    });
     doc.save(`compras-${format(new Date(),'dd-MM-yyyy')}.pdf`);toast.success('PDF exportado!');
   };
 
