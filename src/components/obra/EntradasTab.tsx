@@ -905,23 +905,23 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     )}
 
                     {showProductList && !isNewProduct && (
-                      <div ref={productListRef} className="absolute z-50 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                      <div ref={productListRef} className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                         {filteredProducts.filter((p: any) => !p.nome.startsWith('[FERRAMENTA]')).map((p: any) => (
                           <button
                             key={p.id} type="button"
-                            className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors flex items-center gap-3 text-sm"
+                            className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors flex items-center gap-3 text-sm"
                             onClick={() => handleSelectProduct(p.id, p.nome)}
                           >
-                            <Package className="h-5 w-5 text-muted-foreground shrink-0" />
+                            <Package className="h-5 w-5 text-white/40 shrink-0" />
                             <div className="flex flex-col min-w-0">
-                              <span className="font-medium truncate">{p.nome} {p.categoria && <span className="text-muted-foreground font-normal ml-1">• {p.categoria}</span>}</span>
-                              <span className="text-xs text-muted-foreground truncate">Estoque atual: {p.estoque_atual || 0} {p.unidade} | Mínimo: {p.estoque_minimo || 0}</span>
+                              <span className="font-medium text-white truncate">{p.nome} {p.categoria && <span className="text-white/50 font-normal ml-1">• {p.categoria}</span>}</span>
+                              <span className="text-xs text-white/40 truncate">Estoque atual: {p.estoque_atual || 0} {p.unidade} | Mínimo: {p.estoque_minimo || 0}</span>
                             </div>
                           </button>
                         ))}
                         <button
                           type="button"
-                          className="w-full text-left px-4 py-2.5 hover:bg-primary/5 transition-colors flex items-center gap-2 text-sm text-primary font-medium border-t"
+                          className="w-full text-left px-4 py-2.5 hover:bg-primary/10 transition-colors flex items-center gap-2 text-sm text-primary font-medium border-t border-white/10"
                           onClick={handleNewProduct}
                         >
                           <Plus className="h-4 w-4 shrink-0" />
@@ -1105,21 +1105,21 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     autoComplete="off"
                   />
                   {showFornecedorList && fornecedores.filter((f: any) => f.toLowerCase().includes(form.fornecedor.toLowerCase()) && f !== form.fornecedor).length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                       {fornecedores
                         .filter((f: any) => f.toLowerCase().includes(form.fornecedor.toLowerCase()) && f !== form.fornecedor)
                         .map((f: any) => (
                           <button
                             key={f}
                             type="button"
-                            className="w-full text-left px-4 py-2 hover:bg-accent transition-colors flex items-center text-sm"
+                            className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors flex items-center text-sm"
                             onMouseDown={(e) => {
                               e.preventDefault();
                               setForm(prev => ({ ...prev, fornecedor: f }));
                               setShowFornecedorList(false);
                             }}
                           >
-                            <span className="font-medium truncate text-foreground">{f}</span>
+                            <span className="font-medium truncate text-white">{f}</span>
                           </button>
                         ))
                       }

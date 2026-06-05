@@ -510,14 +510,14 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                 />
               )}
               {showDestinoList && !quickPessoaId && (
-                <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-44 overflow-y-auto">
                   {(pessoas as any[])
                     .filter((p: any) => p.nome.toLowerCase().includes(quickPessoaSearch.toLowerCase()))
                     .map((p: any) => (
                       <button
                         key={p.id}
                         type="button"
-                        className="w-full text-left px-4 py-2.5 hover:bg-accent transition-colors text-sm font-medium"
+                        className="w-full text-left px-4 py-2.5 hover:bg-white/10 text-white transition-colors text-sm font-medium"
                         onMouseDown={e => {
                           e.preventDefault();
                           setQuickPessoaId(p.id);
@@ -525,12 +525,12 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                           setShowDestinoList(false);
                         }}
                       >
-                        {p.nome}
+                        <span className="font-medium text-white">{p.nome}</span>
                       </button>
                     ))
                   }
                   {(pessoas as any[]).filter((p: any) => p.nome.toLowerCase().includes(quickPessoaSearch.toLowerCase())).length === 0 && (
-                    <p className="text-xs text-muted-foreground p-3 text-center">Nenhuma pessoa encontrada</p>
+                    <p className="text-xs text-white/40 p-3 text-center">Nenhuma pessoa encontrada</p>
                   )}
                 </div>
               )}

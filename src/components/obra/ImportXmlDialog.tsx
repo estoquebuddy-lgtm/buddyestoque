@@ -596,21 +596,21 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
                     autoComplete="off"
                   />
                   {showFornecedorList && fornecedores.filter((f: any) => f.toLowerCase().includes(fornecedor.toLowerCase()) && f !== fornecedor).length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                       {fornecedores
                         .filter((f: any) => f.toLowerCase().includes(fornecedor.toLowerCase()) && f !== fornecedor)
                         .map((f: any) => (
                           <button
                             key={f}
                             type="button"
-                            className="w-full text-left px-4 py-2 hover:bg-accent transition-colors flex items-center text-sm"
+                            className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors flex items-center text-sm"
                             onMouseDown={(e) => {
                               e.preventDefault();
                               setFornecedor(f);
                               setShowFornecedorList(false);
                             }}
                           >
-                            <span className="font-medium truncate text-foreground">{f}</span>
+                            <span className="font-medium truncate text-white">{f}</span>
                           </button>
                         ))
                       }

@@ -717,14 +717,14 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                         autoComplete="off"
                       />
                       {showProductList && (
-                        <div className="absolute z-50 w-full mt-1 bg-popover border border-input rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                        <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                           {produtos
                             .filter((p: any) => p.nome.toLowerCase().includes(productSearch.toLowerCase()))
                             .map((p: any) => (
                               <button
                                 key={p.id}
                                 type="button"
-                                className="w-full text-left px-4 py-2 hover:bg-accent transition-colors flex flex-col justify-center text-sm min-h-[44px]"
+                                className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors flex flex-col justify-center text-sm min-h-[44px]"
                                 onMouseDown={(e) => {
                                   e.preventDefault();
                                   setSelectedProdutoId(p.id);
@@ -732,18 +732,18 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                                   setShowProductList(false);
                                 }}
                               >
-                                <span className="font-medium truncate text-foreground flex items-center gap-2">
+                                <span className="font-medium truncate text-white flex items-center gap-2">
                                   {p.nome.replace('[FERRAMENTA] ', '').replace('[FERRAMENTA]', '')}
                                   {p.nome.startsWith('[FERRAMENTA]') && <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-semibold uppercase tracking-wider">Ferramenta</span>}
                                 </span>
-                                {p.unidade && <span className="text-[10px] text-muted-foreground">{p.unidade}</span>}
+                                {p.unidade && <span className="text-[10px] text-white/40">{p.unidade}</span>}
                               </button>
                             ))
                           }
                           {produtos
                             .filter((p: any) => p.nome.toLowerCase().includes(productSearch.toLowerCase()))
                             .length === 0 && (
-                            <p className="text-xs text-muted-foreground p-3 text-center">Nenhum produto encontrado</p>
+                            <p className="text-xs text-white/40 p-3 text-center">Nenhum produto encontrado</p>
                           )}
                         </div>
                       )}
