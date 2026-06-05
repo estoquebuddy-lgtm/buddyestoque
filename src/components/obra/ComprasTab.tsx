@@ -70,9 +70,10 @@ const PARCELA_PRESETS = ['ÚNICA', '50% INICIAL', '50% FINAL', '1/2', '2/2'];
 function getConf(c: any): 'ok' | 'warn' | 'missing' | 'estornado' {
   if (c.estornado) return 'estornado';
   const nfs: any[] = c.compras_nfs || [];
-  if (!nfs.length) return c.valor_pago ? 'missing' : 'warn';
+  const netPago = (c.valor_pago || 0) - (c.valor_estornado || 0);
+  if (!nfs.length) return netPago ? 'missing' : 'warn';
   const sumNF = nfs.reduce((s: number, n: any) => s + (n.valor_nf || 0), 0);
-  return Math.abs(sumNF - (c.valor_pago || 0)) < 0.01 ? 'ok' : 'warn';
+  return Math.abs(sumNF - netPago) < 0.01 ? 'ok' : 'warn';
 }
 const CONF_LEFT: Record<string, string> = {
   ok:        'border-l-emerald-500',
@@ -256,7 +257,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     fornecedor_nome: '', fornecedor_cnpj: '', fornecedor_dados: '', conta: '',
     centro_custo: '', cc_desc: 'Não previsto em orçamento',
     qtd_parcelas: 1,
-    parcelas: [{ parcela: '1/1', data_envio: '', valor_solicitado: '', valor_pago: '', data_pagamento: '', estornado: false }],
+    parcelas: [{ parcela: '1/1', data_envio: '', valor_solicitado: '', valor_pago: '', valor_estornado: '', data_pagamento: '', estornado: false }],
   });
   const [form, setForm] = useState(emptyForm());
 
@@ -503,12 +504,13 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const months = useMemo(()=>{const s=new Set<string>();compras.forEach((c:any)=>{const k1=mesKey(c.data_envio);const k2=mesKey(c.data_pagamento);if(k1)s.add(k1);if(k2)s.add(k2);});return Array.from(s).sort((a,b)=>b.localeCompare(a));},[compras]);
 
   const stats = useMemo(() => {
-    let sol = 0, pago = 0, nfT = 0, docs = 0;
+    let sol = 0, pago = 0, estornado = 0, nfT = 0, docs = 0;
     const countedNfs = new Set<string>();
     processed.forEach((c: any) => {
       if (!c.estornado) {
         sol += c.valor_solicitado || 0;
         pago += c.valor_pago || 0;
+        estornado += c.valor_estornado || 0;
       }
       const nfs: any[] = c.compras_nfs || [];
       nfs.forEach((n: any) => {
@@ -519,7 +521,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         }
       });
     });
-    return { sol, pago, nfT, docs, diff: Math.abs(pago - nfT) };
+    const netPago = pago - estornado;
+    return { sol, pago, estornado, netPago, nfT, docs, diff: Math.abs(netPago - nfT) };
   }, [processed]);
 
   const monthlyTotals = useMemo(() => {
@@ -630,7 +633,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     const parcelas = Array.from({length:n},(_,i)=>{
       const ex=form.parcelas[i];
       const def=n===2?(i===0?'50% inicial':'50% final'):`${i+1}/${n}`;
-      return ex||{parcela:def,data_envio:'',valor_solicitado:'',valor_pago:'',data_pagamento:'',estornado:false};
+      return ex||{parcela:def,data_envio:'',valor_solicitado:'',valor_pago:'',valor_estornado:'',data_pagamento:'',estornado:false};
     });
     setForm(f=>({...f,qtd_parcelas:n,parcelas}));
   };
@@ -649,16 +652,16 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   // Submit
   const handleCreate = () => {
     const base={obra_id:obraId,status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,fornecedor_dados:form.fornecedor_dados||null,conta:form.conta||null,centro_custo:form.centro_custo?parseInt(form.centro_custo):null,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null};
-    createMut.mutate(form.parcelas.map((p:any)=>({...base,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false})));
+    createMut.mutate(form.parcelas.map((p:any)=>({...base,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,valor_estornado:p.valor_estornado?parseFloat(p.valor_estornado):0,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false})));
   };
   const handleEdit = () => {
     if(!selectedCompra)return;
     const p=form.parcelas[0]||{};
-    updateMut.mutate({id:selectedCompra.id,fields:{status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,conta:form.conta||null,centro_custo:form.centro_custo?parseInt(form.centro_custo):null,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false}});
+    updateMut.mutate({id:selectedCompra.id,fields:{status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,conta:form.conta||null,centro_custo:form.centro_custo?parseInt(form.centro_custo):null,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,valor_estornado:p.valor_estornado?parseFloat(p.valor_estornado):0,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false}});
   };
   const openEdit = (c:any) => {
     setSelectedCompra(c);
-    setForm({...emptyForm(),status:c.status,email_titulo:c.email_titulo||'',email_link:c.email_link||'',fornecedor_nome:c.fornecedor_nome||'',fornecedor_cnpj:c.fornecedor_cnpj||'',fornecedor_dados:c.fornecedor_dados||'',conta:c.conta||'',centro_custo:c.centro_custo?.toString()||'',cc_desc:c.cc_desc||'',obs:c.obs||'',tipo_solicitacao:c.tipo_solicitacao||'Materiais',qtd_parcelas:1,parcelas:[{parcela:c.parcela||'1/1',data_envio:c.data_envio||'',valor_solicitado:c.valor_solicitado?.toString()||'',valor_pago:c.valor_pago?.toString()||'',data_pagamento:c.data_pagamento||'',estornado:c.estornado||false}]});
+    setForm({...emptyForm(),status:c.status,email_titulo:c.email_titulo||'',email_link:c.email_link||'',fornecedor_nome:c.fornecedor_nome||'',fornecedor_cnpj:c.fornecedor_cnpj||'',fornecedor_dados:c.fornecedor_dados||'',conta:c.conta||'',centro_custo:c.centro_custo?.toString()||'',cc_desc:c.cc_desc||'',obs:c.obs||'',tipo_solicitacao:c.tipo_solicitacao||'Materiais',qtd_parcelas:1,parcelas:[{parcela:c.parcela||'1/1',data_envio:c.data_envio||'',valor_solicitado:c.valor_solicitado?.toString()||'',valor_pago:c.valor_pago?.toString()||'',valor_estornado:c.valor_estornado?.toString()||'',data_pagamento:c.data_pagamento||'',estornado:c.estornado||false}]});
     setIsEditOpen(true);
   };
 
@@ -1034,7 +1037,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="bg-[#0a1020] text-white/60 uppercase tracking-wider text-[9px]">
-                      {['#','Status','Parcela','Envio','Solicitado','E-mail / Título','Tipo','Fornecedor','Pago','Dt. Pgto','NF / Livro','CC','Ações'].map(h=>{
+                      {['#','Status','Parcela','Envio','Solicitado','E-mail / Título','Tipo','Fornecedor','Pago','Estornado','Dt. Pgto','NF / Livro','CC','Ações'].map(h=>{
                         if (h === 'Envio') {
                           const active = sortBy === 'envio';
                           return (
@@ -1130,6 +1133,11 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                             {c.conta&&<p className="text-[9px] text-white/60">{c.conta}</p>}
                           </td>
                           <td className={`px-3 py-2.5 text-right font-mono font-bold whitespace-nowrap ${c.estornado?'line-through text-white/30':'text-emerald-400'}`}>{fmt(c.valor_pago)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono whitespace-nowrap">
+                            {(c.valor_estornado && c.valor_estornado > 0) ? (
+                              <span className="text-blue-300 font-bold">{fmt(c.valor_estornado)}</span>
+                            ) : <span className="text-white/20">—</span>}
+                          </td>
                           <td className="px-3 py-2.5 text-white/60 whitespace-nowrap">{fmtDate(c.data_pagamento)}</td>
                           <td className="px-3 py-2.5 min-w-[160px]">
                             {c.estornado ? (
@@ -1561,6 +1569,14 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                           </div>
                         ))}
                       </div>
+                      {/* Estorno parcial */}
+                      <div className="space-y-1">
+                        <Label className="text-[8px] uppercase tracking-wider text-blue-300/60 font-bold">Valor Estornado</Label>
+                        <Input type="number" step="0.01" min="0" value={p.valor_estornado} onChange={e=>updateParcela(i,'valor_estornado',e.target.value)} placeholder="0,00" className="text-xs h-8 bg-[#0e1629] border-blue-400/20 text-blue-200 placeholder:text-white/20 focus-visible:ring-blue-400 rounded-lg"/>
+                        {p.valor_pago && p.valor_estornado && parseFloat(p.valor_estornado) > 0 && (
+                          <p className="text-[9px] text-blue-300/70">Líquido: {fmt(parseFloat(p.valor_pago||'0') - parseFloat(p.valor_estornado||'0'))}</p>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -1651,6 +1667,19 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 </div>
               );
             })}
+            {/* Estorno parcial – edit form */}
+            <div className="space-y-1">
+              <Label className="text-[9px] uppercase tracking-wider text-blue-300/60 font-bold">Valor Estornado</Label>
+              <Input type="number" step="0.01" min="0"
+                value={form.parcelas[0]?.valor_estornado||''}
+                onChange={e=>updateParcela(0,'valor_estornado',e.target.value)}
+                placeholder="0,00"
+                className="text-sm bg-[#0e1629] border-blue-400/20 text-blue-200 placeholder:text-white/20 focus-visible:ring-blue-400 rounded-xl h-10"
+              />
+              {form.parcelas[0]?.valor_pago && form.parcelas[0]?.valor_estornado && parseFloat(form.parcelas[0].valor_estornado) > 0 && (
+                <p className="text-[10px] text-blue-300/70">Líquido: {fmt(parseFloat(form.parcelas[0].valor_pago||'0') - parseFloat(form.parcelas[0].valor_estornado||'0'))}</p>
+              )}
+            </div>
             <div className="col-span-2 space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Observações</Label>
               <Input value={form.obs} onChange={e=>setForm(f=>({...f,obs:e.target.value}))} className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
