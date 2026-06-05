@@ -45,8 +45,8 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
   const fmtDate = (d?: string | null) => {
     if (!d) return '—';
     try {
-      // Split YYYY-MM-DD
-      const parts = d.split('-');
+      const datePart = d.split('T')[0];
+      const parts = datePart.split('-');
       if (parts.length === 3) {
         return `${parts[2]}/${parts[1]}/${parts[0]}`;
       }
