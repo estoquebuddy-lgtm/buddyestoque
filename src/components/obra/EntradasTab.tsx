@@ -52,14 +52,15 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewNota, setViewNota] = useState<string | null>(null);
   const [subTab, setSubTab] = useState<'almoxarifado' | 'comprados'>('almoxarifado');
+  const [xmlOpen, setXmlOpen] = useState(false);
 
   const [fornecedorSelect, setFornecedorSelect] = useState('__new__');
 
   useEffect(() => {
-    if (form.fornecedor) {
-      const exists = fornecedores.some((f: any) => f.toLowerCase() === form.fornecedor.trim().toLowerCase());
+    if (form.fornecedor && Array.isArray(fornecedores)) {
+      const exists = fornecedores.some((f: any) => typeof f === 'string' && f.toLowerCase() === form.fornecedor.trim().toLowerCase());
       if (exists) {
-        const match = fornecedores.find((f: any) => f.toLowerCase() === form.fornecedor.trim().toLowerCase());
+        const match = fornecedores.find((f: any) => typeof f === 'string' && f.toLowerCase() === form.fornecedor.trim().toLowerCase());
         setFornecedorSelect(match || form.fornecedor);
       } else {
         setFornecedorSelect('__new__');
@@ -1142,7 +1143,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     <SelectItem value="__new__" className="text-emerald-400 font-semibold focus:bg-white/10 focus:text-emerald-400 cursor-pointer">
                       + Novo Fornecedor
                     </SelectItem>
-                    {fornecedores.map((f: any) => (
+                    {Array.isArray(fornecedores) && fornecedores.map((f: any) => (
                       <SelectItem key={f} value={f} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
                         {f}
                       </SelectItem>
