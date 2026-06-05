@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -20,6 +20,24 @@ interface RelatorioFornecedorTabProps {
 
 export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTabProps) {
   const [selectedSupplier, setSelectedSupplier] = useState<string>('');
+  const [selectedMonth, setSelectedMonth] = useState<string>('all');
+
+  useEffect(() => {
+    setSelectedMonth('all');
+  }, [selectedSupplier]);
+
+  const mesKey = (d?: string | null) => {
+    if (!d) return '';
+    const m = d.match(/(\d{4})-(\d{2})/);
+    return m ? `${m[1]}-${m[2]}` : '';
+  };
+  
+  const mesLabel = (k: string) => {
+    if (!k) return 'Sem data';
+    const [a, m] = k.split('-');
+    const n = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return `${n[parseInt(m)] || m}/${a}`;
+  };
 
   const fmt = (n?: number | null) =>
     (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -107,10 +125,42 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     }
   });
 
-  // 3. Stats calculations
-  const stats = (() => {
-    let sol = 0, pago = 0, estornado = 0;
+  // 3. Extract months and build filtered data
+  const months = useMemo(() => {
+    const s = new Set<string>();
     supplierData.compras.forEach((c: any) => {
+      const k1 = mesKey(c.data_envio);
+      const k2 = mesKey(c.data_pagamento);
+      if (k1) s.add(k1);
+      if (k2) s.add(k2);
+    });
+    supplierData.entradas.forEach((e: any) => {
+      const k = mesKey(e.data);
+      if (k) s.add(k);
+    });
+    return Array.from(s).sort((a, b) => b.localeCompare(a));
+  }, [supplierData]);
+
+  const filteredData = useMemo(() => {
+    let compras = [...supplierData.compras];
+    let entradas = [...supplierData.entradas];
+
+    if (selectedMonth !== 'all') {
+      compras = compras.filter(
+        (c: any) => mesKey(c.data_envio) === selectedMonth || mesKey(c.data_pagamento) === selectedMonth
+      );
+      entradas = entradas.filter(
+        (e: any) => mesKey(e.data) === selectedMonth
+      );
+    }
+
+    return { compras, entradas };
+  }, [supplierData, selectedMonth]);
+
+  // 4. Stats calculations
+  const stats = useMemo(() => {
+    let sol = 0, pago = 0, estornado = 0;
+    filteredData.compras.forEach((c: any) => {
       if (!c.estornado) {
         sol += c.valor_solicitado || 0;
         pago += c.valor_pago || 0;
@@ -118,21 +168,21 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
       }
     });
 
-    const totalEntradasVal = supplierData.entradas.reduce((acc: number, curr: any) => {
+    const totalEntradasVal = filteredData.entradas.reduce((acc: number, curr: any) => {
       const valorTotal = curr.valor_unitario ? Number(curr.quantidade) * Number(curr.valor_unitario) : 0;
       return acc + valorTotal;
     }, 0);
 
     return {
-      comprasCount: supplierData.compras.length,
+      comprasCount: filteredData.compras.length,
       sol,
       pago,
       estornado,
       liquido: pago - estornado,
-      entradasCount: supplierData.entradas.length,
+      entradasCount: filteredData.entradas.length,
       entradasVal: totalEntradasVal
     };
-  })();
+  }, [filteredData]);
 
   const exportPDF = () => {
     if (!selectedSupplier) return;
@@ -141,7 +191,10 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
 
     // Title Section
     doc.setFontSize(18);
-    doc.text(`Relatório de Fornecedor: ${selectedSupplier}`, 14, 22);
+    const title = selectedMonth !== 'all' 
+      ? `Relatório: ${selectedSupplier} (${mesLabel(selectedMonth)})`
+      : `Relatório de Fornecedor: ${selectedSupplier}`;
+    doc.text(title, 14, 22);
 
     doc.setFontSize(10);
     doc.setTextColor(100);
@@ -168,12 +221,12 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     });
 
     // compras table
-    if (supplierData.compras.length > 0) {
+    if (filteredData.compras.length > 0) {
       doc.addPage();
       doc.setFontSize(14);
       doc.text('Histórico de Compras / Pagamentos', 14, 22);
 
-      const comprasTable = supplierData.compras.map((c: any) => [
+      const comprasTable = filteredData.compras.map((c: any) => [
         c.parcela || '1/1',
         fmtDate(c.data_envio),
         fmt(c.valor_solicitado),
@@ -195,12 +248,12 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     }
 
     // entradas table
-    if (supplierData.entradas.length > 0) {
+    if (filteredData.entradas.length > 0) {
       doc.addPage();
       doc.setFontSize(14);
       doc.text('Histórico de Entradas no Estoque', 14, 22);
 
-      const entradasTable = supplierData.entradas.map((e: any) => {
+      const entradasTable = filteredData.entradas.map((e: any) => {
         const total = e.valor_unitario ? Number(e.quantidade) * Number(e.valor_unitario) : 0;
         return [
           fmtDate(e.data),
@@ -222,7 +275,8 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
       });
     }
 
-    doc.save(`relatorio-fornecedor-${selectedSupplier.toLowerCase().replace(/\s+/g, '-')}.pdf`);
+    const fileMonthSuffix = selectedMonth !== 'all' ? `-${selectedMonth}` : '-geral';
+    doc.save(`relatorio-fornecedor-${selectedSupplier.toLowerCase().replace(/\s+/g, '-')}${fileMonthSuffix}.pdf`);
     toast.success('Relatório PDF exportado!');
   };
 
@@ -230,7 +284,7 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     if (!selectedSupplier) return;
 
     // Sheet 1: Compras
-    const comprasWSData = supplierData.compras.map((c: any) => ({
+    const comprasWSData = filteredData.compras.map((c: any) => ({
       'Status': c.status,
       'Parcela': c.parcela || '1/1',
       'Data Envio': fmtDate(c.data_envio),
@@ -245,7 +299,7 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     }));
 
     // Sheet 2: Entradas
-    const entradasWSData = supplierData.entradas.map((e: any) => {
+    const entradasWSData = filteredData.entradas.map((e: any) => {
       const total = e.valor_unitario ? Number(e.quantidade) * Number(e.valor_unitario) : 0;
       return {
         'Data': fmtDate(e.data),
@@ -267,7 +321,8 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     const entradasWS = XLSX.utils.json_to_sheet(entradasWSData);
     XLSX.utils.book_append_sheet(wb, entradasWS, 'Entradas de Estoque');
 
-    XLSX.writeFile(wb, `relatorio-fornecedor-${selectedSupplier.toLowerCase().replace(/\s+/g, '-')}.xlsx`);
+    const fileMonthSuffix = selectedMonth !== 'all' ? `-${selectedMonth}` : '-geral';
+    XLSX.writeFile(wb, `relatorio-fornecedor-${selectedSupplier.toLowerCase().replace(/\s+/g, '-')}${fileMonthSuffix}.xlsx`);
     toast.success('Relatório Excel exportado com sucesso!');
   };
 
@@ -296,6 +351,27 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
                 </SelectContent>
               </Select>
             </div>
+
+            {selectedSupplier && (
+              <div className="w-full sm:w-48 animate-in fade-in duration-200">
+                <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider mb-1 block">
+                  Filtrar por Mês
+                </label>
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="text-sm bg-white/5 border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-12">
+                    <SelectValue placeholder="Todos os meses" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
+                    <SelectItem value="all">Todos os meses</SelectItem>
+                    {months.map((m: string) => (
+                      <SelectItem key={m} value={m} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                        {mesLabel(m)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           {selectedSupplier && (
@@ -397,10 +473,10 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
             <TabsContent value="compras" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
               <Card className="border border-border/40 shadow-sm">
                 <CardContent className="p-0">
-                  {supplierData.compras.length === 0 ? (
+                  {filteredData.compras.length === 0 ? (
                     <div className="p-16 text-center text-muted-foreground flex flex-col items-center justify-center">
                       <ReceiptText className="h-10 w-10 opacity-10 mb-2" />
-                      <p className="text-sm">Nenhum lançamento de compra encontrado para este fornecedor.</p>
+                      <p className="text-sm">Nenhum lançamento de compra encontrado para este fornecedor no período.</p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -418,25 +494,25 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {supplierData.compras.map((c: any) => {
+                          {filteredData.compras.map((c: any) => {
                             const netPago = (c.valor_pago || 0) - (c.valor_estornado || 0);
                             return (
-                              <TableRow key={c.id} className="hover:bg-muted/30">
-                                <TableCell className="font-semibold text-sm">{c.parcela || '1/1'}</TableCell>
-                                <TableCell className="text-sm text-muted-foreground">{fmtDate(c.data_envio)}</TableCell>
-                                <TableCell className="text-sm font-mono">{fmt(c.valor_solicitado)}</TableCell>
-                                <TableCell>
-                                  <Badge className="text-[8px] font-bold uppercase tracking-wider">{c.status}</Badge>
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-sm">{fmt(c.valor_pago)}</TableCell>
-                                <TableCell className="text-right font-mono text-sm text-blue-500">
-                                  {c.valor_estornado > 0 ? fmt(c.valor_estornado) : '—'}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-sm font-bold text-emerald-600">
-                                  {fmt(netPago)}
-                                </TableCell>
-                                <TableCell className="text-sm text-muted-foreground">{fmtDate(c.data_pagamento)}</TableCell>
-                              </TableRow>
+                               <TableRow key={c.id} className="hover:bg-muted/30">
+                                 <TableCell className="font-semibold text-sm">{c.parcela || '1/1'}</TableCell>
+                                 <TableCell className="text-sm text-muted-foreground">{fmtDate(c.data_envio)}</TableCell>
+                                 <TableCell className="text-sm font-mono">{fmt(c.valor_solicitado)}</TableCell>
+                                 <TableCell>
+                                   <Badge className="text-[8px] font-bold uppercase tracking-wider">{c.status}</Badge>
+                                 </TableCell>
+                                 <TableCell className="text-right font-mono text-sm">{fmt(c.valor_pago)}</TableCell>
+                                 <TableCell className="text-right font-mono text-sm text-blue-500">
+                                   {c.valor_estornado > 0 ? fmt(c.valor_estornado) : '—'}
+                                 </TableCell>
+                                 <TableCell className="text-right font-mono text-sm font-bold text-emerald-600">
+                                   {fmt(netPago)}
+                                 </TableCell>
+                                 <TableCell className="text-sm text-muted-foreground">{fmtDate(c.data_pagamento)}</TableCell>
+                               </TableRow>
                             );
                           })}
                         </TableBody>
@@ -450,10 +526,10 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
             <TabsContent value="entradas" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
               <Card className="border border-border/40 shadow-sm">
                 <CardContent className="p-0">
-                  {supplierData.entradas.length === 0 ? (
+                  {filteredData.entradas.length === 0 ? (
                     <div className="p-16 text-center text-muted-foreground flex flex-col items-center justify-center">
                       <ArrowDownToLine className="h-10 w-10 opacity-10 mb-2" />
-                      <p className="text-sm">Nenhuma entrada de material encontrada para este fornecedor.</p>
+                      <p className="text-sm">Nenhuma entrada de material encontrada para este fornecedor no período.</p>
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -469,31 +545,31 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {supplierData.entradas.map((e: any) => {
+                          {filteredData.entradas.map((e: any) => {
                             const valorTotal = e.valor_unitario ? Number(e.quantidade) * Number(e.valor_unitario) : 0;
                             return (
-                              <TableRow key={e.id} className="hover:bg-muted/30">
-                                <TableCell className="text-sm text-muted-foreground">
-                                  {fmtDate(e.data)}
-                                </TableCell>
-                                <TableCell className="font-semibold text-sm">
-                                  {e.produtos?.nome || <span className="text-destructive">Produto Excluído</span>}
-                                </TableCell>
-                                <TableCell className="text-center font-mono">
-                                  {e.quantidade} <span className="text-[10px] text-muted-foreground">{e.produtos?.unidade || ''}</span>
-                                </TableCell>
-                                <TableCell className="text-right font-mono">
-                                  {e.valor_unitario ? fmt(Number(e.valor_unitario)) : '—'}
-                                </TableCell>
-                                <TableCell className="text-right font-mono font-bold text-primary">
-                                  {valorTotal > 0 ? fmt(valorTotal) : '—'}
-                                </TableCell>
-                                <TableCell>
-                                  <Badge variant="outline" className="text-[8px] uppercase font-bold">
-                                    {e.status_entrega || 'PENDENTE'}
-                                  </Badge>
-                                </TableCell>
-                              </TableRow>
+                               <TableRow key={e.id} className="hover:bg-muted/30">
+                                 <TableCell className="text-sm text-muted-foreground">
+                                   {fmtDate(e.data)}
+                                 </TableCell>
+                                 <TableCell className="font-semibold text-sm">
+                                   {e.produtos?.nome || <span className="text-destructive">Produto Excluído</span>}
+                                 </TableCell>
+                                 <TableCell className="text-center font-mono">
+                                   {e.quantidade} <span className="text-[10px] text-muted-foreground">{e.produtos?.unidade || ''}</span>
+                                 </TableCell>
+                                 <TableCell className="text-right font-mono">
+                                   {e.valor_unitario ? fmt(Number(e.valor_unitario)) : '—'}
+                                 </TableCell>
+                                 <TableCell className="text-right font-mono font-bold text-primary">
+                                   {valorTotal > 0 ? fmt(valorTotal) : '—'}
+                                 </TableCell>
+                                 <TableCell>
+                                   <Badge variant="outline" className="text-[8px] uppercase font-bold">
+                                     {e.status_entrega || 'PENDENTE'}
+                                   </Badge>
+                                 </TableCell>
+                               </TableRow>
                             );
                           })}
                         </TableBody>
