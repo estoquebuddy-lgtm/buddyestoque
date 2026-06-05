@@ -668,7 +668,21 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   }, [compras]);
 
   // Parcel helpers
-  const updateParcela = (i:number,f:string,v:any) => setForm(prev=>{const p=[...prev.parcelas];p[i]={...p[i],[f]:v};return{...prev,parcelas:p};});
+  const updateParcela = (i:number,f:string,v:any) => setForm(prev=>{
+    const p=[...prev.parcelas];
+    if (f === 'estornado') {
+      const isChecked = !!v;
+      const valorPago = p[i]?.valor_pago || '';
+      p[i] = {
+        ...p[i],
+        estornado: isChecked,
+        valor_estornado: isChecked ? valorPago : ''
+      };
+    } else {
+      p[i] = { ...p[i], [f]: v };
+    }
+    return {...prev,parcelas:p};
+  });
   const setQtd = (n:number) => {
     const parcelas = Array.from({length:n},(_,i)=>{
       const ex=form.parcelas[i];
