@@ -194,7 +194,7 @@ function parseEmail(txt: string) {
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ComprasTab({ obraId }: ComprasTabProps) {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'ativas'|'geral'|'kanban'|'dashboard'>('ativas');
+  const [activeTab, setActiveTab] = useState<'ativas'|'geral'|'kanban'|'dashboard'|'fornecedores'>('ativas');
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedTipo, setSelectedTipo] = useState('all');
@@ -213,6 +213,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [isLivroOpen, setIsLivroOpen] = useState(false);
   const [isColarOpen, setIsColarOpen] = useState(false);
   const [xmlOpen, setXmlOpen] = useState(false);
+  const [isEditFornecedorOpen, setIsEditFornecedorOpen] = useState(false);
+  const [editFornecedorForm, setEditFornecedorForm] = useState<{ oldNome: string; newNome: string; newCnpj: string } | null>(null);
   const [selectedCompra, setSelectedCompra] = useState<any|null>(null);
   const [selectedNf, setSelectedNf] = useState<any|null>(null);
   const [viewEstoqueCompra, setViewEstoqueCompra] = useState<any|null>(null);
@@ -429,6 +431,53 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     onSuccess: () => { queryClient.invalidateQueries({queryKey:['compras',obraId]}); toast.success('Excluído!'); setIsEditOpen(false); },
     onError: (e:any) => toast.error(`Erro: ${e.message}`)
   });
+  const updateFornecedorMut = useMutation({
+    mutationFn: async ({ oldNome, newNome, newCnpj }: { oldNome: string; newNome: string; newCnpj: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      const comprasUpdateOld = await supabase
+        .from('compras')
+        .update({ fornecedor_nome: newNome, fornecedor_cnpj: newCnpj })
+        .eq('obra_id', obraId)
+        .eq('fornecedor_nome', oldNome);
+      
+      if (comprasUpdateOld.error) throw comprasUpdateOld.error;
+
+      if (oldNome.toLowerCase() !== newNome.toLowerCase()) {
+        const comprasUpdateNew = await supabase
+          .from('compras')
+          .update({ fornecedor_cnpj: newCnpj })
+          .eq('obra_id', obraId)
+          .eq('fornecedor_nome', newNome);
+        
+        if (comprasUpdateNew.error) throw comprasUpdateNew.error;
+      }
+
+      await supabase
+        .from('entradas')
+        .update({ fornecedor: newNome })
+        .eq('obra_id', obraId)
+        .eq('fornecedor', oldNome);
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'ATUALIZAR',
+        entidade: 'FORNECEDOR',
+        detalhes: `Atualizou fornecedor: ${oldNome} -> ${newNome} (CNPJ: ${newCnpj})`
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['compras', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['fornecedores-unicos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
+      toast.success('Fornecedor atualizado em todos os registros!');
+      setIsEditFornecedorOpen(false);
+      setEditFornecedorForm(null);
+    },
+    onError: (e: any) => toast.error(`Erro ao atualizar fornecedor: ${e.message}`)
+  });
   const saveNfMut = useMutation({
     mutationFn: async (payload:any) => {
       if(selectedNf){const {error}=await supabase.from('compras_nfs').update(payload).eq('id',selectedNf.id);if(error) throw error;}
@@ -576,6 +625,40 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     });
     return r;
     },[compras,activeTab,selectedMonth,selectedTipo,search,sortBy,sortDir]);
+
+  const fornecedoresListWithStats = useMemo(() => {
+    const map = new Map<string, { nome: string; cnpj: string; comprasCount: number; valorLiquido: number }>();
+    compras.forEach((c: any) => {
+      const nome = (c.fornecedor_nome || '').trim();
+      const cnpj = (c.fornecedor_cnpj || '').trim();
+      if (!nome) return;
+      const key = nome.toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, { nome, cnpj, comprasCount: 0, valorLiquido: 0 });
+      }
+      const entry = map.get(key)!;
+      entry.comprasCount++;
+      if (!c.estornado) {
+        entry.valorLiquido += (c.valor_pago || 0) - (c.valor_estornado || 0);
+      }
+      if (!entry.cnpj && cnpj) {
+        entry.cnpj = cnpj;
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [compras]);
+
+  const filteredFornecedores = useMemo(() => {
+    let list = fornecedoresListWithStats;
+    if (search.trim()) {
+      const term = normal(search);
+      list = list.filter(f => 
+        normal(f.nome).includes(term) || 
+        normal(f.cnpj || '').includes(term)
+      );
+    }
+    return list;
+  }, [fornecedoresListWithStats, search]);
 
   const months = useMemo(()=>{const s=new Set<string>();compras.forEach((c:any)=>{const k1=mesKey(c.data_envio);const k2=mesKey(c.data_pagamento);if(k1)s.add(k1);if(k2)s.add(k2);});return Array.from(s).sort((a,b)=>b.localeCompare(a));},[compras]);
 
@@ -1149,10 +1232,10 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       {/* Filters + Tabs */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex gap-1 p-1 bg-[#0e1629] border border-white/5 rounded-xl">
-          {(['ativas','geral','kanban','dashboard'] as const).map(t=>(
+          {(['ativas','geral','kanban','dashboard','fornecedores'] as const).map(t=>(
             <button key={t} onClick={()=>setActiveTab(t)}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab===t?'bg-primary text-white':'text-white/50 hover:text-white/80'}`}>
-              {t==='ativas'?'📋 Ativas':t==='geral'?'📂 Geral':t==='kanban'?'🗂 Kanban':'📊 Dashboard'}
+              {t==='ativas'?'📋 Ativas':t==='geral'?'📂 Geral':t==='kanban'?'🗂 Kanban':t==='dashboard'?'📊 Dashboard':'🤝 Fornecedores'}
             </button>
           ))}
         </div>
@@ -1160,20 +1243,24 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40"/>
           <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 h-8 text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary"/>
         </div>
-        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-          <SelectTrigger className="h-8 w-36 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Mês"/></SelectTrigger>
-          <SelectContent className="bg-[#161f30] border-white/10 text-white">
-            <SelectItem value="all">Todos os meses</SelectItem>
-            {months.map(m=><SelectItem key={m} value={m}>{mesLabel(m)}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={selectedTipo} onValueChange={setSelectedTipo}>
-          <SelectTrigger className="h-8 w-32 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Tipo"/></SelectTrigger>
-          <SelectContent className="bg-[#161f30] border-white/10 text-white">
-            <SelectItem value="all">Todos tipos</SelectItem>
-            {TIPO_OPTIONS.map(t=><SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {activeTab !== 'fornecedores' && (
+          <>
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="h-8 w-36 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Mês"/></SelectTrigger>
+              <SelectContent className="bg-[#161f30] border-white/10 text-white">
+                <SelectItem value="all">Todos os meses</SelectItem>
+                {months.map(m=><SelectItem key={m} value={m}>{mesLabel(m)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={selectedTipo} onValueChange={setSelectedTipo}>
+              <SelectTrigger className="h-8 w-32 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Tipo"/></SelectTrigger>
+              <SelectContent className="bg-[#161f30] border-white/10 text-white">
+                <SelectItem value="all">Todos tipos</SelectItem>
+                {TIPO_OPTIONS.map(t=><SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </>
+        )}
       </div>
 
       {/* ── Table view (ativas / geral) ── */}
@@ -1555,6 +1642,79 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   );
                 })}
               </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── Fornecedores ── */}
+      {activeTab === 'fornecedores' && (
+        <div className="space-y-4">
+          <Card className="bg-[#0e1629] border-white/5">
+            <CardContent className="p-4 sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+                <div>
+                  <h3 className="text-base font-bold text-white">Lista de Fornecedores</h3>
+                  <p className="text-xs text-white/40">Visualize e edite as informações dos fornecedores associados a esta obra.</p>
+                </div>
+                <div className="text-xs text-white/40 font-semibold bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+                  Total: <span className="text-white font-bold">{filteredFornecedores.length}</span> fornecedor(es)
+                </div>
+              </div>
+
+              {filteredFornecedores.length === 0 ? (
+                <div className="text-center py-12 text-white/40 text-xs">
+                  Nenhum fornecedor encontrado.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl border border-white/5">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-[#0a1020] text-white/60 uppercase tracking-wider text-[9px] border-b border-white/5">
+                        <th className="px-4 py-3 text-left font-bold">Fornecedor</th>
+                        <th className="px-4 py-3 text-left font-bold">CNPJ / CPF</th>
+                        <th className="px-4 py-3 text-left font-bold">Compras</th>
+                        <th className="px-4 py-3 text-right font-bold">Valor Líquido Pago</th>
+                        <th className="px-4 py-3 text-center font-bold">Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                      {filteredFornecedores.map((f: any) => (
+                        <tr key={f.nome} className="bg-[#0e1629] hover:bg-[#111d35] transition-colors">
+                          <td className="px-4 py-3">
+                            <span className="font-semibold text-white/90">{f.nome}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span className="font-mono text-white/60">{f.cnpj || '—'}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20 text-[9px] font-bold">
+                              {f.comprasCount} compra(s)
+                            </Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-emerald-400">
+                            {fmt(f.valorLiquido)}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-amber-400 hover:bg-amber-400/10 hover:text-amber-300 rounded-lg"
+                              onClick={() => {
+                                setEditFornecedorForm({ oldNome: f.nome, newNome: f.nome, newCnpj: f.cnpj });
+                                setIsEditFornecedorOpen(true);
+                              }}
+                              title="Editar Fornecedor"
+                            >
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -2630,6 +2790,113 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           }
         }} 
       />
+
+      {/* ══════ DIALOG: Editar Fornecedor ══════ */}
+      <Dialog open={isEditFornecedorOpen} onOpenChange={setIsEditFornecedorOpen}>
+        <DialogContent className="max-w-md bg-[#161f30] text-white border-white/10 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white font-display font-bold">
+              <Edit className="h-5 w-5 text-primary" />
+              Editar Fornecedor
+            </DialogTitle>
+          </DialogHeader>
+
+          {editFornecedorForm && (
+            <div className="space-y-4 pt-2">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-white/45 font-bold">Nome do Fornecedor</Label>
+                <Input
+                  value={editFornecedorForm.newNome}
+                  onChange={e => setEditFornecedorForm(f => f ? { ...f, newNome: e.target.value } : null)}
+                  className="text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase tracking-wider text-white/45 font-bold">CNPJ / CPF</Label>
+                <Input
+                  value={editFornecedorForm.newCnpj}
+                  onChange={e => setEditFornecedorForm(f => f ? { ...f, newCnpj: e.target.value } : null)}
+                  className="text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+                />
+              </div>
+
+              {(() => {
+                const newNameClean = editFornecedorForm.newNome.trim().toLowerCase();
+                const oldNameClean = editFornecedorForm.oldNome.trim().toLowerCase();
+                const isConflict = newNameClean && newNameClean !== oldNameClean && 
+                  fornecedoresListWithStats.some(f => f.nome.trim().toLowerCase() === newNameClean);
+
+                if (isConflict) {
+                  return (
+                    <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex gap-2.5 items-start">
+                      <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="font-bold text-amber-200">Aviso de Duplicidade / Mesclagem</p>
+                        <p className="leading-relaxed">
+                          Já existe outro fornecedor cadastrado como <strong className="text-white">"{editFornecedorForm.newNome.trim()}"</strong>. 
+                          Ao salvar, todos os lançamentos de compras e histórico de estoque do fornecedor 
+                          <strong className="text-white"> "{editFornecedorForm.oldNome}"</strong> serão mesclados a ele.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl"
+              onClick={() => {
+                setIsEditFornecedorOpen(false);
+                setEditFornecedorForm(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-primary hover:bg-primary/90 text-white rounded-xl"
+              disabled={updateFornecedorMut.isPending}
+              onClick={() => {
+                if (!editFornecedorForm) return;
+                const newName = editFornecedorForm.newNome.trim();
+                if (!newName) {
+                  toast.error('O nome do fornecedor é obrigatório.');
+                  return;
+                }
+
+                const newNameClean = newName.toLowerCase();
+                const oldNameClean = editFornecedorForm.oldNome.trim().toLowerCase();
+                const isConflict = newNameClean !== oldNameClean && 
+                  fornecedoresListWithStats.some(f => f.nome.trim().toLowerCase() === newNameClean);
+
+                if (isConflict) {
+                  const confirmed = confirm(
+                    `Tem certeza que deseja mesclar "${editFornecedorForm.oldNome}" com "${newName}"?\n` +
+                    `Todos os registros de compras e entradas serão unificados e o nome "${editFornecedorForm.oldNome}" será removido.`
+                  );
+                  if (!confirmed) return;
+                }
+
+                updateFornecedorMut.mutate({
+                  oldNome: editFornecedorForm.oldNome,
+                  newNome: newName,
+                  newCnpj: editFornecedorForm.newCnpj.trim()
+                });
+              }}
+            >
+              {updateFornecedorMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
