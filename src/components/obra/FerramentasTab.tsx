@@ -39,6 +39,9 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [retirarObservacao, setRetirarObservacao] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [showBaixadas, setShowBaixadas] = useState(false);
+  const [groupByName, setGroupByName] = useState(false);
+  const [groupDetails, setGroupDetails] = useState<{ name: string; tools: any[] } | null>(null);
+
 
   // QR Code Generation State
   const [qrCodeOpen, setQrCodeOpen] = useState(false);
@@ -472,6 +475,16 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
   const totalBaixadas = ferramentas.filter((f: any) => f.estado === 'baixa').length;
 
+  const groupTools = groupDetails
+    ? filtered.filter((f: any) => f.nome.toLowerCase().trim() === groupDetails.name.toLowerCase().trim())
+    : [];
+
+  useEffect(() => {
+    if (groupDetails && groupTools.length === 0) {
+      setGroupDetails(null);
+    }
+  }, [groupTools, groupDetails]);
+
   const estadoBadge = (estado: string) => {
     switch (estado?.toLowerCase()) {
       case 'disponivel': return <Badge className="bg-success/10 text-success border-success/20">Disponível</Badge>;
@@ -515,8 +528,8 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               <span className="text-[10px] font-bold uppercase tracking-wider text-center">Histórico</span>
            </Button>
         </div>
-        {totalBaixadas > 0 && (
-          <div className="flex items-center gap-2 mt-3 select-none">
+        <div className="flex flex-wrap items-center gap-2 mt-3 select-none">
+          {totalBaixadas > 0 && (
             <button
               onClick={() => setShowBaixadas(!showBaixadas)}
               className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-all px-3 py-1.5 rounded-xl ${
@@ -528,8 +541,20 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               <span className={`inline-block h-2 w-2 rounded-full ${showBaixadas ? 'bg-zinc-400' : 'bg-white/20'}`} />
               {showBaixadas ? `Ocultando ferramentas baixadas (${totalBaixadas})` : `Ver ferramentas baixadas (${totalBaixadas})`}
             </button>
-          </div>
-        )}
+          )}
+
+          <button
+            onClick={() => setGroupByName(!groupByName)}
+            className={`flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-all px-3 py-1.5 rounded-xl ${
+              groupByName
+                ? 'bg-primary/20 text-primary-foreground border border-primary/30 hover:bg-primary/30'
+                : 'bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60'
+            }`}
+          >
+            <span className={`inline-block h-2 w-2 rounded-full ${groupByName ? 'bg-primary' : 'bg-white/20'}`} />
+            {groupByName ? 'Ferramentas Agrupadas' : 'Agrupar por Nome'}
+          </button>
+        </div>
       </div>
 
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
@@ -552,22 +577,112 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="pt-2 pb-1 space-y-2">
-                  {toolsInCat.map((f: any) => (
-                    <Card key={f.id} className="border-none shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.995]" onClick={() => setSelectedTool(f)}>
-                      <CardContent className="p-4 flex items-center gap-4">
-                        <ImageThumbnail src={f.foto_url} alt={f.nome} type="ferramenta" />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm truncate">{f.nome}</p>
-                          <div className="flex items-center gap-2">
-                            {f.codigo && <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Cód: {f.codigo}</p>}
-                            {f.localizacao && <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight bg-muted px-1.5 py-0.5 rounded">Loc: {f.localizacao}</p>}
-                            {f.pessoas?.nome && <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">• Com: {f.pessoas.nome}</p>}
-                          </div>
-                        </div>
-                        {estadoBadge(f.estado)}
-                      </CardContent>
-                    </Card>
-                  ))}
+                  {(() => {
+                    const displayedItems: any[] = [];
+                    if (groupByName) {
+                      const groups = new Map<string, any[]>();
+                      toolsInCat.forEach((f: any) => {
+                        const key = f.nome.toLowerCase().trim();
+                        if (!groups.has(key)) groups.set(key, []);
+                        groups.get(key)!.push(f);
+                      });
+
+                      groups.forEach((groupTools, key) => {
+                        const first = groupTools[0];
+                        const total = groupTools.length;
+                        const disponivel = groupTools.filter(t => t.estado === 'disponivel').length;
+                        const emUso = groupTools.filter(t => t.estado === 'em_uso').length;
+                        const manutencao = groupTools.filter(t => t.estado === 'manutencao').length;
+                        const extraviada = groupTools.filter(t => t.estado === 'extraviada').length;
+                        const baixa = groupTools.filter(t => t.estado === 'baixa').length;
+
+                        displayedItems.push({
+                          isGroup: true,
+                          nome: first.nome,
+                          foto_url: first.foto_url,
+                          categoria: first.categoria,
+                          tools: groupTools,
+                          stats: { total, disponivel, emUso, manutencao, extraviada, baixa }
+                        });
+                      });
+                    } else {
+                      toolsInCat.forEach((f: any) => {
+                        displayedItems.push({
+                          isGroup: false,
+                          ...f
+                        });
+                      });
+                    }
+
+                    return displayedItems.map((item: any) => {
+                      if (item.isGroup) {
+                        return (
+                          <Card 
+                            key={`group-${item.nome}`} 
+                            className="border-none shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.995]" 
+                            onClick={() => setGroupDetails({ name: item.nome, tools: item.tools })}
+                          >
+                            <CardContent className="p-4 flex items-center gap-4">
+                              <ImageThumbnail src={item.foto_url} alt={item.nome} type="ferramenta" />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium text-sm truncate">{item.nome}</p>
+                                <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                                  <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight bg-muted px-1.5 py-0.5 rounded">
+                                    {item.stats.total} {item.stats.total === 1 ? 'unidade' : 'unidades'}
+                                  </span>
+                                  {item.stats.disponivel > 0 && (
+                                    <Badge className="bg-success/10 text-success border-success/20 text-[9px] font-sans">
+                                      {item.stats.disponivel} Disp.
+                                    </Badge>
+                                  )}
+                                  {item.stats.emUso > 0 && (
+                                    <Badge className="bg-warning/10 text-warning border-warning/20 text-[9px] font-sans">
+                                      {item.stats.emUso} Em uso
+                                    </Badge>
+                                  )}
+                                  {item.stats.manutencao > 0 && (
+                                    <Badge className="bg-destructive/10 text-destructive border-destructive/20 text-[9px] font-sans">
+                                      {item.stats.manutencao} Manut.
+                                    </Badge>
+                                  )}
+                                  {item.stats.extraviada > 0 && (
+                                    <Badge className="bg-red-500/10 text-red-500 border-red-500/20 text-[9px] font-sans">
+                                      {item.stats.extraviada} Extrav.
+                                    </Badge>
+                                  )}
+                                  {item.stats.baixa > 0 && (
+                                    <Badge className="bg-zinc-500/10 text-zinc-500 border-zinc-500/20 text-[9px] font-sans">
+                                      {item.stats.baixa} Baixa
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="text-primary text-[10px] uppercase font-bold shrink-0 flex items-center gap-1">
+                                Ver itens ➔
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      }
+
+                      return (
+                        <Card key={item.id} className="border-none shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.995]" onClick={() => setSelectedTool(item)}>
+                          <CardContent className="p-4 flex items-center gap-4">
+                            <ImageThumbnail src={item.foto_url} alt={item.nome} type="ferramenta" />
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-sm truncate">{item.nome}</p>
+                              <div className="flex items-center gap-2">
+                                {item.codigo && <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">Cód: {item.codigo}</p>}
+                                {item.localizacao && <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight bg-muted px-1.5 py-0.5 rounded">Loc: {item.localizacao}</p>}
+                                {item.pessoas?.nome && <p className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">• Com: {item.pessoas.nome}</p>}
+                              </div>
+                            </div>
+                            {estadoBadge(item.estado)}
+                          </CardContent>
+                        </Card>
+                      );
+                    });
+                  })()}
                 </AccordionContent>
               </AccordionItem>
             );
@@ -707,6 +822,66 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       </Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Ferramenta" description="Tem certeza? Isso removerá permanentemente a ferramenta." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
+
+      {/* Group Details Dialog */}
+      <Dialog open={!!groupDetails} onOpenChange={(open) => !open && setGroupDetails(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader className="flex flex-row items-center gap-4 text-left">
+            {groupTools[0] && (
+              <ImageThumbnail src={groupTools[0].foto_url} alt={groupDetails?.name} type="ferramenta" size="sm" />
+            )}
+            <div>
+              <DialogTitle className="font-display font-bold text-lg">
+                {groupDetails?.name}
+              </DialogTitle>
+              <p className="text-xs text-muted-foreground">
+                {groupTools.length} {groupTools.length === 1 ? 'unidade' : 'unidades'} neste grupo
+              </p>
+            </div>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1 mt-4">
+            {groupTools.map((tool: any) => (
+              <Card 
+                key={tool.id} 
+                className="border border-muted bg-white dark:bg-card shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.995]" 
+                onClick={() => {
+                  setSelectedTool(tool);
+                }}
+              >
+                <CardContent className="p-4 flex items-center justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-sm truncate mb-1">{tool.nome}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight bg-muted px-1.5 py-0.5 rounded">
+                        QR: {tool.qr_code || `F-${tool.id.substring(0, 6).toUpperCase()}`}
+                      </span>
+                      {tool.codigo && (
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight bg-muted px-1.5 py-0.5 rounded">
+                          Cód: {tool.codigo}
+                        </span>
+                      )}
+                      {tool.localizacao && (
+                        <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight bg-muted px-1.5 py-0.5 rounded">
+                          Loc: {tool.localizacao}
+                        </span>
+                      )}
+                      {tool.pessoas?.nome && (
+                        <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                          • Com: {tool.pessoas.nome}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {estadoBadge(tool.estado)}
+                    <span className="text-primary text-xs font-bold">➔</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* QR Code Dialog */}
       <Dialog open={qrCodeOpen} onOpenChange={setQrCodeOpen}>

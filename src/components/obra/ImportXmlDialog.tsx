@@ -62,6 +62,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
   const [descontoTotal, setDescontoTotal] = useState<number>(0);
   const [fornecedor, setFornecedor] = useState<string>('');
   const [showFornecedorList, setShowFornecedorList] = useState(false);
+  const [isAppending, setIsAppending] = useState(false);
 
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
@@ -102,10 +103,11 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
     setDescontoTotal(0);
     setFornecedor('');
     setShowFornecedorList(false);
+    setIsAppending(false);
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const loadXml = async (file: File) => {
+  const loadXml = async (file: File, append = false) => {
     try {
       const reader = new FileReader();
       reader.onload = async (e) => {
@@ -124,12 +126,19 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
         const emitNode = xmlDoc.getElementsByTagName('emit')[0];
         const xNomeNode = emitNode?.getElementsByTagName('xNome')[0];
         const supplierName = xNomeNode ? xNomeNode.textContent || '' : '';
-        setFornecedor(supplierName.trim());
+        const trimmedSupplier = supplierName.trim();
+        if (trimmedSupplier && (!fornecedor || !append)) {
+          setFornecedor(trimmedSupplier);
+        }
 
         // 2. Discount (vDesc)
         const vDescNode = xmlDoc.getElementsByTagName('vDesc')[0];
         const totalDiscount = vDescNode ? parseFloat(vDescNode.textContent || '0') || 0 : 0;
-        setDescontoTotal(totalDiscount);
+        if (append) {
+          setDescontoTotal(prev => prev + totalDiscount);
+        } else {
+          setDescontoTotal(totalDiscount);
+        }
 
         // 3. Items (det)
         const detNodes = xmlDoc.getElementsByTagName('det');
@@ -167,13 +176,17 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
         }
 
         if (parsedItems.length === 0) {
-          parsedItems.push(makeItem());
-          toast.info('Não foi possível encontrar itens de produtos no XML. Você pode preenchê-los manualmente.');
+          if (!append) parsedItems.push(makeItem());
+          toast.info('Não foi possível encontrar itens de produtos no XML.');
         } else {
           toast.success(`${parsedItems.length} itens extraídos do XML com sucesso!`);
         }
 
-        setItems(parsedItems);
+        if (append) {
+          setItems(prev => [...prev, ...parsedItems]);
+        } else {
+          setItems(parsedItems);
+        }
         setStep('review');
       };
 
@@ -191,7 +204,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    loadXml(file);
+    loadXml(file, isAppending);
   };
 
   const updateItem = (id: string, field: keyof XmlItem, value: any) => {
@@ -570,9 +583,23 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
               ))}
             </div>
 
-            <Button variant="outline" size="sm" onClick={addItem} className="mt-2 h-9 border-dashed border-2">
-              <Plus className="h-4 w-4 mr-2" /> Adicionar Linha Manualmente
-            </Button>
+            <div className="flex flex-wrap gap-2 mt-2">
+              <Button variant="outline" size="sm" onClick={addItem} className="h-9 border-dashed border-2">
+                <Plus className="h-4 w-4 mr-2" /> Adicionar Linha Manualmente
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 border-dashed border-2 bg-primary/10 border-primary/20 hover:bg-primary/20 text-primary"
+                onClick={() => {
+                  setIsAppending(true);
+                  if (fileRef.current) fileRef.current.value = '';
+                  fileRef.current?.click();
+                }}
+              >
+                <FileUp className="h-4 w-4 mr-2" /> Importar Outro XML (Acumular Itens)
+              </Button>
+            </div>
 
             <div className="bg-muted/30 border border-border/60 rounded-xl p-4 mt-4 space-y-4">
               <h4 className="text-sm font-semibold text-foreground flex items-center gap-2">

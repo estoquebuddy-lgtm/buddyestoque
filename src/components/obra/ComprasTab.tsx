@@ -427,9 +427,30 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     onError: (e:any) => toast.error(`Erro: ${e.message}`)
   });
   const deleteMut = useMutation({
-    mutationFn: async (id:string) => { const {error}=await supabase.from('compras').delete().eq('id',id); if(error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({queryKey:['compras',obraId]}); toast.success('Excluído!'); setIsEditOpen(false); },
-    onError: (e:any) => toast.error(`Erro: ${e.message}`)
+    mutationFn: async (id: string) => {
+      // 1. Deletar entradas correspondentes no estoque (comprados)
+      const { error: entError } = await supabase.from('entradas').delete().eq('compra_id', id);
+      if (entError) throw entError;
+
+      // 2. Deletar vínculos de NFs correspondentes a esta compra
+      const { error: vincError } = await supabase.from('compras_nfs_vinculos').delete().eq('compra_id', id);
+      if (vincError) throw vincError;
+
+      // 3. Deletar NFs carregadas diretamente nesta compra
+      const { error: nfError } = await supabase.from('compras_nfs').delete().eq('compra_id', id);
+      if (nfError) throw nfError;
+
+      // 4. Deletar o lançamento de compra
+      const { error } = await supabase.from('compras').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['compras', obraId] }); 
+      queryClient.invalidateQueries({ queryKey: ['entradas', obraId] }); 
+      toast.success('Lançamento e suas entradas no estoque foram excluídos com sucesso!'); 
+      setIsEditOpen(false); 
+    },
+    onError: (e: any) => toast.error(`Erro ao excluir: ${e.message}`)
   });
   const updateFornecedorMut = useMutation({
     mutationFn: async ({ oldNome, newNome, newCnpj }: { oldNome: string; newNome: string; newCnpj: string }) => {
@@ -510,6 +531,27 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     },
     onSuccess: () => { queryClient.invalidateQueries({queryKey:['compras',obraId]}); toast.success('NF excluída!'); },
     onError: (e:any) => toast.error(`Erro: ${e.message}`)
+  });
+
+  const deleteEntradaMut = useMutation({
+    mutationFn: async (entradaId: string) => {
+      const { error } = await supabase.from('entradas').delete().eq('id', entradaId);
+      if (error) throw error;
+      return entradaId;
+    },
+    onSuccess: (entradaId) => {
+      queryClient.invalidateQueries({ queryKey: ['compras', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
+      toast.success('Material removido do estoque!');
+      setSelectedCompra((prev: any) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          entradas: (prev.entradas || []).filter((e: any) => e.id !== entradaId)
+        };
+      });
+    },
+    onError: (e: any) => toast.error(`Erro ao remover: ${e.message}`)
   });
 
   const linkNfMut = useMutation({
@@ -1431,7 +1473,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                             )}
                           </td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
-                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-400 hover:bg-emerald-400/10" onClick={()=>{setSelectedCompra(c);setEstoqueForm(f=>({...f,quantidade:'1',valor_unitario:c.valor_pago?c.valor_pago.toString():(c.valor_solicitado?c.valor_solicitado.toString():'')}));setIsEstoqueOpen(true);}} title="Entrar em estoque"><Boxes className="h-3.5 w-3.5"/></Button>
+                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-400 hover:bg-emerald-400/10" onClick={()=>{setSelectedCompra(c);setXmlOpen(true);}} title="Entrar em estoque"><Boxes className="h-3.5 w-3.5"/></Button>
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-amber-400 hover:bg-amber-400/10" onClick={()=>openEdit(c)}><Edit className="h-3.5 w-3.5"/></Button>
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:bg-red-400/10" onClick={()=>{if(confirm('Excluir?'))deleteMut.mutate(c.id);}}><Trash2 className="h-3.5 w-3.5"/></Button>
                           </td>
@@ -2160,17 +2202,31 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   {selectedCompra.entradas.map((e: any) => {
                     const itemTotal = (e.valor_unitario || 0) * e.quantidade;
                     return (
-                      <div key={e.id} className="py-1.5 text-xs text-white/90 flex justify-between items-center gap-2">
-                        <span>
-                          <span className="font-semibold text-white">{e.produtos?.nome || 'Produto'}</span>
-                          <span className={`text-[10px] ml-2 px-1.5 py-0.5 rounded-full border ${e.status_entrega === 'REALIZADO' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20'}`}>
+                      <div key={e.id} className="py-1.5 text-xs text-white/90 flex justify-between items-center gap-2 border-b border-white/5 last:border-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-semibold text-white truncate" title={e.produtos?.nome}>{e.produtos?.nome || 'Produto'}</span>
+                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full border shrink-0 ${e.status_entrega === 'REALIZADO' ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' : 'bg-amber-500/10 text-amber-300 border-amber-500/20'}`}>
                             {e.status_entrega}
                           </span>
-                        </span>
-                        <div className="flex items-center gap-3 font-mono text-xs">
-                          <span className="text-white/40">{e.quantidade} un x</span>
+                        </div>
+                        <div className="flex items-center gap-3 font-mono text-xs shrink-0">
+                          <span className="text-white/40">{e.quantidade} {e.produtos?.unidade || 'un'} x</span>
                           <span className="text-white/60">{fmt(e.valor_unitario)}</span>
                           <span className="font-semibold text-white/90">{fmt(itemTotal)}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={deleteEntradaMut.isPending}
+                            className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg"
+                            onClick={() => {
+                              if (confirm(`Remover "${e.produtos?.nome || 'este material'}" do estoque?`)) {
+                                deleteEntradaMut.mutate(e.id);
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -2784,11 +2840,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         open={xmlOpen} 
         onOpenChange={setXmlOpen} 
         compraToLink={selectedCompra} 
-        onCancel={() => {
-          if (selectedCompra) {
-            setIsEstoqueOpen(true);
-          }
-        }} 
+        onCancel={() => {}} 
       />
 
       {/* ══════ DIALOG: Editar Fornecedor ══════ */}
