@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Wrench, MessageSquarePlus, DollarSign } from 'lucide-react';
+import { Wrench, MessageSquarePlus, DollarSign, Store } from 'lucide-react';
 import RelatorioFerramentasTab from './RelatorioFerramentasTab';
 import RelatorioSolicitacoesTab from './RelatorioSolicitacoesTab';
 import FinanceiroTab from './FinanceiroTab';
 import RelatorioEntradasTab from './RelatorioEntradasTab';
 import RelatorioSaidasTab from './RelatorioSaidasTab';
+import RelatorioFornecedorTab from './RelatorioFornecedorTab';
 import { ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
 
 export default function RelatoriosTab({ obraId }: { obraId: string }) {
-  const [activeTab, setActiveTab] = useState<'ferramentas' | 'solicitacoes' | 'financeiro' | 'entradas' | 'saidas'>('financeiro');
+  const [activeTab, setActiveTab] = useState<'ferramentas' | 'solicitacoes' | 'financeiro' | 'entradas' | 'saidas' | 'fornecedor'>('financeiro');
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -71,6 +72,15 @@ export default function RelatoriosTab({ obraId }: { obraId: string }) {
             <MessageSquarePlus className="h-4 w-4 mr-2" />
             Solicitações
           </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setActiveTab('fornecedor')}
+            className={`rounded-lg h-10 font-semibold text-xs px-5 flex-1 sm:flex-none transition-all ${activeTab === 'fornecedor' ? 'bg-white text-primary shadow-sm ring-1 ring-border/50' : 'text-muted-foreground hover:text-foreground'}`}
+          >
+            <Store className="h-4 w-4 mr-2" />
+            Por Fornecedor
+          </Button>
         </div>
       </div>
 
@@ -80,6 +90,7 @@ export default function RelatoriosTab({ obraId }: { obraId: string }) {
       {activeTab === 'saidas' && <RelatorioSaidasTab obraId={obraId} />}
       {activeTab === 'ferramentas' && <RelatorioFerramentasTab obraId={obraId} />}
       {activeTab === 'solicitacoes' && <RelatorioSolicitacoesTab obraId={obraId} />}
+      {activeTab === 'fornecedor' && <RelatorioFornecedorTab obraId={obraId} />}
     </div>
   );
 }

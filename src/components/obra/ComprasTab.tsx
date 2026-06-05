@@ -286,6 +286,37 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     }
   });
 
+  // Unique suppliers query from compras table
+  const { data: fornecedoresUnicos = [] } = useQuery({
+    queryKey: ['fornecedores-unicos', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('compras')
+        .select('fornecedor_nome, fornecedor_cnpj')
+        .eq('obra_id', obraId)
+        .not('fornecedor_nome', 'is', null)
+        .neq('fornecedor_nome', '');
+      
+      const map = new Map<string, string>();
+      (data || []).forEach((item: any) => {
+        const nome = item.fornecedor_nome.trim();
+        const cnpj = item.fornecedor_cnpj?.trim() || '';
+        if (nome && !map.has(nome.toLowerCase())) {
+          map.set(nome.toLowerCase(), JSON.stringify({ nome, cnpj }));
+        }
+      });
+      return Array.from(map.values()).map(val => JSON.parse(val));
+    }
+  });
+
+  const [fornecedorSelect, setFornecedorSelect] = useState('__new__');
+
+  useEffect(() => {
+    if (isCreateOpen) {
+      setFornecedorSelect('__new__');
+    }
+  }, [isCreateOpen]);
+
   // Email parser
   const [emailText, setEmailText] = useState('');
   const [emailResult, setEmailResult] = useState<any|null>(null);
@@ -714,6 +745,13 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         ccD = standardCc.label.replace(/^\d+\.\s*/, '');
       }
     }
+    const emailForn = (p.fornecedor || '').trim();
+    const exists = fornecedoresUnicos.some((f: any) => f.nome.toLowerCase() === emailForn.toLowerCase());
+    if (emailForn) {
+      setFornecedorSelect(exists ? fornecedoresUnicos.find((f: any) => f.nome.toLowerCase() === emailForn.toLowerCase()).nome : '__new__');
+    } else {
+      setFornecedorSelect('__new__');
+    }
     setForm(f=>({...f,email_titulo:p.titulo||'',tipo_solicitacao:p.tipo||'Materiais',fornecedor_nome:p.fornecedor||'',fornecedor_cnpj:p.cnpj||'',conta:p.conta||'',centro_custo:ccVal.toString(),cc_desc:ccD,obs:p.obs||'',qtd_parcelas:n,parcelas:p.pagamentos.slice(0,3).map((pg:any)=>({parcela:pg.parcela||'1/1',data_envio:pg.envio||'',valor_solicitado:String(pg.solicitado||''),valor_pago:String(pg.pago||''),data_pagamento:pg.dataPgto||'',estornado:pg.estornado||false}))}));
     setIsColarOpen(false);setIsCreateOpen(true);toast.success('Formulário preenchido!');
   };
@@ -735,6 +773,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const openEdit = (c:any) => {
     setSelectedCompra(c);
     let ccVal = c.centro_custo === 0 ? '31' : (c.centro_custo?.toString() || '');
+    const exists = c.fornecedor_nome && fornecedoresUnicos.some((f: any) => f.nome.toLowerCase() === c.fornecedor_nome.trim().toLowerCase());
+    setFornecedorSelect(exists ? fornecedoresUnicos.find((f: any) => f.nome.toLowerCase() === c.fornecedor_nome.trim().toLowerCase()).nome : '__new__');
     setForm({...emptyForm(),status:c.status,email_titulo:c.email_titulo||'',email_link:c.email_link||'',fornecedor_nome:c.fornecedor_nome||'',fornecedor_cnpj:c.fornecedor_cnpj||'',fornecedor_dados:c.fornecedor_dados||'',conta:c.conta||'',centro_custo:ccVal,cc_desc:c.cc_desc||'',obs:c.obs||'',tipo_solicitacao:c.tipo_solicitacao||'Materiais',qtd_parcelas:1,parcelas:[{parcela:c.parcela||'1/1',data_envio:c.data_envio||'',valor_solicitado:c.valor_solicitado?.toString()||'',valor_pago:c.valor_pago?.toString()||'',valor_estornado:c.valor_estornado?.toString()||'',data_pagamento:c.data_pagamento||'',estornado:c.estornado||false}]});
     setIsEditOpen(true);
   };
@@ -1626,12 +1666,52 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             </div>
             <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Fornecedor</Label>
-              <Input value={form.fornecedor_nome} onChange={e=>setForm(f=>({...f,fornecedor_nome:e.target.value}))} placeholder="Nome da empresa" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+              <Select value={fornecedorSelect} onValueChange={val => {
+                setFornecedorSelect(val);
+                if (val === '__new__') {
+                  setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '' }));
+                } else {
+                  const found = fornecedoresUnicos.find((f: any) => f.nome === val);
+                  setForm(f => ({
+                    ...f,
+                    fornecedor_nome: val,
+                    fornecedor_cnpj: found ? found.cnpj : ''
+                  }));
+                }
+              }}>
+                <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
+                  <SelectValue placeholder="Selecione um fornecedor" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
+                  <SelectItem value="__new__" className="text-emerald-400 font-semibold focus:bg-white/10 focus:text-emerald-400 cursor-pointer">
+                    + Novo Fornecedor
+                  </SelectItem>
+                  {fornecedoresUnicos.map((f: any) => (
+                    <SelectItem key={f.nome} value={f.nome} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                      {f.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="space-y-1">
-              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
-              <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
-            </div>
+
+            {fornecedorSelect === '__new__' ? (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Nome do Fornecedor</Label>
+                  <Input value={form.fornecedor_nome} onChange={e=>setForm(f=>({...f,fornecedor_nome:e.target.value}))} placeholder="Nome da empresa" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
+                  <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1">
+                <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
+                <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+              </div>
+            )}
             <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Conta / Banco</Label>
               <Input value={form.conta} onChange={e=>setForm(f=>({...f,conta:e.target.value}))} placeholder="Ag. / Conta / Banco" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
@@ -1802,8 +1882,6 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               {label:'Valor Solicitado',field:'valor_solicitado',type:'number',target:'parcelas[0].valor_solicitado'},
               {label:'Valor Pago',field:'valor_pago',type:'number',target:'parcelas[0].valor_pago'},
               {label:'Data Pagamento',field:'data_pagamento',type:'date',target:'parcelas[0].data_pagamento'},
-              {label:'Fornecedor',field:'fornecedor_nome',type:'text',target:'form'},
-              {label:'CNPJ/CPF',field:'fornecedor_cnpj',type:'text',target:'form'},
               {label:'Conta / Banco',field:'conta',type:'text',target:'form'},
             ].map(({label,field,type,target})=>{
               const isParc=target.startsWith('parcelas');
@@ -1819,6 +1897,54 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 </div>
               );
             })}
+            <div className="space-y-1">
+              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Fornecedor</Label>
+              <Select value={fornecedorSelect} onValueChange={val => {
+                setFornecedorSelect(val);
+                if (val === '__new__') {
+                  setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '' }));
+                } else {
+                  const found = fornecedoresUnicos.find((f: any) => f.nome === val);
+                  setForm(f => ({
+                    ...f,
+                    fornecedor_nome: val,
+                    fornecedor_cnpj: found ? found.cnpj : ''
+                  }));
+                }
+              }}>
+                <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
+                  <SelectValue placeholder="Selecione um fornecedor" />
+                </SelectTrigger>
+                <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
+                  <SelectItem value="__new__" className="text-emerald-400 font-semibold focus:bg-white/10 focus:text-emerald-400 cursor-pointer">
+                    + Novo Fornecedor
+                  </SelectItem>
+                  {fornecedoresUnicos.map((f: any) => (
+                    <SelectItem key={f.nome} value={f.nome} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                      {f.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {fornecedorSelect === '__new__' ? (
+              <>
+                <div className="space-y-1">
+                  <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Nome do Fornecedor</Label>
+                  <Input value={form.fornecedor_nome} onChange={e=>setForm(f=>({...f,fornecedor_nome:e.target.value}))} placeholder="Nome da empresa" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
+                  <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1">
+                <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
+                <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+              </div>
+            )}
             <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Centro de Custo</Label>
               <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
