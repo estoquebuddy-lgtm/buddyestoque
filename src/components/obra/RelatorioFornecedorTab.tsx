@@ -38,7 +38,7 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     }
   };
 
-  // 1. Get unique supplier list across both compras and entradas
+  // 1. Get unique supplier list across both compras and entradas (grouped case-insensitively)
   const { data: suppliers = [], isLoading: loadingSuppliers } = useQuery({
     queryKey: ['report-suppliers', obraId],
     queryFn: async () => {
@@ -47,19 +47,31 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
         supabase.from('entradas').select('fornecedor').eq('obra_id', obraId).not('fornecedor', 'is', null).neq('fornecedor', '')
       ]);
 
-      const set = new Set<string>();
+      const map = new Map<string, string>();
       (comprasRes.data || []).forEach((c: any) => {
-        if (c.fornecedor_nome) set.add(c.fornecedor_nome.trim());
+        const name = (c.fornecedor_nome || '').trim();
+        if (name) {
+          const key = name.toLowerCase();
+          if (!map.has(key) || name === name.toUpperCase()) {
+            map.set(key, name);
+          }
+        }
       });
       (entradasRes.data || []).forEach((e: any) => {
-        if (e.fornecedor) set.add(e.fornecedor.trim());
+        const name = (e.fornecedor || '').trim();
+        if (name) {
+          const key = name.toLowerCase();
+          if (!map.has(key) || name === name.toUpperCase()) {
+            map.set(key, name);
+          }
+        }
       });
 
-      return Array.from(set).sort((a, b) => a.localeCompare(b));
+      return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
     }
   });
 
-  // 2. Query compras & entradas data for the selected supplier
+  // 2. Query compras & entradas data for the selected supplier (using case-insensitive matching)
   const { data: supplierData = { compras: [], entradas: [] }, isLoading: loadingData } = useQuery({
     queryKey: ['report-supplier-data', obraId, selectedSupplier],
     enabled: !!selectedSupplier,
@@ -69,12 +81,12 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
           .from('compras')
           .select('*, compras_nfs_vinculos(compras_nfs(*))')
           .eq('obra_id', obraId)
-          .eq('fornecedor_nome', selectedSupplier),
+          .ilike('fornecedor_nome', selectedSupplier),
         supabase
           .from('entradas')
           .select('*, produtos(nome, unidade, categoria)')
           .eq('obra_id', obraId)
-          .eq('fornecedor', selectedSupplier)
+          .ilike('fornecedor', selectedSupplier)
       ]);
 
       // Mapeamento idêntico de NFs da aba Compras

@@ -632,7 +632,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       const nome = (c.fornecedor_nome || '').trim();
       const cnpj = (c.fornecedor_cnpj || '').trim();
       if (!nome) return;
-      const key = nome.toLowerCase();
+      const key = nome;
       if (!map.has(key)) {
         map.set(key, { nome, cnpj, comprasCount: 0, valorLiquido: 0 });
       }
@@ -2824,8 +2824,12 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               {(() => {
                 const newNameClean = editFornecedorForm.newNome.trim().toLowerCase();
                 const oldNameClean = editFornecedorForm.oldNome.trim().toLowerCase();
-                const isConflict = newNameClean && newNameClean !== oldNameClean && 
-                  fornecedoresListWithStats.some(f => f.nome.trim().toLowerCase() === newNameClean);
+                const isConflict = newNameClean && 
+                  (newNameClean !== oldNameClean || editFornecedorForm.newNome.trim() !== editFornecedorForm.oldNome.trim()) && 
+                  fornecedoresListWithStats.some(f => 
+                    f.nome.trim() !== editFornecedorForm.oldNome.trim() && 
+                    f.nome.trim().toLowerCase() === newNameClean
+                  );
 
                 if (isConflict) {
                   return (
