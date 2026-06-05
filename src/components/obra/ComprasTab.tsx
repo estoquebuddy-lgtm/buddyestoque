@@ -1011,11 +1011,11 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {[
-          { label:'Solicitado', value:fmt(stats.sol), sub:`${processed.length} lançamento(s)`, icon:<DollarSign className="h-5 w-5"/>, color:'text-primary', bg:'bg-primary/15 border-primary/20' },
-          { label:'Pago', value:fmt(stats.pago), sub:'Total pago', icon:<CheckCircle2 className="h-5 w-5"/>, color:'text-emerald-400', bg:'bg-emerald-500/15 border-emerald-500/20' },
-          { label:'Total NF', value:fmt(stats.nfT), sub:'Livro de Entradas', icon:<ReceiptText className="h-5 w-5"/>, color:'text-amber-400', bg:'bg-amber-500/15 border-amber-500/20' },
-          { label:'Diferença Pago×NF', value:fmt(stats.diff), sub:stats.diff<0.01?'✓ Conciliado':'A conciliar', icon:<AlertTriangle className="h-5 w-5"/>, color:stats.diff<0.01?'text-emerald-400':'text-red-400', bg:stats.diff<0.01?'bg-emerald-500/15 border-emerald-500/20':'bg-red-500/15 border-red-500/20' },
-          { label:'Documentos Fiscais', value:String(stats.docs), sub:'NFs no Livro', icon:<FileText className="h-5 w-5"/>, color:'text-blue-400', bg:'bg-blue-500/15 border-blue-500/20' },
+          { label:'Solicitado',          value:fmt(stats.sol),     sub:`${processed.length} lançamento(s)`,            icon:<DollarSign className="h-5 w-5"/>,     color:'text-primary',     bg:'bg-primary/15 border-primary/20' },
+          { label:'Pago',                value:fmt(stats.pago),    sub:'Total bruto pago',                              icon:<CheckCircle2 className="h-5 w-5"/>,   color:'text-emerald-400', bg:'bg-emerald-500/15 border-emerald-500/20' },
+          { label:'Líquido',             value:fmt(stats.netPago), sub:stats.estornado>0?`− ${fmt(stats.estornado)} estornado`:'Sem estornos', icon:<DollarSign className="h-5 w-5"/>, color:'text-cyan-300', bg:'bg-cyan-500/15 border-cyan-500/20' },
+          { label:'Total NF',            value:fmt(stats.nfT),     sub:'Livro de Entradas',                             icon:<ReceiptText className="h-5 w-5"/>,    color:'text-amber-400',   bg:'bg-amber-500/15 border-amber-500/20' },
+          { label:'Diferença Líquido×NF',value:fmt(stats.diff),    sub:stats.diff<0.01?'✓ Conciliado':'A conciliar',  icon:<AlertTriangle className="h-5 w-5"/>,  color:stats.diff<0.01?'text-emerald-400':'text-red-400', bg:stats.diff<0.01?'bg-emerald-500/15 border-emerald-500/20':'bg-red-500/15 border-red-500/20' },
         ].map(kpi=>(
           <Card key={kpi.label} className="bg-[#0e1629] border-white/5 text-white">
             <CardContent className="p-4 flex items-center justify-between gap-3">
