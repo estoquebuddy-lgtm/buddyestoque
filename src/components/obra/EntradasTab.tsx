@@ -45,6 +45,87 @@ const FERRAMENTA_CATEGORIES = [
 export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const queryClient = useQueryClient();
   const { isAdmin } = useProfile();
+
+  // 1. Queries (defined first)
+  const { data: produtos = [] } = useQuery({
+    queryKey: ['produtos', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('produtos')
+        .select('id, nome, unidade, categoria, estoque_atual, estoque_minimo')
+        .eq('obra_id', obraId)
+        .order('nome');
+      return data || [];
+    },
+    enabled: !!obraId
+  });
+  
+  const { data: entradas = [], isLoading } = useQuery({
+    queryKey: ['entradas', obraId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('entradas')
+        .select(`
+          *,
+          produtos(nome, unidade),
+          comprado_por:profiles!entradas_comprado_por_id_fkey(email, apelido),
+          responsavel:profiles!entradas_responsavel_id_fkey(email, apelido)
+        `)
+        .eq('obra_id', obraId)
+        .order('data', { ascending: false });
+      if (error) {
+        // Fallback query if migration has not been applied yet
+        const { data: fallbackData } = await supabase
+          .from('entradas')
+          .select('*, produtos(nome, unidade)')
+          .eq('obra_id', obraId)
+          .order('data', { ascending: false });
+        return fallbackData || [];
+      }
+      return data || [];
+    },
+    enabled: !!obraId
+  });
+
+  const { data: fornecedores = [] } = useQuery({
+    queryKey: ['fornecedores', obraId],
+    queryFn: async () => {
+      const [comprasRes, entradasRes] = await Promise.all([
+        supabase.from('compras').select('fornecedor_nome').eq('obra_id', obraId).not('fornecedor_nome', 'is', null).neq('fornecedor_nome', ''),
+        supabase.from('entradas').select('fornecedor').eq('obra_id', obraId).not('fornecedor', 'is', null).neq('fornecedor', '')
+      ]);
+
+      const map = new Map<string, string>();
+      (comprasRes.data || []).forEach((c: any) => {
+        const name = (c.fornecedor_nome || '').trim();
+        if (name) {
+          const key = name.toLowerCase();
+          if (!map.has(key) || name === name.toUpperCase()) {
+            map.set(key, name);
+          }
+        }
+      });
+      (entradasRes.data || []).forEach((e: any) => {
+        const name = (e.fornecedor || '').trim();
+        if (name) {
+          const key = name.toLowerCase();
+          if (!map.has(key) || name === name.toUpperCase()) {
+            map.set(key, name);
+          }
+        }
+      });
+
+      return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+    },
+    enabled: !!obraId,
+  });
+
+  // 2. Safe array wrappers derived from queries
+  const safeEntradas = Array.isArray(entradas) ? entradas : [];
+  const safeProdutos = Array.isArray(produtos) ? produtos : [];
+  const safeFornecedores = Array.isArray(fornecedores) ? fornecedores : [];
+
+  // 3. States and hooks
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -107,83 +188,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
-
-  const { data: produtos = [] } = useQuery({
-    queryKey: ['produtos', obraId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('produtos')
-        .select('id, nome, unidade, categoria, estoque_atual, estoque_minimo')
-        .eq('obra_id', obraId)
-        .order('nome');
-      return data || [];
-    },
-    enabled: !!obraId
-  });
-  
-  const { data: entradas = [], isLoading } = useQuery({
-    queryKey: ['entradas', obraId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('entradas')
-        .select(`
-          *,
-          produtos(nome, unidade),
-          comprado_por:profiles!entradas_comprado_por_id_fkey(email, apelido),
-          responsavel:profiles!entradas_responsavel_id_fkey(email, apelido)
-        `)
-        .eq('obra_id', obraId)
-        .order('data', { ascending: false });
-      if (error) {
-        // Fallback query if migration has not been applied yet
-        const { data: fallbackData } = await supabase
-          .from('entradas')
-          .select('*, produtos(nome, unidade)')
-          .eq('obra_id', obraId)
-          .order('data', { ascending: false });
-        return fallbackData || [];
-      }
-      return data || [];
-    },
-    enabled: !!obraId
-  });
-
-  const safeEntradas = Array.isArray(entradas) ? entradas : [];
-  const safeProdutos = Array.isArray(produtos) ? produtos : [];
-  const safeFornecedores = Array.isArray(fornecedores) ? fornecedores : [];
-
-  const { data: fornecedores = [] } = useQuery({
-    queryKey: ['fornecedores', obraId],
-    queryFn: async () => {
-      const [comprasRes, entradasRes] = await Promise.all([
-        supabase.from('compras').select('fornecedor_nome').eq('obra_id', obraId).not('fornecedor_nome', 'is', null).neq('fornecedor_nome', ''),
-        supabase.from('entradas').select('fornecedor').eq('obra_id', obraId).not('fornecedor', 'is', null).neq('fornecedor', '')
-      ]);
-
-      const map = new Map<string, string>();
-      (comprasRes.data || []).forEach((c: any) => {
-        const name = (c.fornecedor_nome || '').trim();
-        if (name) {
-          const key = name.toLowerCase();
-          if (!map.has(key) || name === name.toUpperCase()) {
-            map.set(key, name);
-          }
-        }
-      });
-      (entradasRes.data || []).forEach((e: any) => {
-        const name = (e.fornecedor || '').trim();
-        if (name) {
-          const key = name.toLowerCase();
-          if (!map.has(key) || name === name.toUpperCase()) {
-            map.set(key, name);
-          }
-        }
-      });
-
-      return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
-    },
-    enabled: !!obraId,
-  });
 
   useEffect(() => {
     const channel = supabase.channel('entradas-changes')
