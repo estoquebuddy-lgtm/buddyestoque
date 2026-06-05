@@ -66,6 +66,46 @@ const TIPO_BADGE: Record<string, string> = {
 
 const PARCELA_PRESETS = ['ÚNICA', '50% INICIAL', '50% FINAL', '1/2', '2/2'];
 
+export const CENTROS_CUSTO = [
+  { value: 1,  label: '1. SERVIÇOS PRELIMINARES' },
+  { value: 2,  label: '2. MOVIMENTO DE TERRA' },
+  { value: 3,  label: '3. SERVIÇOS AUXILIARES' },
+  { value: 4,  label: '4. FUNDAÇÕES E ESTRUTURAS' },
+  { value: 5,  label: '5. PAREDES E PAINÉIS' },
+  { value: 6,  label: '6. MURO EXTERNO DE ESTACAS DE SABIÁ' },
+  { value: 7,  label: '7. PISOS' },
+  { value: 8,  label: '8. FORROS' },
+  { value: 9,  label: '9. REVESTIMENTOS' },
+  { value: 10, label: '10. IMPERMEABILIZAÇÃO' },
+  { value: 11, label: '11. COBERTURA' },
+  { value: 12, label: '12. ESQUADRIAS E FECHAMENTOS' },
+  { value: 13, label: '13. VIDROS' },
+  { value: 14, label: '14. INSTALAÇÕES HIDROSSANITÁRIAS' },
+  { value: 15, label: '15. INSTALAÇÕES ELÉTRICAS' },
+  { value: 16, label: '16. INSTALAÇÕES DE LÓGICA' },
+  { value: 17, label: '17. INSTALAÇÕES DE GÁS' },
+  { value: 18, label: '18. INSTALAÇÕES AVAC' },
+  { value: 19, label: '19. INSTALAÇÕES MECÂNICAS' },
+  { value: 20, label: '20. ILUMINAÇÃO' },
+  { value: 21, label: '21. BANCADAS E ARMÁRIOS DE ALVENARIA' },
+  { value: 22, label: '22. LOUÇAS E METAIS' },
+  { value: 23, label: '23. AMBIENTES ESPECIAIS' },
+  { value: 24, label: '24. PISCINAS' },
+  { value: 25, label: '25. FERRAMENTAS E EQUIPAMENTOS' },
+  { value: 26, label: '26. INSUMOS DE FERRAMENTAS GERAIS' },
+  { value: 27, label: "27. EQUIPAMENTOS DE PROTEÇÃO INDIVIDUAIS EPI's" },
+  { value: 28, label: '28. FINALIZAÇÃO E LIMPEZA FINAL DE OBRA' },
+  { value: 29, label: '29. GESTÃO ADMINISTRATIVA DE OBRA' },
+  { value: 30, label: '30. IMPOSTOS SOBRE MÃO DE OBRA' },
+  { value: 31, label: '31. NÃO PREVISTO EM ORÇAMENTO' }
+];
+
+export const ccLabel = (n?: number | null) => {
+  const num = (!n || n === 0) ? 31 : n;
+  return CENTROS_CUSTO.find(c => c.value === num)?.label || '31. NÃO PREVISTO EM ORÇAMENTO';
+};
+
+
 // ── Row conciliation state ────────────────────────────────────────────────────
 function getConf(c: any): 'ok' | 'warn' | 'missing' | 'estornado' {
   if (c.estornado) return 'estornado';
@@ -645,23 +685,38 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   };
   const handlePreencherEmail = (p:any) => {
     const n=Math.max(1,Math.min(3,p.pagamentos.length));
-    setForm(f=>({...f,email_titulo:p.titulo||'',tipo_solicitacao:p.tipo||'Materiais',fornecedor_nome:p.fornecedor||'',fornecedor_cnpj:p.cnpj||'',conta:p.conta||'',centro_custo:p.cc||'',cc_desc:p.ccDesc||'',obs:p.obs||'',qtd_parcelas:n,parcelas:p.pagamentos.slice(0,3).map((pg:any)=>({parcela:pg.parcela||'1/1',data_envio:pg.envio||'',valor_solicitado:String(pg.solicitado||''),valor_pago:String(pg.pago||''),data_pagamento:pg.dataPgto||'',estornado:pg.estornado||false}))}));
+    let ccVal = p.cc || '';
+    if (ccVal === '0' || ccVal === 0) ccVal = '31';
+    let ccD = p.ccDesc || 'Não previsto em orçamento';
+    if (ccVal) {
+      const parsedCc = parseInt(ccVal.toString());
+      const standardCc = CENTROS_CUSTO.find(c => c.value === parsedCc);
+      if (standardCc) {
+        ccD = standardCc.label.replace(/^\d+\.\s*/, '');
+      }
+    }
+    setForm(f=>({...f,email_titulo:p.titulo||'',tipo_solicitacao:p.tipo||'Materiais',fornecedor_nome:p.fornecedor||'',fornecedor_cnpj:p.cnpj||'',conta:p.conta||'',centro_custo:ccVal.toString(),cc_desc:ccD,obs:p.obs||'',qtd_parcelas:n,parcelas:p.pagamentos.slice(0,3).map((pg:any)=>({parcela:pg.parcela||'1/1',data_envio:pg.envio||'',valor_solicitado:String(pg.solicitado||''),valor_pago:String(pg.pago||''),data_pagamento:pg.dataPgto||'',estornado:pg.estornado||false}))}));
     setIsColarOpen(false);setIsCreateOpen(true);toast.success('Formulário preenchido!');
   };
 
   // Submit
   const handleCreate = () => {
-    const base={obra_id:obraId,status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,fornecedor_dados:form.fornecedor_dados||null,conta:form.conta||null,centro_custo:form.centro_custo?parseInt(form.centro_custo):null,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null};
+    let ccInt = form.centro_custo ? parseInt(form.centro_custo) : null;
+    if (ccInt === 0) ccInt = 31;
+    const base={obra_id:obraId,status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,fornecedor_dados:form.fornecedor_dados||null,conta:form.conta||null,centro_custo:ccInt,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null};
     createMut.mutate(form.parcelas.map((p:any)=>({...base,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,valor_estornado:p.valor_estornado?parseFloat(p.valor_estornado):0,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false})));
   };
   const handleEdit = () => {
     if(!selectedCompra)return;
     const p=form.parcelas[0]||{};
-    updateMut.mutate({id:selectedCompra.id,fields:{status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,conta:form.conta||null,centro_custo:form.centro_custo?parseInt(form.centro_custo):null,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,valor_estornado:p.valor_estornado?parseFloat(p.valor_estornado):0,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false}});
+    let ccInt = form.centro_custo ? parseInt(form.centro_custo) : null;
+    if (ccInt === 0) ccInt = 31;
+    updateMut.mutate({id:selectedCompra.id,fields:{status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,conta:form.conta||null,centro_custo:ccInt,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,valor_estornado:p.valor_estornado?parseFloat(p.valor_estornado):0,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false}});
   };
   const openEdit = (c:any) => {
     setSelectedCompra(c);
-    setForm({...emptyForm(),status:c.status,email_titulo:c.email_titulo||'',email_link:c.email_link||'',fornecedor_nome:c.fornecedor_nome||'',fornecedor_cnpj:c.fornecedor_cnpj||'',fornecedor_dados:c.fornecedor_dados||'',conta:c.conta||'',centro_custo:c.centro_custo?.toString()||'',cc_desc:c.cc_desc||'',obs:c.obs||'',tipo_solicitacao:c.tipo_solicitacao||'Materiais',qtd_parcelas:1,parcelas:[{parcela:c.parcela||'1/1',data_envio:c.data_envio||'',valor_solicitado:c.valor_solicitado?.toString()||'',valor_pago:c.valor_pago?.toString()||'',valor_estornado:c.valor_estornado?.toString()||'',data_pagamento:c.data_pagamento||'',estornado:c.estornado||false}]});
+    let ccVal = c.centro_custo === 0 ? '31' : (c.centro_custo?.toString() || '');
+    setForm({...emptyForm(),status:c.status,email_titulo:c.email_titulo||'',email_link:c.email_link||'',fornecedor_nome:c.fornecedor_nome||'',fornecedor_cnpj:c.fornecedor_cnpj||'',fornecedor_dados:c.fornecedor_dados||'',conta:c.conta||'',centro_custo:ccVal,cc_desc:c.cc_desc||'',obs:c.obs||'',tipo_solicitacao:c.tipo_solicitacao||'Materiais',qtd_parcelas:1,parcelas:[{parcela:c.parcela||'1/1',data_envio:c.data_envio||'',valor_solicitado:c.valor_solicitado?.toString()||'',valor_pago:c.valor_pago?.toString()||'',valor_estornado:c.valor_estornado?.toString()||'',data_pagamento:c.data_pagamento||'',estornado:c.estornado||false}]});
     setIsEditOpen(true);
   };
 
@@ -939,7 +994,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         'Valor Estornado': valEst,
         'Líquido (Pago-Est.)': valPago - valEst,
         'Data Pagamento':  fmtDate(c.data_pagamento),
-        'Centro Custo':    c.centro_custo||'',
+        'Centro Custo':    ccLabel(c.centro_custo),
         'Desc CC':         c.cc_desc||'',
         'Tipo':            c.tipo_solicitacao||'',
         'NFs':             (c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),
@@ -966,7 +1021,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       body:processed.map((c:any,i:number)=>{
         const valPago=c.valor_pago||0;
         const valEst=c.valor_estornado||0;
-        return [i+1,c.status,c.parcela||'',fmtDate(c.data_envio),fmt(c.valor_solicitado),c.email_titulo||'',c.fornecedor_nome||'',fmt(valPago),valEst>0?fmt(valEst):'—',fmt(valPago-valEst),fmtDate(c.data_pagamento),`${c.centro_custo||''} ${c.cc_desc||''}`.trim(),c.tipo_solicitacao||'',(c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),c.obs||''];
+        return [i+1,c.status,c.parcela||'',fmtDate(c.data_envio),fmt(c.valor_solicitado),c.email_titulo||'',c.fornecedor_nome||'',fmt(valPago),valEst>0?fmt(valEst):'—',fmt(valPago-valEst),fmtDate(c.data_pagamento),ccLabel(c.centro_custo),c.tipo_solicitacao||'',(c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),c.obs||''];
       }),
       styles:{fontSize:7,cellPadding:1.5},
       headStyles:{fillColor:[14,22,41]},
@@ -1199,9 +1254,11 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                               📎 NFs
                             </Button>
                           </td>
-                          <td className="px-3 py-2.5">
-                            <p className="font-semibold text-white/70">{c.centro_custo||'—'}</p>
-                            {c.cc_desc&&<p className="text-[9px] text-white/60 truncate max-w-[100px]">{c.cc_desc}</p>}
+                          <td className="px-3 py-2.5 max-w-[180px]">
+                            <p className="font-semibold text-white/70 truncate" title={ccLabel(c.centro_custo)}>{ccLabel(c.centro_custo)}</p>
+                            {c.cc_desc && c.cc_desc !== ccLabel(c.centro_custo).replace(/^\d+\.\s*/, '') && (
+                              <p className="text-[9px] text-white/60 truncate" title={c.cc_desc}>{c.cc_desc}</p>
+                            )}
                           </td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-400 hover:bg-emerald-400/10" onClick={()=>{setSelectedCompra(c);setEstoqueForm(f=>({...f,quantidade:'1',valor_unitario:c.valor_pago?c.valor_pago.toString():(c.valor_solicitado?c.valor_solicitado.toString():'')}));setIsEstoqueOpen(true);}} title="Entrar em estoque"><Boxes className="h-3.5 w-3.5"/></Button>
@@ -1541,7 +1598,25 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             </div>
             <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Centro de Custo</Label>
-              <Input type="number" value={form.centro_custo} onChange={e=>setForm(f=>({...f,centro_custo:e.target.value}))} placeholder="0" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+              <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
+                const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(val));
+                setForm(f => ({
+                  ...f,
+                  centro_custo: val,
+                  cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento'
+                }));
+              }}>
+                <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
+                  <SelectValue placeholder="Selecione um Centro de Custo" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] bg-[#0e1629] border-white/10 text-white">
+                  {CENTROS_CUSTO.map(cc => (
+                    <SelectItem key={cc.value} value={cc.value.toString()} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                      {cc.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Descrição do CC</Label>
@@ -1695,8 +1770,6 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               {label:'CNPJ/CPF',field:'fornecedor_cnpj',type:'text',target:'form'},
               {label:'Conta / Banco',field:'conta',type:'text',target:'form'},
               {label:'Link E-mail',field:'email_link',type:'text',target:'form'},
-              {label:'Centro de Custo',field:'centro_custo',type:'number',target:'form'},
-              {label:'Desc. CC',field:'cc_desc',type:'text',target:'form'},
             ].map(({label,field,type,target})=>{
               const isParc=target.startsWith('parcelas');
               const val=isParc?(form.parcelas[0] as any)?.[field]||'':(form as any)[field]||'';
@@ -1711,6 +1784,32 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 </div>
               );
             })}
+            <div className="space-y-1">
+              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Centro de Custo</Label>
+              <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
+                const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(val));
+                setForm(f => ({
+                  ...f,
+                  centro_custo: val,
+                  cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento'
+                }));
+              }}>
+                <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
+                  <SelectValue placeholder="Selecione um Centro de Custo" />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] bg-[#0e1629] border-white/10 text-white">
+                  {CENTROS_CUSTO.map(cc => (
+                    <SelectItem key={cc.value} value={cc.value.toString()} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                      {cc.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Desc. CC</Label>
+              <Input value={form.cc_desc} onChange={e=>setForm(f=>({...f,cc_desc:e.target.value}))} className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
+            </div>
             {/* Estorno parcial – edit form */}
             <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-blue-300/60 font-bold">Valor Estornado</Label>
