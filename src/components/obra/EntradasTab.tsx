@@ -51,8 +51,23 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewNota, setViewNota] = useState<string | null>(null);
-  const [xmlOpen, setXmlOpen] = useState(false);
   const [subTab, setSubTab] = useState<'almoxarifado' | 'comprados'>('almoxarifado');
+
+  const [fornecedorSelect, setFornecedorSelect] = useState('__new__');
+
+  useEffect(() => {
+    if (form.fornecedor) {
+      const exists = fornecedores.some((f: any) => f.toLowerCase() === form.fornecedor.trim().toLowerCase());
+      if (exists) {
+        const match = fornecedores.find((f: any) => f.toLowerCase() === form.fornecedor.trim().toLowerCase());
+        setFornecedorSelect(match || form.fornecedor);
+      } else {
+        setFornecedorSelect('__new__');
+      }
+    } else {
+      setFornecedorSelect('__new__');
+    }
+  }, [form.fornecedor, fornecedores]);
 
   // Entry type: 'material' or 'ferramenta'
   const [entryType, setEntryType] = useState<'material' | 'ferramenta'>('material');
@@ -123,15 +138,32 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('entradas')
-        .select('fornecedor')
-        .eq('obra_id', obraId)
-        .not('fornecedor', 'is', null)
-        .neq('fornecedor', '');
-      if (!data) return [];
-      const unique = Array.from(new Set(data.map((d: any) => d.fornecedor.trim()))).filter(Boolean);
-      return unique.sort((a: any, b: any) => a.localeCompare(b));
+      const [comprasRes, entradasRes] = await Promise.all([
+        supabase.from('compras').select('fornecedor_nome').eq('obra_id', obraId).not('fornecedor_nome', 'is', null).neq('fornecedor_nome', ''),
+        supabase.from('entradas').select('fornecedor').eq('obra_id', obraId).not('fornecedor', 'is', null).neq('fornecedor', '')
+      ]);
+
+      const map = new Map<string, string>();
+      (comprasRes.data || []).forEach((c: any) => {
+        const name = (c.fornecedor_nome || '').trim();
+        if (name) {
+          const key = name.toLowerCase();
+          if (!map.has(key) || name === name.toUpperCase()) {
+            map.set(key, name);
+          }
+        }
+      });
+      (entradasRes.data || []).forEach((e: any) => {
+        const name = (e.fornecedor || '').trim();
+        if (name) {
+          const key = name.toLowerCase();
+          if (!map.has(key) || name === name.toUpperCase()) {
+            map.set(key, name);
+          }
+        }
+      });
+
+      return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
     },
     enabled: !!obraId,
   });
@@ -503,13 +535,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const currentTabList = subTab === 'almoxarifado' ? almoxarifadoList : compradosList;
   const currentFilteredList = currentTabList.filter(matchesSearch);
 
-  const canSubmit = entryType === 'ferramenta'
+  const canSubmit = (entryType === 'ferramenta'
     ? (editingId
         ? !!form.quantidade && !!form.valor_unitario
         : !!newFerramenta.nome.trim() && !!form.quantidade && !!form.valor_unitario)
     : isNewProduct
       ? !!newProduct.nome.trim() && !!form.quantidade && !!form.valor_unitario
-      : !!form.produto_id && !!form.quantidade && !!form.valor_unitario;
+      : (!!form.produto_id && !!form.quantidade && !!form.valor_unitario)) && !!form.fornecedor?.trim();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1094,42 +1126,40 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               )}
 
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground ml-1">Fornecedor (opcional)</label>
-                <div className="relative">
+                <label className="text-xs text-muted-foreground ml-1">Fornecedor *</label>
+                <Select value={fornecedorSelect} onValueChange={val => {
+                  setFornecedorSelect(val);
+                  if (val === '__new__') {
+                    setForm(f => ({ ...f, fornecedor: '' }));
+                  } else {
+                    setForm(f => ({ ...f, fornecedor: val }));
+                  }
+                }}>
+                  <SelectTrigger className="w-full bg-[#0a1020] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-12 text-sm">
+                    <SelectValue placeholder="Selecione um fornecedor..." />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
+                    <SelectItem value="__new__" className="text-emerald-400 font-semibold focus:bg-white/10 focus:text-emerald-400 cursor-pointer">
+                      + Novo Fornecedor
+                    </SelectItem>
+                    {fornecedores.map((f: any) => (
+                      <SelectItem key={f} value={f} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                        {f}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                {fornecedorSelect === '__new__' && (
                   <Input 
-                    placeholder="De onde veio?" 
+                    placeholder="Nome do Novo Fornecedor" 
                     value={form.fornecedor} 
-                    onChange={e => {
-                      setForm(f => ({ ...f, fornecedor: e.target.value }));
-                      setShowFornecedorList(true);
-                    }} 
-                    onFocus={() => setShowFornecedorList(true)}
-                    onBlur={() => setTimeout(() => setShowFornecedorList(false), 200)}
-                    className="h-12" 
+                    onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
+                    className="h-12 mt-1.5"
                     autoComplete="off"
+                    required
                   />
-                  {showFornecedorList && fornecedores.filter((f: any) => f.toLowerCase().includes(form.fornecedor.toLowerCase()) && f !== form.fornecedor).length > 0 && (
-                    <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                      {fornecedores
-                        .filter((f: any) => f.toLowerCase().includes(form.fornecedor.toLowerCase()) && f !== form.fornecedor)
-                        .map((f: any) => (
-                          <button
-                            key={f}
-                            type="button"
-                            className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors flex items-center text-sm"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setForm(prev => ({ ...prev, fornecedor: f }));
-                              setShowFornecedorList(false);
-                            }}
-                          >
-                            <span className="font-medium truncate text-white">{f}</span>
-                          </button>
-                        ))
-                      }
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
               <div className="space-y-1">
