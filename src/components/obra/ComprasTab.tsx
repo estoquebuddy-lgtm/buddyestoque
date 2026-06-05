@@ -199,7 +199,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedTipo, setSelectedTipo] = useState('all');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
-  const [sortBy, setSortBy] = useState<'envio'|'pagamento'>('envio');
+  const [sortBy, setSortBy] = useState<'envio'|'pagamento'|'solicitado'>('envio');
   const [parcelaOtros, setParcelaOtros] = useState<boolean[]>([false,false,false]);
 
   // Kanban drag-and-drop
@@ -531,6 +531,11 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     if(search.trim()){const t=normal(search);r=r.filter((c:any)=>normal(c.email_titulo||'').includes(t)||normal(c.fornecedor_nome||'').includes(t)||normal(c.obs||'').includes(t));}
     // Sorting
     r.sort((a:any,b:any)=>{
+      if (sortBy === 'solicitado') {
+        const va = a.valor_solicitado || 0;
+        const vb = b.valor_solicitado || 0;
+        return sortDir === 'asc' ? va - vb : vb - va;
+      }
       const field = sortBy==='envio' ? 'data_envio' : 'data_pagamento';
       const da = a[field]||'';
       const db = b[field]||'';
@@ -1171,6 +1176,30 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                                 }`}
                               >
                                 Envio {active ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
+                              </button>
+                            </th>
+                          );
+                        }
+                        if (h === 'Solicitado') {
+                          const active = sortBy === 'solicitado';
+                          return (
+                            <th key={h} className="px-3 py-2 text-right whitespace-nowrap font-bold">
+                              <button
+                                onClick={() => {
+                                  if (active) {
+                                    setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+                                  } else {
+                                    setSortBy('solicitado');
+                                    setSortDir('desc');
+                                  }
+                                }}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full transition-all text-[10px] font-bold ${
+                                  active 
+                                    ? 'bg-white text-zinc-950 font-extrabold shadow-sm' 
+                                    : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                                }`}
+                              >
+                                Solicitado {active ? (sortDir === 'asc' ? '↑' : '↓') : '⇅'}
                               </button>
                             </th>
                           );
