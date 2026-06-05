@@ -57,10 +57,10 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [fornecedorSelect, setFornecedorSelect] = useState('__new__');
 
   useEffect(() => {
-    if (form.fornecedor && Array.isArray(fornecedores)) {
-      const exists = fornecedores.some((f: any) => typeof f === 'string' && f.toLowerCase() === form.fornecedor.trim().toLowerCase());
+    if (form.fornecedor) {
+      const exists = safeFornecedores.some((f: any) => typeof f === 'string' && f.toLowerCase() === form.fornecedor.trim().toLowerCase());
       if (exists) {
-        const match = fornecedores.find((f: any) => typeof f === 'string' && f.toLowerCase() === form.fornecedor.trim().toLowerCase());
+        const match = safeFornecedores.find((f: any) => typeof f === 'string' && f.toLowerCase() === form.fornecedor.trim().toLowerCase());
         setFornecedorSelect(match || form.fornecedor);
       } else {
         setFornecedorSelect('__new__');
@@ -68,7 +68,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     } else {
       setFornecedorSelect('__new__');
     }
-  }, [form.fornecedor, fornecedores]);
+  }, [form.fornecedor, safeFornecedores]);
 
   // Entry type: 'material' or 'ferramenta'
   const [entryType, setEntryType] = useState<'material' | 'ferramenta'>('material');
@@ -108,7 +108,18 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
 
-  const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome, unidade, categoria, estoque_atual, estoque_minimo').eq('obra_id', obraId).order('nome'); return data || []; } });
+  const { data: produtos = [] } = useQuery({
+    queryKey: ['produtos', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('produtos')
+        .select('id, nome, unidade, categoria, estoque_atual, estoque_minimo')
+        .eq('obra_id', obraId)
+        .order('nome');
+      return data || [];
+    },
+    enabled: !!obraId
+  });
   
   const { data: entradas = [], isLoading } = useQuery({
     queryKey: ['entradas', obraId],
@@ -133,8 +144,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         return fallbackData || [];
       }
       return data || [];
-    }
+    },
+    enabled: !!obraId
   });
+
+  const safeEntradas = Array.isArray(entradas) ? entradas : [];
+  const safeProdutos = Array.isArray(produtos) ? produtos : [];
+  const safeFornecedores = Array.isArray(fornecedores) ? fornecedores : [];
 
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
@@ -178,13 +194,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [obraId, queryClient]);
 
-  const filteredProducts = produtos.filter((p: any) =>
-    p.nome.toLowerCase().includes(productSearch.toLowerCase())
+  const filteredProducts = safeProdutos.filter((p: any) =>
+    p && typeof p.nome === 'string' && p.nome.toLowerCase().includes((productSearch || '').toLowerCase())
   );
 
   const selectedProductName = isNewProduct
     ? newProduct.nome
-    : produtos.find((p: any) => p.id === form.produto_id)?.nome || '';
+    : safeProdutos.find((p: any) => p.id === form.produto_id)?.nome || '';
 
   // Save entry for MATERIAL
   const saveMaterial = useMutation({
@@ -201,7 +217,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           newProduct: { ...newProduct },
           quantidade: form.quantidade,
           valor_unitario: form.valor_unitario,
-          selectedProductName: isNewProduct ? newProduct.nome : (produtos.find((p: any) => p.id === form.produto_id)?.nome || ''),
+          selectedProductName: isNewProduct ? newProduct.nome : (safeProdutos.find((p: any) => p.id === form.produto_id)?.nome || ''),
         });
       }
 
@@ -235,7 +251,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           });
         }
 
-        const prod = produtos.find((p: any) => p.id === produtoId) || { nome: item.newProduct.nome, unidade: item.newProduct.unidade || 'un' };
+        const prod = safeProdutos.find((p: any) => p.id === produtoId) || { nome: item.newProduct.nome, unidade: item.newProduct.unidade || 'un' };
 
         const payload = {
           obra_id: obraId, produto_id: produtoId,
@@ -386,7 +402,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { data: { user } } = await supabase.auth.getUser();
-      const ent = entradas.find((e: any) => e.id === id);
+      const ent = safeEntradas.find((e: any) => e.id === id);
       const isTool = isFerramenta(ent);
 
       const { error } = await supabase.from('entradas').delete().eq('id', id);
@@ -526,13 +542,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     (e.observacao && e.observacao.toLowerCase().includes(term))
   );
 
-  const filtered = entradas.filter(matchesSearch);
+  const filtered = safeEntradas.filter(matchesSearch);
 
   const isFerramenta = (e: any) => e.observacao?.startsWith('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
 
   // Sub-tab lists: split by status_entrega
-  const almoxarifadoList = entradas.filter((e: any) => !e.status_entrega || e.status_entrega === 'REALIZADO');
-  const compradosList = entradas.filter((e: any) => e.status_entrega === 'PENDENTE');
+  const almoxarifadoList = safeEntradas.filter((e: any) => !e.status_entrega || e.status_entrega === 'REALIZADO');
+  const compradosList = safeEntradas.filter((e: any) => e.status_entrega === 'PENDENTE');
   const currentTabList = subTab === 'almoxarifado' ? almoxarifadoList : compradosList;
   const currentFilteredList = currentTabList.filter(matchesSearch);
 
@@ -891,7 +907,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 {editingId ? (
                   <Select value={form.produto_id} onValueChange={v => setForm(f => ({ ...f, produto_id: v }))}>
                     <SelectTrigger className="h-12"><SelectValue placeholder="Selecione o produto" /></SelectTrigger>
-                    <SelectContent>{produtos.filter((p: any) => !p.nome.startsWith('[FERRAMENTA]')).map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+                    <SelectContent>{safeProdutos.filter((p: any) => p && typeof p.nome === 'string' && !p.nome.startsWith('[FERRAMENTA]')).map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
                   <div className="relative">
@@ -924,10 +940,10 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                             <p className="font-medium text-sm text-foreground">
                               {isNewProduct ? (newProduct.nome ? `Novo: ${newProduct.nome}` : 'Novo Produto') : selectedProductName}
                             </p>
-                            {!isNewProduct && produtos.find((p: any) => p.id === form.produto_id) && (
+                            {!isNewProduct && safeProdutos.find((p: any) => p.id === form.produto_id) && (
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                Estoque atual: {produtos.find((p: any) => p.id === form.produto_id)?.estoque_atual || 0} {produtos.find((p: any) => p.id === form.produto_id)?.unidade} |
-                                Mínimo: {produtos.find((p: any) => p.id === form.produto_id)?.estoque_minimo || 0}
+                                Estoque atual: {safeProdutos.find((p: any) => p.id === form.produto_id)?.estoque_atual || 0} {safeProdutos.find((p: any) => p.id === form.produto_id)?.unidade} |
+                                Mínimo: {safeProdutos.find((p: any) => p.id === form.produto_id)?.estoque_minimo || 0}
                               </p>
                             )}
                           </div>
@@ -943,7 +959,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
                     {showProductList && !isNewProduct && (
                       <div ref={productListRef} className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                        {filteredProducts.filter((p: any) => !p.nome.startsWith('[FERRAMENTA]')).map((p: any) => (
+                        {filteredProducts.filter((p: any) => p && typeof p.nome === 'string' && !p.nome.startsWith('[FERRAMENTA]')).map((p: any) => (
                           <button
                             key={p.id} type="button"
                             className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors flex items-center gap-3 text-sm"
@@ -1143,7 +1159,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     <SelectItem value="__new__" className="text-emerald-400 font-semibold focus:bg-white/10 focus:text-emerald-400 cursor-pointer">
                       + Novo Fornecedor
                     </SelectItem>
-                    {Array.isArray(fornecedores) && fornecedores.map((f: any) => (
+                    {safeFornecedores.map((f: any) => (
                       <SelectItem key={f} value={f} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
                         {f}
                       </SelectItem>

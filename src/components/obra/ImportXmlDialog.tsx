@@ -73,7 +73,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
         .not('fornecedor', 'is', null)
         .neq('fornecedor', '');
       if (!data) return [];
-      const unique = Array.from(new Set(data.map((d: any) => d.fornecedor.trim()))).filter(Boolean);
+      const unique = Array.from(new Set(data.map((d: any) => String(d.fornecedor || '').trim()))).filter(Boolean);
       return unique.sort((a: any, b: any) => a.localeCompare(b));
     },
     enabled: !!obraId && open,
@@ -595,10 +595,10 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
                     className="h-9 text-sm" 
                     autoComplete="off"
                   />
-                  {showFornecedorList && fornecedores.filter((f: any) => f.toLowerCase().includes(fornecedor.toLowerCase()) && f !== fornecedor).length > 0 && (
+                  {showFornecedorList && Array.isArray(fornecedores) && fornecedores.filter((f: any) => typeof f === 'string' && f.toLowerCase().includes((fornecedor || '').toLowerCase()) && f !== fornecedor).length > 0 && (
                     <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                       {fornecedores
-                        .filter((f: any) => f.toLowerCase().includes(fornecedor.toLowerCase()) && f !== fornecedor)
+                        .filter((f: any) => typeof f === 'string' && f.toLowerCase().includes((fornecedor || '').toLowerCase()) && f !== fornecedor)
                         .map((f: any) => (
                           <button
                             key={f}
