@@ -90,6 +90,28 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     enabled: !!obraId
   });
 
+  const { data: metrics } = useQuery({
+    queryKey: ['entradas', obraId, 'metrics'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('entradas')
+        .select('quantidade, status_entrega')
+        .eq('obra_id', obraId);
+      
+      const safeData = data || [];
+      const totalAlmoxarifadoCount = safeData.filter(e => !e.status_entrega || e.status_entrega === 'REALIZADO').length;
+      const totalAlmoxarifadoQtd = safeData.filter(e => !e.status_entrega || e.status_entrega === 'REALIZADO').reduce((acc, e) => acc + Number(e.quantidade), 0);
+      const totalCompradosCount = safeData.filter(e => e.status_entrega === 'PENDENTE').length;
+      const totalCompradosQtd = safeData.filter(e => e.status_entrega === 'PENDENTE').reduce((acc, e) => acc + Number(e.quantidade), 0);
+      
+      return {
+        almoxarifado: { count: totalAlmoxarifadoCount, qty: totalAlmoxarifadoQtd },
+        comprados: { count: totalCompradosCount, qty: totalCompradosQtd }
+      };
+    },
+    enabled: !!obraId
+  });
+
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
     queryFn: async () => {
@@ -754,7 +776,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             </p>
             <div className="flex items-end gap-2">
               <span className="text-3xl font-display font-bold text-white leading-none">
-                {currentTabList.length}
+                {subTab === 'almoxarifado' ? metrics?.almoxarifado.count ?? 0 : metrics?.comprados.count ?? 0}
               </span>
               <span className="text-xs text-white/30 mb-1">registros</span>
             </div>
@@ -763,7 +785,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Volume Total</p>
             <div className="flex items-end gap-2">
               <span className="text-3xl font-display font-bold text-primary-foreground leading-none">
-                {currentTabList.reduce((acc: number, e: any) => acc + Number(e.quantidade), 0)}
+                {subTab === 'almoxarifado' ? metrics?.almoxarifado.qty ?? 0 : metrics?.comprados.qty ?? 0}
               </span>
               <span className="text-xs text-white/30 mb-1">unidades</span>
             </div>

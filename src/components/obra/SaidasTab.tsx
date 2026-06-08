@@ -53,6 +53,21 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
     }
   });
 
+  const { data: metrics } = useQuery({
+    queryKey: ['saidas', obraId, 'metrics'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('saidas')
+        .select('quantidade')
+        .eq('obra_id', obraId);
+      const safeData = data || [];
+      const totalCount = safeData.length;
+      const totalQty = safeData.reduce((acc: number, s: any) => acc + Number(s.quantidade), 0);
+      return { count: totalCount, qty: totalQty };
+    },
+    enabled: !!obraId
+  });
+
   useEffect(() => {
     if (!obraId) return;
     const uniqueId = Math.random().toString(36).substring(2, 9);
@@ -137,17 +152,17 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Total Saídas</p>
               <div className="flex items-end gap-2">
-                <span className="text-3xl font-display font-bold text-white leading-none">{saidas.length}</span>
-                <span className="text-xs text-white/40 mb-1">registros</span>
-              </div>
-           </div>
-           <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
-              <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Volume Total</p>
-              <div className="flex items-end gap-2">
-                <span className="text-3xl font-display font-bold text-destructive leading-none">{saidas.reduce((acc: number, s: any) => acc + Number(s.quantidade), 0)}</span>
-                <span className="text-xs text-white/40 mb-1">unidades</span>
-              </div>
-           </div>
+                 <span className="text-3xl font-display font-bold text-white leading-none">{metrics?.count ?? 0}</span>
+                 <span className="text-xs text-white/40 mb-1">registros</span>
+               </div>
+            </div>
+            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
+               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Volume Total</p>
+               <div className="flex items-end gap-2">
+                 <span className="text-3xl font-display font-bold text-destructive leading-none">{metrics?.qty ?? 0}</span>
+                 <span className="text-xs text-white/40 mb-1">unidades</span>
+               </div>
+            </div>
         </div>
       </div>
 
