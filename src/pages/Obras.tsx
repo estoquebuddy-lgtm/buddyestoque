@@ -50,8 +50,24 @@ export default function Obras() {
   });
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
-      <header className="bg-white/95 backdrop-blur-md px-6 py-4 sticky top-0 z-50 shadow-sm border-b border-slate-200/50">
+    <div className="min-h-screen bg-[#f8fafc] relative overflow-hidden">
+      {/* Marca d'água da logo no fundo */}
+      <div className="fixed -right-24 -bottom-24 pointer-events-none opacity-[0.04] select-none z-0">
+        <img 
+          src="https://cmiqyagqhklazbouwudl.supabase.co/storage/v1/object/public/public-assets/PNG%20sem%20fundo%20-%20LOGO%20Buddy.png" 
+          alt="Marca d'água" 
+          className="w-[500px] h-[500px] object-contain"
+        />
+      </div>
+      <div className="fixed -left-20 -top-20 pointer-events-none opacity-[0.02] select-none z-0">
+        <img 
+          src="https://cmiqyagqhklazbouwudl.supabase.co/storage/v1/object/public/public-assets/PNG%20sem%20fundo%20-%20LOGO%20Buddy.png" 
+          alt="Marca d'água secundária" 
+          className="w-[350px] h-[350px] object-contain"
+        />
+      </div>
+
+      <header className="bg-white/95 backdrop-blur-md px-6 py-4 sticky top-0 z-50 shadow-sm border-b border-slate-200/50 relative">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
           <div className="flex items-center gap-3">
             <img 
@@ -76,7 +92,7 @@ export default function Obras() {
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto py-10 px-6 space-y-8">
+      <main className="max-w-4xl mx-auto py-10 px-6 space-y-8 relative z-10">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-display font-black text-slate-800 tracking-tight">Minhas Obras</h2>
           <Dialog open={open} onOpenChange={setOpen}>

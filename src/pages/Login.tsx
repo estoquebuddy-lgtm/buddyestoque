@@ -82,8 +82,24 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-4">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-4 relative overflow-hidden">
+      {/* Marca d'água da logo no fundo do Login */}
+      <div className="absolute -right-20 -bottom-20 pointer-events-none opacity-[0.04] select-none z-0">
+        <img 
+          src="https://cmiqyagqhklazbouwudl.supabase.co/storage/v1/object/public/public-assets/PNG%20sem%20fundo%20-%20LOGO%20Buddy.png" 
+          alt="Marca d'água" 
+          className="w-[450px] h-[450px] object-contain"
+        />
+      </div>
+      <div className="absolute -left-20 -top-20 pointer-events-none opacity-[0.02] select-none z-0">
+        <img 
+          src="https://cmiqyagqhklazbouwudl.supabase.co/storage/v1/object/public/public-assets/PNG%20sem%20fundo%20-%20LOGO%20Buddy.png" 
+          alt="Marca d'água secundária" 
+          className="w-[300px] h-[300px] object-contain"
+        />
+      </div>
+
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md relative z-10">
         <Card className="shadow-2xl border border-slate-100 rounded-3xl overflow-hidden bg-white">
           <CardHeader className="text-center space-y-4 pb-2 pt-8">
             <div className="mx-auto flex justify-center mb-2">
