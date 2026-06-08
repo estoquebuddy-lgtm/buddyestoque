@@ -39,7 +39,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [retirarObservacao, setRetirarObservacao] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
   const [showBaixadas, setShowBaixadas] = useState(false);
-  const [groupByName, setGroupByName] = useState(false);
+  const [groupByName, setGroupByName] = useState(true);
   const [groupDetails, setGroupDetails] = useState<{ name: string; tools: any[] } | null>(null);
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
