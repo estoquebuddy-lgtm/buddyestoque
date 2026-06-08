@@ -212,7 +212,10 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
           data_entrega: formattedDate,
           usuario_remetente: formatUserDisplay(profile || { email: user?.email }),
           from_name: formatUserDisplay(profile || { email: user?.email }), // Fallback para a variável padrão do EmailJS
-          app_url: window.location.origin
+          app_url: window.location.origin,
+          url: window.location.origin,
+          link: window.location.origin,
+          app_link: window.location.origin
         };
 
         await emailjs.send(
