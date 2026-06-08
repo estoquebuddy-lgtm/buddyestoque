@@ -13,7 +13,14 @@ import PendingApproval from "./pages/PendingApproval";
 import NotFound from "./pages/NotFound";
 import UpdatePassword from "./pages/UpdatePassword";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 15, // 15 segundos
+      refetchOnWindowFocus: false, // evita requisições ao focar na janela
+    },
+  },
+});
 
 function ProtectedRoute({ children, requireAdmin }: { children: React.ReactNode; requireAdmin?: boolean }) {
   const { user, loading } = useAuth();
