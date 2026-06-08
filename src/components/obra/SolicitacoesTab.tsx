@@ -203,7 +203,9 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
           'service_q5nfjuk',
           'template_i77h8pk',
           templateParams,
-          'uUAL8xHI-jKaqRpuy'
+          {
+            publicKey: 'uUAL8xHI-jKaqRpuy'
+          }
         );
       } catch (err) {
         console.error('Erro ao enviar e-mail via EmailJS:', err);
