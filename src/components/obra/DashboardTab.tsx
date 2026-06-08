@@ -146,18 +146,18 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
       {/* Header with Title */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-2xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20 shrink-0">
+          <div className="h-14 w-14 rounded-2xl bg-gradient-to-tr from-[#0e1629] to-slate-800 flex items-center justify-center shadow-xl shadow-slate-900/10 shrink-0">
              <LayoutDashboard className="h-6 w-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-display font-bold tracking-tight text-foreground">Controle de Estoque</h1>
-            <p className="text-sm text-muted-foreground font-medium">Buddy Construtora</p>
+            <h1 className="text-2xl font-display font-black tracking-tight text-slate-800">Controle de Estoque e compras</h1>
+            <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mt-1">Buddy Construtora</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <SidebarTrigger className="lg:hidden h-10 w-10 border shadow-sm" />
-          <div className="px-4 py-2 bg-muted/50 rounded-xl border text-[10px] font-bold text-muted-foreground flex items-center gap-2 tracking-wider">
-            <span className="h-2 w-2 rounded-full bg-success animate-pulse" />
+          <div className="px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[10px] font-black text-emerald-600 flex items-center gap-2 tracking-wider">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             TEMPO REAL
           </div>
         </div>
@@ -270,18 +270,18 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
             transition={{ delay: i * 0.1, duration: 0.4 }}
             whileHover={{ y: -4 }}
           >
-            <Card className="border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:shadow-[0_8px_30px_rgb(0,0,0,0.08)] transition-all duration-300 overflow-hidden group">
+            <Card className="border border-slate-100 dark:border-slate-800/40 shadow-[0_8px_30px_rgb(0,0,0,0.02)] hover:shadow-[0_20px_40px_rgb(0,0,0,0.06)] transition-all duration-300 overflow-hidden group rounded-2xl bg-card">
               <CardContent className="p-6 relative">
-                <div className={`absolute -right-5 -top-5 h-28 w-28 rounded-full ${c.bg} opacity-40 group-hover:scale-110 transition-transform duration-500`} />
+                <div className={`absolute -right-5 -top-5 h-28 w-28 rounded-full ${c.bg} opacity-30 group-hover:scale-125 transition-transform duration-500 blur-xl`} />
                 <div className="relative z-10">
-                  <div className={`h-11 w-11 rounded-xl ${c.bg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                  <div className={`h-11 w-11 rounded-xl ${c.bg} flex items-center justify-center mb-4 group-hover:scale-105 transition-transform duration-300`}>
                     <c.icon className={`h-5 w-5 ${c.color}`} />
                   </div>
-                  <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-1">{c.label}</h4>
+                  <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">{c.label}</h4>
                   <div className="flex items-baseline gap-2">
-                    <p className="text-4xl font-display font-bold tabular-nums tracking-tight">{c.value}</p>
+                    <p className="text-4xl font-display font-black tabular-nums tracking-tight text-slate-800 dark:text-slate-100">{c.value}</p>
                     {c.label === 'Estoque Baixo' && Number(c.value) > 0 && (
-                      <span className="text-[10px] text-destructive font-bold">ALERTA</span>
+                      <span className="text-[9px] bg-red-500/10 text-red-600 dark:text-red-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider animate-pulse">ALERTA</span>
                     )}
                   </div>
                 </div>
@@ -293,26 +293,26 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Low Stock */}
-        <Card className="border-none shadow-sm">
+        <Card className="border border-slate-100 dark:border-slate-800/40 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl bg-card">
           <CardContent className="p-5">
-            <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-bold flex items-center gap-2 mb-4 text-slate-800 dark:text-slate-100">
               <AlertTriangle className="h-4 w-4 text-warning" />
               Produtos com Estoque Baixo
             </h3>
             {lowStock.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Todos os produtos estão com estoque adequado ✓</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">Todos os produtos estão com estoque adequado ✓</p>
             ) : (
-              <div className="divide-y divide-border">
+              <div className="space-y-1.5">
                 {lowStock.slice(0, 6).map((p: any) => (
-                  <div key={p.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <div key={p.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all duration-200 group">
                     <ImageThumbnail src={p.foto_url} alt={p.nome} type="produto" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{p.nome}</p>
-                      {p.categoria && <p className="text-xs text-muted-foreground">{p.categoria}</p>}
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">{p.nome}</p>
+                      {p.categoria && <p className="text-xs text-muted-foreground mt-0.5">{p.categoria}</p>}
                     </div>
                     <Badge
                       variant={Number(p.estoque_atual) <= 0 && Number(p.estoque_minimo) > 0 ? 'destructive' : 'secondary'}
-                      className={Number(p.estoque_atual) <= 0 && Number(p.estoque_minimo) > 0 ? '' : 'bg-warning/10 text-warning border-warning/20'}
+                      className={Number(p.estoque_atual) <= 0 && Number(p.estoque_minimo) > 0 ? '' : 'bg-warning/10 text-warning border-warning/20 hover:bg-warning/20'}
                     >
                       {Number(p.estoque_atual) <= 0 ? 'Crítico' : 'Baixo'}
                     </Badge>
@@ -324,27 +324,27 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
         </Card>
 
         {/* Tools in Use */}
-        <Card className="border-none shadow-sm">
+        <Card className="border border-slate-100 dark:border-slate-800/40 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl bg-card">
           <CardContent className="p-5">
-            <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-bold flex items-center gap-2 mb-4 text-slate-800 dark:text-slate-100">
               <Wrench className="h-4 w-4 text-info" />
               Ferramentas em Uso
             </h3>
             {ferramentasEmUso.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma ferramenta em uso</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma ferramenta em uso</p>
             ) : (
-              <div className="divide-y divide-border">
+              <div className="space-y-1.5">
                 {ferramentasEmUso.slice(0, 6).map((f: any) => (
-                  <div key={f.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                  <div key={f.id} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all duration-200 group">
                     <ImageThumbnail src={f.foto_url} alt={f.nome} type="ferramenta" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-sm font-bold truncate">{f.nome}</p>
-                        {f.codigo && <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">#{f.codigo}</span>}
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200 truncate group-hover:text-primary transition-colors">{f.nome}</p>
+                        {f.codigo && <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">#{f.codigo}</span>}
                       </div>
                       <p className="text-xs text-muted-foreground font-medium">{f.pessoas?.nome || 'Sem responsável'}</p>
                     </div>
-                    <Badge className="bg-warning/10 text-warning border-warning/20">Em uso</Badge>
+                    <Badge className="bg-warning/10 text-warning border-warning/20 hover:bg-warning/20">Em uso</Badge>
                   </div>
                 ))}
               </div>
@@ -355,20 +355,20 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Today's Entries */}
-        <Card className="border-none shadow-sm">
+        <Card className="border border-slate-100 dark:border-slate-800/40 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl bg-card">
           <CardContent className="p-5">
-            <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-bold flex items-center gap-2 mb-4 text-slate-800 dark:text-slate-100">
               <ArrowDownToLine className="h-4 w-4 text-primary" />
               Entradas de Hoje
               <Badge variant="secondary" className="ml-auto bg-primary/10 text-primary hover:bg-primary/20 border-none">{todayEntradas.length}</Badge>
             </h3>
             {todayEntradas.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma entrada registrada hoje</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma entrada registrada hoje</p>
             ) : (
-              <div className="divide-y divide-border">
+              <div className="space-y-1">
                 {todayEntradas.slice(0, 8).map((e: any) => (
-                  <div key={e.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                    <span className="text-sm truncate">{e.produtos?.nome}</span>
+                  <div key={e.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all duration-200">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{e.produtos?.nome}</span>
                     <span className="text-sm font-bold text-primary">+{Number(e.quantidade)}</span>
                   </div>
                 ))}
@@ -378,20 +378,20 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
         </Card>
 
         {/* Today's Exits */}
-        <Card className="border-none shadow-sm">
+        <Card className="border border-slate-100 dark:border-slate-800/40 shadow-[0_8px_30px_rgb(0,0,0,0.02)] rounded-2xl bg-card">
           <CardContent className="p-5">
-            <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
+            <h3 className="text-sm font-bold flex items-center gap-2 mb-4 text-slate-800 dark:text-slate-100">
               <ArrowUpFromLine className="h-4 w-4 text-destructive" />
               Saídas de Hoje
               <Badge variant="secondary" className="ml-auto bg-destructive/10 text-destructive hover:bg-destructive/20 border-none">{todaySaidas.length}</Badge>
             </h3>
             {todaySaidas.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4 text-center">Nenhuma saída registrada hoje</p>
+              <p className="text-sm text-muted-foreground py-6 text-center">Nenhuma saída registrada hoje</p>
             ) : (
-              <div className="divide-y divide-border">
+              <div className="space-y-1">
                 {todaySaidas.slice(0, 8).map((s: any) => (
-                  <div key={s.id} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
-                    <span className="text-sm truncate">{s.produtos?.nome}</span>
+                  <div key={s.id} className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-all duration-200">
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate">{s.produtos?.nome}</span>
                     <span className="text-sm font-bold text-destructive">-{Number(s.quantidade)}</span>
                   </div>
                 ))}
