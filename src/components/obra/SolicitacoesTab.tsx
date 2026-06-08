@@ -223,8 +223,9 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
             publicKey: 'uUAL8xHI-jKaqRpuy'
           }
         );
-      } catch (err) {
+      } catch (err: any) {
         console.error('Erro ao enviar e-mail via EmailJS:', err);
+        throw new Error(`EMAIL_SEND_FAILED: ${err?.text || err?.message || err || 'Erro desconhecido'}`);
       }
     },
     onSuccess: () => {
@@ -233,7 +234,17 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       setForm(emptyForm);
       toast.success('Solicitação enviada com sucesso!');
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => {
+      if (e.message && e.message.startsWith('EMAIL_SEND_FAILED:')) {
+        const details = e.message.replace('EMAIL_SEND_FAILED: ', '');
+        queryClient.invalidateQueries({ queryKey: ['solicitacoes', obraId] });
+        setDialogOpen(false);
+        setForm(emptyForm);
+        toast.warning(`Solicitação salva, mas falhou ao enviar e-mail: ${details}`);
+      } else {
+        toast.error(e.message);
+      }
+    },
   });
 
   const updateStatus = useMutation({
