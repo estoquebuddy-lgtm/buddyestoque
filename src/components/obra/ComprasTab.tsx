@@ -202,6 +202,11 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [sortBy, setSortBy] = useState<'envio'|'pagamento'|'solicitado'>('envio');
   const [parcelaOtros, setParcelaOtros] = useState<boolean[]>([false,false,false]);
+  const [limit, setLimit] = useState(50);
+
+  useEffect(() => {
+    setLimit(50);
+  }, [activeTab, search, selectedMonth, selectedTipo, selectedNfFilter]);
 
   // Kanban drag-and-drop
   const [dragId, setDragId] = useState<string|null>(null);
@@ -1515,7 +1520,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/5">
-                    {processed.map((c:any,i:number)=>{
+                    {processed.slice(0, limit).map((c:any,i:number)=>{
                       const conf=getConf(c);
                       const nfs:any[]=c.compras_nfs||[];
                       const totalNF=nfs.reduce((s:number,n:any)=>s+(n.valor_nf||0),0);
@@ -1594,6 +1599,14 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   </tbody>
                 </table>
               </div>
+
+              {processed.length > limit && (
+                <div className="flex justify-center pt-4 pb-2">
+                  <Button onClick={() => setLimit(prev => prev + 50)} variant="outline" className="gap-2 bg-white/5 border-white/10 text-white hover:bg-white/10">
+                    Carregar Mais ({processed.length - limit} restantes)
+                  </Button>
+                </div>
+              )}
 
               {/* Totais mensais */}
               {monthlyTotals.length>0&&(

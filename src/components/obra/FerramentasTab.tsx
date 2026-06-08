@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, Hand, RotateCcw, History, ArrowUpFromLine, QrCode, Download, Printer, Camera } from 'lucide-react';
+import { Pencil, Trash2, Hand, RotateCcw, History, ArrowUpFromLine, ArrowDownToLine, QrCode, Download, Printer, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import ImageUpload from '@/components/ImageUpload';
@@ -41,6 +41,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [showBaixadas, setShowBaixadas] = useState(false);
   const [groupByName, setGroupByName] = useState(false);
   const [groupDetails, setGroupDetails] = useState<{ name: string; tools: any[] } | null>(null);
+  const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
 
   // QR Code Generation State
@@ -477,6 +478,14 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
   const totalBaixadas = ferramentas.filter((f: any) => f.estado === 'baixa').length;
 
+  const toggleAccordion = () => {
+    if (accordionValue.length > 0) {
+      setAccordionValue([]);
+    } else {
+      setAccordionValue([...FERRAMENTA_CATEGORIES, 'Sem Categoria']);
+    }
+  };
+
   const groupTools = groupDetails
     ? filtered.filter((f: any) => f.nome.toLowerCase().trim() === groupDetails.name.toLowerCase().trim())
     : [];
@@ -557,13 +566,24 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             <span className={`inline-block h-2 w-2 rounded-full ${groupByName ? 'bg-primary' : 'bg-white/20'}`} />
             {groupByName ? 'Ferramentas Agrupadas' : 'Agrupar por Nome'}
           </button>
+
+          <button
+            onClick={toggleAccordion}
+            className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider transition-all px-3 py-1.5 rounded-xl bg-white/5 text-white/40 hover:bg-white/10 hover:text-white/60"
+          >
+            {accordionValue.length > 0 ? (
+              <><ArrowUpFromLine className="h-3.5 w-3.5 mr-1" /> Recolher Tudo</>
+            ) : (
+              <><ArrowDownToLine className="h-3.5 w-3.5 mr-1" /> Expandir Tudo</>
+            )}
+          </button>
         </div>
       </div>
 
       {isLoading ? <SkeletonList /> : filtered.length === 0 ? (
         <p className="text-center py-16 text-muted-foreground">{search ? 'Nenhuma ferramenta encontrada' : 'Nenhuma ferramenta cadastrada'}</p>
       ) : (
-        <Accordion type="multiple" defaultValue={FERRAMENTA_CATEGORIES} className="space-y-3">
+        <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue} className="space-y-3">
           {[...FERRAMENTA_CATEGORIES, 'Sem Categoria'].map((cat) => {
             const toolsInCat = filtered.filter(f => 
               (cat === 'Sem Categoria' ? !f.categoria : f.categoria === cat)
