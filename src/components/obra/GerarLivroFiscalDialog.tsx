@@ -100,18 +100,35 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
           const icms = imposto?.getElementsByTagName('ICMS')[0];
           
           let vBC = 0, pICMS = 0, vICMS = 0;
+          let codigoA = '3';
           if (icms) {
             const icmsNode = icms.children[0];
             if (icmsNode) {
               vBC = parseFloat(icmsNode.getElementsByTagName('vBC')[0]?.textContent || '0');
               pICMS = parseFloat(icmsNode.getElementsByTagName('pICMS')[0]?.textContent || '0');
               vICMS = parseFloat(icmsNode.getElementsByTagName('vICMS')[0]?.textContent || '0');
+              
+              if (vICMS > 0) {
+                codigoA = '1';
+              } else {
+                const cst = icmsNode.getElementsByTagName('CST')[0]?.textContent?.trim();
+                const csosn = icmsNode.getElementsByTagName('CSOSN')[0]?.textContent?.trim();
+                if (
+                  cst === '40' || 
+                  cst === '41' || 
+                  cst === '50' || 
+                  csosn === '103' || 
+                  csosn === '300' || 
+                  csosn === '400'
+                ) {
+                  codigoA = '2';
+                }
+              }
             }
           }
 
           const cfop = prod?.getElementsByTagName('CFOP')[0]?.textContent?.trim() || '1556';
           const vProd = parseFloat(prod?.getElementsByTagName('vProd')[0]?.textContent || '0');
-          const codigoA = vICMS > 0 ? '1' : '3';
           
           const key = `${cfop}-${codigoA}-${vICMS > 0 ? pICMS : 0}`;
           if (!fiscalLinesMap.has(key)) {
@@ -135,7 +152,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
           vNF,
           cfop: Array.from(fiscalLinesMap.values())[0]?.cfop || '1556',
           imposto: 'ICMS',
-          codigoA: '3',
+          codigoA: Array.from(fiscalLinesMap.values())[0]?.codigoA || '3',
           bCalculo: vNF,
           linhas_fiscais: Array.from(fiscalLinesMap.values())
         });

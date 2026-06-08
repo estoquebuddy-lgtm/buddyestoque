@@ -1024,6 +1024,26 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         const icmsGrp = impEl?.children[0];
         const pICMS = icmsGrp ? get('pICMS', icmsGrp as Element) : '';
 
+        // Determinar Código (A) fiscal (1 - Crédito, 2 - Isenta/Não trib., 3 - Outras)
+        let codigoA = '3';
+        const vICMSNum = parseFloat(vICMS || '0');
+        if (vICMSNum > 0) {
+          codigoA = '1';
+        } else if (icmsGrp) {
+          const cst = icmsGrp.getElementsByTagName('CST')[0]?.textContent?.trim();
+          const csosn = icmsGrp.getElementsByTagName('CSOSN')[0]?.textContent?.trim();
+          if (
+            cst === '40' || 
+            cst === '41' || 
+            cst === '50' || 
+            csosn === '103' || 
+            csosn === '300' || 
+            csosn === '400'
+          ) {
+            codigoA = '2';
+          }
+        }
+
         setNfForm(f => ({
           ...f,
           especie: 'NF-e',
@@ -1034,6 +1054,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           livro_cnpj_emitente: cnpjFmt || cnpjEmit || f.livro_cnpj_emitente,
           livro_uf: uf || f.livro_uf,
           livro_cfop: cfop || f.livro_cfop,
+          livro_cod_fiscal: codigoA,
           valor_nf: vNF || f.valor_nf,
           livro_valor_contabil: vNF || f.livro_valor_contabil,
           livro_base_calculo: vBC || vNF || f.livro_base_calculo,
