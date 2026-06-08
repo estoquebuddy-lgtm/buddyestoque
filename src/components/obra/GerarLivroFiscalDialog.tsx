@@ -275,7 +275,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
 
     autoTable(doc, {
       startY: 43,
-      margin: { left: margin, right: margin },
+      margin: { top: 15, left: margin, right: margin },
       head: [
         [
           { content: 'DATA\nENTRADA', rowSpan: 2, styles: { halign: 'center', valign: 'middle' } },
@@ -325,7 +325,9 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
         14: { cellWidth: 'auto' } // observacoes
       },
       didDrawPage: (data) => {
-        drawPageHeader();
+        if (data.pageNumber === 1) {
+          drawPageHeader();
+        }
       }
     });
 
