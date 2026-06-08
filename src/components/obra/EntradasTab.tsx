@@ -60,8 +60,9 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     enabled: !!obraId
   });
   
+  const [limit, setLimit] = useState(100);
   const { data: entradas = [], isLoading } = useQuery({
-    queryKey: ['entradas', obraId],
+    queryKey: ['entradas', obraId, limit],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('entradas')
@@ -72,14 +73,16 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           responsavel:profiles!entradas_responsavel_id_fkey(email, apelido)
         `)
         .eq('obra_id', obraId)
-        .order('data', { ascending: false });
+        .order('data', { ascending: false })
+        .range(0, limit - 1);
       if (error) {
         // Fallback query if migration has not been applied yet
         const { data: fallbackData } = await supabase
           .from('entradas')
           .select('*, produtos(nome, unidade)')
           .eq('obra_id', obraId)
-          .order('data', { ascending: false });
+          .order('data', { ascending: false })
+          .range(0, limit - 1);
         return fallbackData || [];
       }
       return data || [];
@@ -915,6 +918,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               </Card>
             );
           })}
+          {entradas.length === limit && (
+            <div className="flex justify-center mt-4 pb-6">
+              <Button variant="outline" className="bg-[#0e1629] text-white border-white/10 hover:bg-white/5" onClick={() => setLimit(prev => prev + 100)}>
+                Carregar Mais
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

@@ -67,7 +67,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [filterSemLocalizacao, setFilterSemLocalizacao] = useState(false);
   const [filterOcultarZerados, setFilterOcultarZerados] = useState(false);
-  const [accordionValue, setAccordionValue] = useState<string[]>([...CONSTRUCAO_CATEGORIES, 'Não Categorizado']);
+  const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
   useEffect(() => {
     if (fabOpen) { setEditingId(null); setForm(emptyForm); setDialogOpen(true); onFabClose?.(); }

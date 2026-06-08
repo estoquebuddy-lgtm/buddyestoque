@@ -39,7 +39,19 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome, estoque_atual, unidade').eq('obra_id', obraId).order('nome'); return data || []; } });
   const { data: pessoas = [] } = useQuery({ queryKey: ['pessoas', obraId], queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome'); return data || []; } });
-  const { data: saidas = [], isLoading } = useQuery({ queryKey: ['saidas', obraId], queryFn: async () => { const { data } = await supabase.from('saidas').select('*, produtos(nome), pessoas(nome)').eq('obra_id', obraId).order('data', { ascending: false }); return data || []; } });
+  const [limit, setLimit] = useState(100);
+  const { data: saidas = [], isLoading } = useQuery({
+    queryKey: ['saidas', obraId, limit],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('saidas')
+        .select('*, produtos(nome), pessoas(nome)')
+        .eq('obra_id', obraId)
+        .order('data', { ascending: false })
+        .range(0, limit - 1);
+      return data || [];
+    }
+  });
 
   useEffect(() => {
     if (!obraId) return;
@@ -164,6 +176,13 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
               </CardContent>
             </Card>
           ))}
+          {saidas.length === limit && (
+            <div className="flex justify-center mt-4 pb-6">
+              <Button variant="outline" onClick={() => setLimit(prev => prev + 100)}>
+                Carregar Mais
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
