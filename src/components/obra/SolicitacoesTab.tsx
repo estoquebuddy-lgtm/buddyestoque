@@ -199,12 +199,15 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
 
         const templateParams = {
           email_destino: recipient?.email || '', 
+          to_email: recipient?.email || '', // Fallback para a variável padrão do EmailJS
           usuario_destino: recipient ? formatUserDisplay(recipient) : 'Almoxarifado', 
+          to_name: recipient ? formatUserDisplay(recipient) : 'Almoxarifado', // Fallback para a variável padrão do EmailJS
           obra_nome: 'Casa N&J - Preá, Ceará', 
           prioridade: form.urgencia.toUpperCase(),
           material_detalhes: form.descricao,
           data_entrega: formattedDate,
-          usuario_remetente: formatUserDisplay(profile || { email: user?.email })
+          usuario_remetente: formatUserDisplay(profile || { email: user?.email }),
+          from_name: formatUserDisplay(profile || { email: user?.email }) // Fallback para a variável padrão do EmailJS
         };
 
         await emailjs.send(
