@@ -177,7 +177,7 @@ export default function ObraSidebar({ obraNome, obraEndereco, activeTab, onTabCh
 
       <SidebarFooter className="p-3">
         {!collapsed && (
-          <p className="text-[10px] text-sidebar-foreground/30 text-center">ESTOQUE BUDDY</p>
+          <p className="text-[10px] text-sidebar-foreground/30 text-center">SUPRIMENTOS BUDDY</p>
         )}
       </SidebarFooter>
     </Sidebar>

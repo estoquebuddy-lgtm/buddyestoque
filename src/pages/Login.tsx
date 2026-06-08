@@ -82,17 +82,22 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#f8fafc] p-4">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
-        <Card className="shadow-xl border-none">
-          <CardHeader className="text-center space-y-4 pb-2">
-            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-primary shadow-lg">
-              <Package className="h-8 w-8 text-primary-foreground" />
+        <Card className="shadow-2xl border border-slate-100 rounded-3xl overflow-hidden bg-white">
+          <CardHeader className="text-center space-y-4 pb-2 pt-8">
+            <div className="mx-auto flex justify-center mb-2">
+              <img 
+                src="https://cmiqyagqhklazbouwudl.supabase.co/storage/v1/object/public/public-assets/PNG%20sem%20fundo%20-%20LOGO%20Buddy.png" 
+                alt="Buddy Boutique Construtora" 
+                className="h-28 w-auto object-contain hover:scale-105 transition-transform duration-300"
+              />
             </div>
             <div>
-              <h1 className="text-2xl font-display font-bold tracking-tight">ESTOQUE BUDDY</h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {isResetPassword ? 'Recupere sua senha de acesso' : isSignUp ? 'Crie sua conta para começar' : 'Controle de estoque inteligente'}
+              <div className="h-[1px] w-20 bg-slate-200 mx-auto my-3"></div>
+              <h1 className="text-xl font-display font-black tracking-[0.2em] text-slate-800 uppercase">Suprimentos</h1>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mt-1.5">
+                {isResetPassword ? 'Recuperação de Senha' : isSignUp ? 'Criar Nova Conta' : 'Controle de Suprimentos Inteligente'}
               </p>
             </div>
           </CardHeader>

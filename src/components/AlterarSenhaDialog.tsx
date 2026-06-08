@@ -8,7 +8,7 @@ import { KeyRound, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 
-export default function AlterarSenhaDialog() {
+export default function AlterarSenhaDialog({ className }: { className?: string }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [senhaAtual, setSenhaAtual] = useState('');
@@ -71,7 +71,7 @@ export default function AlterarSenhaDialog() {
   return (
     <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
+        <Button variant="ghost" size="sm" className={className || "text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10"}>
           <KeyRound className="h-4 w-4 mr-1" /> Senha
         </Button>
       </DialogTrigger>

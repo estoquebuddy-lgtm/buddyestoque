@@ -50,47 +50,50 @@ export default function Obras() {
   });
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="bg-primary text-primary-foreground px-4 py-4 sticky top-0 z-10 shadow-sm">
+    <div className="min-h-screen bg-[#f8fafc]">
+      <header className="bg-white/95 backdrop-blur-md px-6 py-4 sticky top-0 z-50 shadow-sm border-b border-slate-200/50">
         <div className="flex items-center justify-between max-w-4xl mx-auto">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-primary-foreground/10 flex items-center justify-center">
-              <Package className="h-5 w-5" />
-            </div>
-            <h1 className="text-lg font-display font-bold tracking-tight">ESTOQUE BUDDY</h1>
+          <div className="flex items-center gap-3">
+            <img 
+              src="https://cmiqyagqhklazbouwudl.supabase.co/storage/v1/object/public/public-assets/PNG%20sem%20fundo%20-%20LOGO%20Buddy.png" 
+              alt="Buddy Boutique Construtora" 
+              className="h-10 w-auto object-contain hover:scale-105 transition-transform duration-300"
+            />
+            <div className="h-5 w-[1px] bg-slate-200 hidden sm:block"></div>
+            <h1 className="text-sm font-display font-black tracking-[0.2em] text-slate-800 uppercase hidden sm:block">Suprimentos</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {isAdmin && (
-              <Button variant="ghost" size="sm" onClick={() => navigate('/admin/usuarios')} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
-                <Shield className="h-4 w-4 mr-1" /> Usuários
+              <Button variant="ghost" size="sm" onClick={() => navigate('/admin/usuarios')} className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl font-semibold text-xs transition-all duration-200">
+                <Shield className="h-4 w-4 mr-1.5 text-slate-500" /> Usuários
               </Button>
             )}
-            <AlterarSenhaDialog />
-            <Button variant="ghost" size="sm" onClick={signOut} className="text-primary-foreground hover:text-primary-foreground/80 hover:bg-primary-foreground/10">
-              <LogOut className="h-4 w-4 mr-1" /> Sair
+            <AlterarSenhaDialog className="text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl font-semibold text-xs transition-all duration-200" />
+            <Button variant="ghost" size="sm" onClick={signOut} className="text-slate-700 hover:text-red-600 hover:bg-red-50 rounded-xl font-semibold text-xs transition-all duration-200">
+              <LogOut className="h-4 w-4 mr-1.5 text-slate-500" /> Sair
             </Button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto py-8 px-4 space-y-6">
+      <main className="max-w-4xl mx-auto py-10 px-6 space-y-8">
         <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-display font-bold">Minhas Obras</h2>
+          <h2 className="text-2xl font-display font-black text-slate-800 tracking-tight">Minhas Obras</h2>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="bg-[#0e1629] text-white hover:bg-slate-800 rounded-2xl h-11 px-5 shadow-md hover:shadow-lg transition-all duration-200 font-semibold text-sm">
                 <Plus className="h-4 w-4 mr-1.5" /> Nova Obra
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="rounded-3xl border border-slate-100">
               <DialogHeader>
-                <DialogTitle>Nova Obra</DialogTitle>
+                <DialogTitle className="font-display font-bold text-slate-800 text-lg">Nova Obra</DialogTitle>
               </DialogHeader>
-              <form onSubmit={(e) => { e.preventDefault(); createObra.mutate(); }} className="space-y-4">
-                <Input placeholder="Nome da obra *" value={nome} onChange={(e) => setNome(e.target.value)} required className="h-12" />
-                <Input placeholder="Endereço" value={endereco} onChange={(e) => setEndereco(e.target.value)} className="h-12" />
-                <Input placeholder="Responsável" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="h-12" />
-                <Button type="submit" className="w-full h-12 text-base" disabled={createObra.isPending}>
+              <form onSubmit={(e) => { e.preventDefault(); createObra.mutate(); }} className="space-y-4 pt-2">
+                <Input placeholder="Nome da obra *" value={nome} onChange={(e) => setNome(e.target.value)} required className="h-12 rounded-xl" />
+                <Input placeholder="Endereço" value={endereco} onChange={(e) => setEndereco(e.target.value)} className="h-12 rounded-xl" />
+                <Input placeholder="Responsável" value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className="h-12 rounded-xl" />
+                <Button type="submit" className="w-full h-12 text-base font-bold rounded-xl" disabled={createObra.isPending}>
                   {createObra.isPending ? 'Criando...' : 'Criar Obra'}
                 </Button>
               </form>
@@ -99,7 +102,7 @@ export default function Obras() {
         </div>
 
         {isLoading ? <SkeletonList count={3} /> : obras.length === 0 ? (
-          <Card className="text-center py-20 border-none shadow-sm">
+          <Card className="text-center py-20 border border-slate-100 shadow-sm rounded-3xl bg-white">
             <CardContent>
               <Building2 className="h-16 w-16 mx-auto text-muted-foreground/20 mb-4" />
               <p className="text-lg text-muted-foreground">Nenhuma obra cadastrada</p>
@@ -107,28 +110,31 @@ export default function Obras() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-4">
             {obras.map((obra: any, i: number) => (
               <motion.div key={obra.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                <Card className="cursor-pointer border-none shadow-sm hover:shadow-md transition-all active:scale-[0.995]" onClick={() => navigate(`/obra/${obra.id}`)}>
-                  <CardContent className="p-5 flex items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 shrink-0">
-                      <Building2 className="h-6 w-6 text-primary" />
+                <Card 
+                  className="group cursor-pointer border border-slate-200/50 shadow-md shadow-slate-100/50 hover:shadow-xl hover:shadow-slate-200/50 hover:border-slate-300/60 rounded-3xl transition-all duration-300 active:scale-[0.995] bg-white overflow-hidden" 
+                  onClick={() => navigate(`/obra/${obra.id}`)}
+                >
+                  <CardContent className="p-6 flex items-center gap-5">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-[#0e1629] to-slate-800 text-white shadow-inner shrink-0 group-hover:scale-105 transition-transform duration-300">
+                      <Building2 className="h-6 w-6" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-base truncate">{obra.nome}</p>
+                      <p className="font-bold text-lg text-slate-850 group-hover:text-primary transition-colors duration-200 truncate">{obra.nome}</p>
                       {obra.endereco && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1 truncate">
-                          <MapPin className="h-3 w-3 shrink-0" /> {obra.endereco}
+                        <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5 truncate mt-1.5">
+                          <MapPin className="h-3.5 w-3.5 text-blue-500/80 shrink-0" /> {obra.endereco}
                         </p>
                       )}
                       {obra.responsavel && (
-                        <p className="text-sm text-muted-foreground flex items-center gap-1">
-                          <User className="h-3 w-3 shrink-0" /> {obra.responsavel}
+                        <p className="text-xs font-medium text-slate-500 flex items-center gap-1.5 mt-1">
+                          <User className="h-3.5 w-3.5 text-slate-400 shrink-0" /> {obra.responsavel}
                         </p>
                       )}
                     </div>
-                    <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
+                    <ChevronRight className="h-5 w-5 text-slate-300 group-hover:text-slate-500 group-hover:translate-x-1 transition-all duration-300 shrink-0" />
                   </CardContent>
                 </Card>
               </motion.div>
