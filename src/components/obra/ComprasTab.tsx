@@ -1692,19 +1692,51 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           </Card>
           <Card className="bg-[#0e1629] border-white/5">
             <CardContent className="p-5">
-              <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold mb-4">Totais por Status</p>
-              <div className="space-y-2">
-                {STATUS_OPTIONS.map(s=>{
-                  const items=compras.filter((c:any)=>c.status===s);
-                  const total=items.reduce((sum:number,c:any)=>sum+(c.valor_pago||0),0);
-                  return(
-                    <div key={s} className="flex items-center gap-3 py-2 border-b border-white/5">
-                      <Badge className={`text-[9px] font-bold uppercase border ${STATUS_BADGE[s]||STATUS_BADGE['NÃO INICIADO']}`}>{s}</Badge>
-                      <span className="ml-auto font-mono font-bold text-white/80 text-sm">{fmt(total)}</span>
-                      <span className="text-[10px] text-white/30">{items.length}x</span>
-                    </div>
-                  );
-                })}
+              <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold mb-4">Total por Centro de Custo</p>
+              <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+                {(() => {
+                  const ccTotals = CENTROS_CUSTO.map(cc => {
+                    const items = processed.filter((c: any) => {
+                      const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
+                      return ccVal === cc.value;
+                    });
+                    const total = items.reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
+                    return {
+                      ...cc,
+                      total,
+                      count: items.length
+                    };
+                  })
+                  .filter(cc => cc.count > 0 || cc.total > 0)
+                  .sort((a, b) => b.total - a.total);
+
+                  if (ccTotals.length === 0) {
+                    return (
+                      <p className="text-xs text-white/40 py-4 text-center">Nenhum lançamento com centro de custo</p>
+                    );
+                  }
+
+                  return ccTotals.map(cc => {
+                    const match = cc.label.match(/^(\d+)\.\s*(.*)/);
+                    const code = match ? match[1].padStart(2, '0') : String(cc.value).padStart(2, '0');
+                    const desc = match ? match[2] : cc.label;
+
+                    return (
+                      <div key={cc.value} className="flex items-center gap-3 py-2 border-b border-white/5 min-w-0">
+                        <Badge variant="secondary" className="bg-white/5 text-white/60 border-white/10 text-[9px] shrink-0">
+                          CC {code}
+                        </Badge>
+                        <span className="text-white/80 font-medium text-xs truncate flex-1" title={cc.label}>
+                          {desc}
+                        </span>
+                        <span className="ml-auto font-mono font-bold text-white/80 text-sm shrink-0">
+                          {fmt(cc.total)}
+                        </span>
+                        <span className="text-[10px] text-white/30 shrink-0">{cc.count}x</span>
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </CardContent>
           </Card>
