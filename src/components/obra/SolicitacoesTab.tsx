@@ -185,6 +185,14 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
 
       try {
         const recipient = usuarios.find((u: any) => u.id === form.destinatario_id);
+        console.log('EmailJS Debug:', {
+          destinatario_id: form.destinatario_id,
+          usuariosCount: usuarios.length,
+          recipient: recipient,
+          email_destino: recipient?.email,
+          profile: profile
+        });
+
         const formattedDate = form.data_necessidade 
           ? form.data_necessidade.split('-').reverse().join('/')
           : 'Não informada';
