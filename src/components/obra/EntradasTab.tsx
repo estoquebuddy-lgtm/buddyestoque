@@ -148,7 +148,15 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [editingFerramenta, setEditingFerramenta] = useState<{ produtoId: string; nome: string } | null>(null);
 
   // Confirmar recebimento dialog
-  const [receberDialog, setReceberDialog] = useState<{ open: boolean; entradaId: string; produtoId: string; produtoNome: string; localizacao: string } | null>(null);
+  const [receberDialog, setReceberDialog] = useState<{
+    open: boolean;
+    entradaId: string;
+    produtoId: string;
+    produtoNome: string;
+    localizacao: string;
+    quantidadeTotal: number;
+    quantidadeReceber: string;
+  } | null>(null);
 
   // New product inline state
   const [isNewProduct, setIsNewProduct] = useState(false);
@@ -433,51 +441,145 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   });
 
   const confirmarRecebimento = useMutation({
-    mutationFn: async ({ entradaId, localizacao, produtoId }: { entradaId: string; localizacao: string; produtoId: string }) => {
+    mutationFn: async ({ 
+      entradaId, 
+      localizacao, 
+      produtoId, 
+      quantidadeReceber 
+    }: { 
+      entradaId: string; 
+      localizacao: string; 
+      produtoId: string; 
+      quantidadeReceber: number; 
+    }) => {
       const { data: { user } } = await supabase.auth.getUser();
       
       const { data: ent, error: fetchErr } = await supabase
         .from('entradas')
-        .select('quantidade, produto_id, produtos(nome, unidade)')
+        .select('*, produtos(nome, unidade)')
         .eq('id', entradaId)
         .single();
       if (fetchErr) throw fetchErr;
 
-      const { error: updateErr } = await supabase
-        .from('entradas')
-        .update({
-          status_entrega: 'REALIZADO',
-          responsavel_id: user?.id || null,
-          entregue_em: new Date().toISOString(),
-          data: new Date().toISOString()
-        })
-        .eq('id', entradaId);
-      if (updateErr) throw updateErr;
+      const totalQtd = Number(ent.quantidade);
+      if (quantidadeReceber <= 0) throw new Error('A quantidade deve ser maior que zero.');
+      if (quantidadeReceber > totalQtd) throw new Error('A quantidade a receber não pode ser maior que a quantidade pendente.');
 
-      // Update status of associated tools from 'comprado' to 'disponivel'
-      const { data: toolsToUpdate } = await supabase
-        .from('ferramentas')
-        .select('id, observacoes')
-        .eq('obra_id', obraId)
-        .eq('estado', 'comprado')
-        .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
+      const isPartial = quantidadeReceber < totalQtd;
 
-      if (toolsToUpdate && toolsToUpdate.length > 0) {
-        for (const tool of toolsToUpdate) {
-          const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
-          await supabase
-            .from('ferramentas')
-            .update({
-              estado: 'disponivel',
-              status: 'DISPONIVEL',
-              observacoes: cleanObs,
-              ultima_movimentacao: new Date().toISOString()
-            })
-            .eq('id', tool.id);
+      if (isPartial) {
+        // 1. Criar uma nova entrada pendente com a quantidade restante
+        const remainingQtd = totalQtd - quantidadeReceber;
+        
+        // Removemos campos autogerados/específicos para clonar
+        const { id, created_at, responsavel_id, entregue_em, status_entrega, quantidade, produtos, ...restOfEnt } = ent;
+        
+        const payloadRemaining = {
+          ...restOfEnt,
+          quantidade: remainingQtd,
+          status_entrega: 'PENDENTE',
+          created_at: new Date().toISOString()
+        };
+
+        const { data: newEnt, error: insertErr } = await supabase
+          .from('entradas')
+          .insert(payloadRemaining)
+          .select('id')
+          .single();
+        if (insertErr) throw insertErr;
+        
+        const newEntId = newEnt.id;
+
+        // 2. Atualizar o vínculo de ferramentas que ainda NÃO foram recebidas
+        const { data: tools } = await supabase
+          .from('ferramentas')
+          .select('id, observacoes')
+          .eq('obra_id', obraId)
+          .eq('estado', 'comprado')
+          .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
+
+        if (tools && tools.length > 0) {
+          const toolsToReceive = tools.slice(0, Math.floor(quantidadeReceber));
+          const toolsToRemain = tools.slice(Math.floor(quantidadeReceber));
+
+          // Marcar as recebidas como 'disponivel'
+          for (const tool of toolsToReceive) {
+            const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
+            await supabase
+              .from('ferramentas')
+              .update({
+                estado: 'disponivel',
+                status: 'DISPONIVEL',
+                observacoes: cleanObs,
+                ultima_movimentacao: new Date().toISOString()
+              })
+              .eq('id', tool.id);
+          }
+
+          // Vincular as restantes à nova entrada pendente
+          for (const tool of toolsToRemain) {
+            const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
+            const newObs = `${cleanObs} [ENTRADA_ID:${newEntId}]`.trim();
+            await supabase
+              .from('ferramentas')
+              .update({
+                observacoes: newObs
+              })
+              .eq('id', tool.id);
+          }
+        }
+
+        // 3. Atualizar a entrada original com a quantidade recebida e marcar como REALIZADO
+        const { error: updateErr } = await supabase
+          .from('entradas')
+          .update({
+            quantidade: quantidadeReceber,
+            status_entrega: 'REALIZADO',
+            responsavel_id: user?.id || null,
+            entregue_em: new Date().toISOString(),
+            data: new Date().toISOString()
+          })
+          .eq('id', entradaId);
+        if (updateErr) throw updateErr;
+
+      } else {
+        // Recebimento total padrão
+        const { error: updateErr } = await supabase
+          .from('entradas')
+          .update({
+            status_entrega: 'REALIZADO',
+            responsavel_id: user?.id || null,
+            entregue_em: new Date().toISOString(),
+            data: new Date().toISOString()
+          })
+          .eq('id', entradaId);
+        if (updateErr) throw updateErr;
+
+        // Atualizar ferramentas vinculadas
+        const { data: toolsToUpdate } = await supabase
+          .from('ferramentas')
+          .select('id, observacoes')
+          .eq('obra_id', obraId)
+          .eq('estado', 'comprado')
+          .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
+
+        if (toolsToUpdate && toolsToUpdate.length > 0) {
+          for (const tool of toolsToUpdate) {
+            const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
+            await supabase
+              .from('ferramentas')
+              .update({
+                estado: 'disponivel',
+                status: 'DISPONIVEL',
+                observacoes: cleanObs,
+                ultima_movimentacao: new Date().toISOString()
+              })
+              .eq('id', tool.id);
+          }
         }
       }
 
-      // Update localizacao on the produto if provided
+      // Atualizar localização do produto no cadastro se fornecida
       if (localizacao.trim()) {
         await supabase.from('produtos').update({ localizacao: localizacao.trim() }).eq('id', produtoId);
       }
@@ -489,7 +591,9 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         user_email: user?.email,
         acao: 'ENTRADA',
         entidade: 'ESTOQUE',
-        detalhes: `Confirmou recebimento de ${ent?.quantidade} ${(ent?.produtos as any)?.unidade || 'un'} de ${prodName}${localizacao.trim() ? ` → Loc: ${localizacao.trim()}` : ''} (via Compras)`
+        detalhes: isPartial 
+          ? `Confirmou recebimento parcial de ${quantidadeReceber} de ${totalQtd} ${(ent?.produtos as any)?.unidade || 'un'} de ${prodName}${localizacao.trim() ? ` → Loc: ${localizacao.trim()}` : ''}`
+          : `Confirmou recebimento de ${totalQtd} ${(ent?.produtos as any)?.unidade || 'un'} de ${prodName}${localizacao.trim() ? ` → Loc: ${localizacao.trim()}` : ''} (via Compras)`
       });
     },
     onSuccess: () => {
@@ -703,7 +807,15 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                           size="sm"
                           className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold shadow-md transition-all border-none"
                           disabled={confirmarRecebimento.isPending}
-                          onClick={() => setReceberDialog({ open: true, entradaId: e.id, produtoId: e.produto_id, produtoNome: e.produtos?.nome || 'Produto', localizacao: e.produtos?.localizacao || '' })}
+                          onClick={() => setReceberDialog({
+                            open: true,
+                            entradaId: e.id,
+                            produtoId: e.produto_id,
+                            produtoNome: e.produtos?.nome || 'Produto',
+                            localizacao: e.produtos?.localizacao || '',
+                            quantidadeTotal: Number(e.quantidade),
+                            quantidadeReceber: String(e.quantidade)
+                          })}
                         >
                           {confirmarRecebimento.isPending && receberDialog?.entradaId === e.id ? (
                             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1273,10 +1385,36 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            {/* Product name */}
-            <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-              <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold mb-0.5">Produto</p>
-              <p className="text-sm font-semibold text-white">{receberDialog?.produtoNome}</p>
+            {/* Product name & total quantity */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 flex justify-between items-center">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold mb-0.5">Produto</p>
+                <p className="text-sm font-semibold text-white truncate max-w-[200px]">{receberDialog?.produtoNome}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[10px] uppercase tracking-wider text-white/40 font-bold mb-0.5">Pendente</p>
+                <p className="text-sm font-bold text-amber-400">{receberDialog?.quantidadeTotal}</p>
+              </div>
+            </div>
+
+            {/* Quantity Input */}
+            <div className="space-y-1.5">
+              <label className="text-[10px] uppercase tracking-wider text-white/40 font-bold">
+                Quantidade a Receber
+              </label>
+              <Input
+                type="number"
+                step="any"
+                min="0.01"
+                max={receberDialog?.quantidadeTotal}
+                placeholder="Ex: 15"
+                value={receberDialog?.quantidadeReceber ?? ''}
+                onChange={e => setReceberDialog(d => d ? { ...d, quantidadeReceber: e.target.value } : d)}
+                className="bg-[#0a1020] border-white/10 text-white placeholder:text-white/25 focus-visible:ring-primary rounded-xl h-11 text-sm"
+              />
+              {receberDialog && Number(receberDialog.quantidadeReceber) < receberDialog.quantidadeTotal && Number(receberDialog.quantidadeReceber) > 0 && (
+                <p className="text-[10px] text-amber-400 font-semibold mt-1">⚠️ Recebimento parcial: os {Number((receberDialog.quantidadeTotal - Number(receberDialog.quantidadeReceber)).toFixed(4))} restantes continuarão como pendentes.</p>
+              )}
             </div>
 
             {/* Location input */}
@@ -1287,13 +1425,22 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 <span className="text-white/25 normal-case font-normal">(opcional)</span>
               </label>
               <Input
-                autoFocus
                 placeholder="Ex: Prateleira A3, Armário 2, Depósito..."
                 value={receberDialog?.localizacao ?? ''}
                 onChange={e => setReceberDialog(d => d ? { ...d, localizacao: e.target.value } : d)}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && receberDialog) {
-                    confirmarRecebimento.mutate({ entradaId: receberDialog.entradaId, localizacao: receberDialog.localizacao, produtoId: receberDialog.produtoId });
+                    const val = parseFloat(receberDialog.quantidadeReceber);
+                    if (isNaN(val) || val <= 0 || val > receberDialog.quantidadeTotal) {
+                      toast.error("Quantidade inválida!");
+                      return;
+                    }
+                    confirmarRecebimento.mutate({ 
+                      entradaId: receberDialog.entradaId, 
+                      localizacao: receberDialog.localizacao, 
+                      produtoId: receberDialog.produtoId, 
+                      quantidadeReceber: val 
+                    });
                   }
                 }}
                 className="bg-[#0a1020] border-white/10 text-white placeholder:text-white/25 focus-visible:ring-primary rounded-xl h-11 text-sm"
@@ -1315,8 +1462,22 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               </Button>
               <Button
                 className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl font-semibold"
-                disabled={confirmarRecebimento.isPending}
-                onClick={() => receberDialog && confirmarRecebimento.mutate({ entradaId: receberDialog.entradaId, localizacao: receberDialog.localizacao, produtoId: receberDialog.produtoId })}
+                disabled={confirmarRecebimento.isPending || !receberDialog?.quantidadeReceber || parseFloat(receberDialog.quantidadeReceber) <= 0 || parseFloat(receberDialog.quantidadeReceber) > receberDialog.quantidadeTotal}
+                onClick={() => {
+                  if (receberDialog) {
+                    const val = parseFloat(receberDialog.quantidadeReceber);
+                    if (isNaN(val) || val <= 0 || val > receberDialog.quantidadeTotal) {
+                      toast.error("Quantidade inválida!");
+                      return;
+                    }
+                    confirmarRecebimento.mutate({ 
+                      entradaId: receberDialog.entradaId, 
+                      localizacao: receberDialog.localizacao, 
+                      produtoId: receberDialog.produtoId, 
+                      quantidadeReceber: val 
+                    });
+                  }
+                }}
               >
                 {confirmarRecebimento.isPending
                   ? <Loader2 className="h-4 w-4 animate-spin" />
