@@ -62,7 +62,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   
   const [limit, setLimit] = useState(15);
   const { data: entradas = [], isLoading } = useQuery({
-    queryKey: ['entradas', obraId, limit],
+    queryKey: ['entradas', obraId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('entradas')
@@ -73,41 +73,17 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           responsavel:profiles!entradas_responsavel_id_fkey(email, apelido)
         `)
         .eq('obra_id', obraId)
-        .order('data', { ascending: false })
-        .range(0, limit - 1);
+        .order('data', { ascending: false });
       if (error) {
         // Fallback query if migration has not been applied yet
         const { data: fallbackData } = await supabase
           .from('entradas')
           .select('*, produtos(nome, unidade)')
           .eq('obra_id', obraId)
-          .order('data', { ascending: false })
-          .range(0, limit - 1);
+          .order('data', { ascending: false });
         return fallbackData || [];
       }
       return data || [];
-    },
-    enabled: !!obraId
-  });
-
-  const { data: metrics } = useQuery({
-    queryKey: ['entradas', obraId, 'metrics'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('entradas')
-        .select('quantidade, status_entrega')
-        .eq('obra_id', obraId);
-      
-      const safeData = data || [];
-      const totalAlmoxarifadoCount = safeData.filter(e => !e.status_entrega || e.status_entrega === 'REALIZADO').length;
-      const totalAlmoxarifadoQtd = safeData.filter(e => !e.status_entrega || e.status_entrega === 'REALIZADO').reduce((acc, e) => acc + Number(e.quantidade), 0);
-      const totalCompradosCount = safeData.filter(e => e.status_entrega === 'PENDENTE').length;
-      const totalCompradosQtd = safeData.filter(e => e.status_entrega === 'PENDENTE').reduce((acc, e) => acc + Number(e.quantidade), 0);
-      
-      return {
-        almoxarifado: { count: totalAlmoxarifadoCount, qty: totalAlmoxarifadoQtd },
-        comprados: { count: totalCompradosCount, qty: totalCompradosQtd }
-      };
     },
     enabled: !!obraId
   });
@@ -776,7 +752,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             </p>
             <div className="flex items-end gap-2">
               <span className="text-3xl font-display font-bold text-white leading-none">
-                {subTab === 'almoxarifado' ? metrics?.almoxarifado.count ?? 0 : metrics?.comprados.count ?? 0}
+                {currentTabList.length}
               </span>
               <span className="text-xs text-white/30 mb-1">registros</span>
             </div>
@@ -785,7 +761,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Volume Total</p>
             <div className="flex items-end gap-2">
               <span className="text-3xl font-display font-bold text-primary-foreground leading-none">
-                {subTab === 'almoxarifado' ? metrics?.almoxarifado.qty ?? 0 : metrics?.comprados.qty ?? 0}
+                {currentTabList.reduce((acc: number, e: any) => acc + Number(e.quantidade), 0)}
               </span>
               <span className="text-xs text-white/30 mb-1">unidades</span>
             </div>
@@ -801,7 +777,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         </p>
       ) : (
         <div className="space-y-2">
-          {currentFilteredList.map((e: any) => {
+          {currentFilteredList.slice(0, limit).map((e: any) => {
             const isTool = isFerramenta(e);
             const displayName = isTool
               ? e.produtos?.nome?.replace('[FERRAMENTA] ', '') || 'Ferramenta'
@@ -940,7 +916,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               </Card>
             );
           })}
-          {entradas.length === limit && (
+          {currentFilteredList.length > limit && (
             <div className="flex justify-center mt-4 pb-6">
               <Button variant="outline" className="bg-[#0e1629] text-white border-white/10 hover:bg-white/5" onClick={() => setLimit(prev => prev + 15)}>
                 Carregar Mais

@@ -41,31 +41,15 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
   const { data: pessoas = [] } = useQuery({ queryKey: ['pessoas', obraId], queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome'); return data || []; } });
   const [limit, setLimit] = useState(15);
   const { data: saidas = [], isLoading } = useQuery({
-    queryKey: ['saidas', obraId, limit],
+    queryKey: ['saidas', obraId],
     queryFn: async () => {
       const { data } = await supabase
         .from('saidas')
         .select('*, produtos(nome), pessoas(nome)')
         .eq('obra_id', obraId)
-        .order('data', { ascending: false })
-        .range(0, limit - 1);
+        .order('data', { ascending: false });
       return data || [];
     }
-  });
-
-  const { data: metrics } = useQuery({
-    queryKey: ['saidas', obraId, 'metrics'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('saidas')
-        .select('quantidade')
-        .eq('obra_id', obraId);
-      const safeData = data || [];
-      const totalCount = safeData.length;
-      const totalQty = safeData.reduce((acc: number, s: any) => acc + Number(s.quantidade), 0);
-      return { count: totalCount, qty: totalQty };
-    },
-    enabled: !!obraId
   });
 
   useEffect(() => {
@@ -152,14 +136,14 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Total Saídas</p>
               <div className="flex items-end gap-2">
-                 <span className="text-3xl font-display font-bold text-white leading-none">{metrics?.count ?? 0}</span>
+                 <span className="text-3xl font-display font-bold text-white leading-none">{saidas.length}</span>
                  <span className="text-xs text-white/40 mb-1">registros</span>
                </div>
             </div>
             <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
                <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Volume Total</p>
                <div className="flex items-end gap-2">
-                 <span className="text-3xl font-display font-bold text-destructive leading-none">{metrics?.qty ?? 0}</span>
+                 <span className="text-3xl font-display font-bold text-destructive leading-none">{saidas.reduce((acc: number, s: any) => acc + Number(s.quantidade), 0)}</span>
                  <span className="text-xs text-white/40 mb-1">unidades</span>
                </div>
             </div>
@@ -170,7 +154,7 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
         <p className="text-center py-16 text-muted-foreground">{search ? 'Nenhuma saída encontrada' : 'Nenhuma saída registrada'}</p>
       ) : (
         <div className="space-y-2">
-          {filtered.map((s: any) => (
+          {filtered.slice(0, limit).map((s: any) => (
             <Card key={s.id} className="border-destructive/10 border shadow-sm hover:shadow-md transition-all hover:-translate-y-0.5">
               <CardContent className="p-4 flex items-center gap-4">
                 <div className="h-12 w-12 rounded-xl bg-destructive flex items-center justify-center shrink-0 shadow-sm">
@@ -191,7 +175,7 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
               </CardContent>
             </Card>
           ))}
-          {saidas.length === limit && (
+          {filtered.length > limit && (
             <div className="flex justify-center mt-4 pb-6">
               <Button variant="outline" onClick={() => setLimit(prev => prev + 15)}>
                 Carregar Mais
