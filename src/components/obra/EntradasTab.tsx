@@ -60,7 +60,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     enabled: !!obraId
   });
   
-  const [limit, setLimit] = useState(100);
+  const [limit, setLimit] = useState(15);
   const { data: entradas = [], isLoading } = useQuery({
     queryKey: ['entradas', obraId, limit],
     queryFn: async () => {
@@ -920,7 +920,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           })}
           {entradas.length === limit && (
             <div className="flex justify-center mt-4 pb-6">
-              <Button variant="outline" className="bg-[#0e1629] text-white border-white/10 hover:bg-white/5" onClick={() => setLimit(prev => prev + 100)}>
+              <Button variant="outline" className="bg-[#0e1629] text-white border-white/10 hover:bg-white/5" onClick={() => setLimit(prev => prev + 15)}>
                 Carregar Mais
               </Button>
             </div>

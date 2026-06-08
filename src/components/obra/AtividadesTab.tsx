@@ -28,7 +28,7 @@ export default function AtividadesTab({ obraId }: { obraId: string }) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const [limit, setLimit] = useState(60);
+  const [limit, setLimit] = useState(20);
 
   const { data: logs = [], isLoading } = useQuery({
     queryKey: ['logs-atividades', obraId, limit],
@@ -101,7 +101,7 @@ export default function AtividadesTab({ obraId }: { obraId: string }) {
                 </div>
                 {logs.length === limit && (
                   <div className="flex justify-center mt-6">
-                    <Button variant="outline" onClick={() => setLimit(prev => prev + 60)}>
+                    <Button variant="outline" onClick={() => setLimit(prev => prev + 20)}>
                       Carregar Mais
                     </Button>
                   </div>

@@ -39,7 +39,7 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
 
   const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome, estoque_atual, unidade').eq('obra_id', obraId).order('nome'); return data || []; } });
   const { data: pessoas = [] } = useQuery({ queryKey: ['pessoas', obraId], queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome'); return data || []; } });
-  const [limit, setLimit] = useState(100);
+  const [limit, setLimit] = useState(15);
   const { data: saidas = [], isLoading } = useQuery({
     queryKey: ['saidas', obraId, limit],
     queryFn: async () => {
@@ -178,7 +178,7 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
           ))}
           {saidas.length === limit && (
             <div className="flex justify-center mt-4 pb-6">
-              <Button variant="outline" onClick={() => setLimit(prev => prev + 100)}>
+              <Button variant="outline" onClick={() => setLimit(prev => prev + 15)}>
                 Carregar Mais
               </Button>
             </div>
