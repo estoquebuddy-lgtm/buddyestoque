@@ -135,21 +135,12 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [subTab, setSubTab] = useState<'almoxarifado' | 'comprados'>('almoxarifado');
   const [xmlOpen, setXmlOpen] = useState(false);
 
-  const [fornecedorSelect, setFornecedorSelect] = useState('__new__');
+  const [fornecedorSearchInput, setFornecedorSearchInput] = useState('');
+  const [showFornecedoresList, setShowFornecedoresList] = useState(false);
 
   useEffect(() => {
-    if (form.fornecedor) {
-      const exists = safeFornecedores.some((f: any) => typeof f === 'string' && f.toLowerCase() === form.fornecedor.trim().toLowerCase());
-      if (exists) {
-        const match = safeFornecedores.find((f: any) => typeof f === 'string' && f.toLowerCase() === form.fornecedor.trim().toLowerCase());
-        setFornecedorSelect(match || form.fornecedor);
-      } else {
-        setFornecedorSelect('__new__');
-      }
-    } else {
-      setFornecedorSelect('__new__');
-    }
-  }, [form.fornecedor, safeFornecedores]);
+    setFornecedorSearchInput(form.fornecedor || '');
+  }, [form.fornecedor]);
 
   // Entry type: 'material' or 'ferramenta'
   const [entryType, setEntryType] = useState<'material' | 'ferramenta'>('material');
@@ -1169,41 +1160,65 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 </div>
               )}
 
-              <div className="space-y-1">
+              <div className="space-y-1 relative">
                 <label className="text-xs text-muted-foreground ml-1">Fornecedor *</label>
-                <Select value={fornecedorSelect} onValueChange={val => {
-                  setFornecedorSelect(val);
-                  if (val === '__new__') {
-                    setForm(f => ({ ...f, fornecedor: '' }));
-                  } else {
-                    setForm(f => ({ ...f, fornecedor: val }));
-                  }
-                }}>
-                  <SelectTrigger className="w-full bg-[#0a1020] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-12 text-sm">
-                    <SelectValue placeholder="Selecione um fornecedor..." />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
-                    <SelectItem value="__new__" className="text-emerald-400 font-semibold focus:bg-white/10 focus:text-emerald-400 cursor-pointer">
-                      + Novo Fornecedor
-                    </SelectItem>
-                    {safeFornecedores.map((f: any) => (
-                      <SelectItem key={f} value={f} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
-                        {f}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {fornecedorSelect === '__new__' && (
-                  <Input 
-                    placeholder="Nome do Novo Fornecedor" 
-                    value={form.fornecedor} 
-                    onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
-                    className="h-12 mt-1.5"
+                <div className="relative">
+                  <Input
+                    value={fornecedorSearchInput}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setFornecedorSearchInput(val);
+                      setForm(f => ({ ...f, fornecedor: val }));
+                      setShowFornecedoresList(true);
+                    }}
+                    onFocus={() => setShowFornecedoresList(true)}
+                    onBlur={() => {
+                      setTimeout(() => setShowFornecedoresList(false), 200);
+                    }}
+                    placeholder="Selecione ou busque um fornecedor..."
+                    className="w-full bg-[#0a1020] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-12 text-sm pr-10"
                     autoComplete="off"
                     required
                   />
-                )}
+                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center text-white/40 pointer-events-none">
+                    <Search className="h-4 w-4" />
+                  </div>
+
+                  {showFornecedoresList && (
+                    <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors text-emerald-400 font-semibold text-xs min-h-[36px]"
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          setFornecedorSearchInput('');
+                          setForm(f => ({ ...f, fornecedor: '' }));
+                          setShowFornecedoresList(false);
+                        }}
+                      >
+                        + Limpar / Novo Fornecedor
+                      </button>
+                      {safeFornecedores
+                        .filter((f: any) => typeof f === 'string' && f.toLowerCase().includes(fornecedorSearchInput.toLowerCase()))
+                        .map((f: any) => (
+                          <button
+                            key={f}
+                            type="button"
+                            className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors text-white text-xs min-h-[36px]"
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setFornecedorSearchInput(f);
+                              setForm(fState => ({ ...fState, fornecedor: f }));
+                              setShowFornecedoresList(false);
+                            }}
+                          >
+                            {f}
+                          </button>
+                        ))
+                      }
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="space-y-1">

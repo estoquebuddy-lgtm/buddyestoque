@@ -198,6 +198,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [search, setSearch] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedTipo, setSelectedTipo] = useState('all');
+  const [selectedNfFilter, setSelectedNfFilter] = useState('all');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [sortBy, setSortBy] = useState<'envio'|'pagamento'|'solicitado'>('envio');
   const [parcelaOtros, setParcelaOtros] = useState<boolean[]>([false,false,false]);
@@ -307,15 +308,20 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           map.set(nome.toLowerCase(), JSON.stringify({ nome, cnpj }));
         }
       });
-      return Array.from(map.values()).map(val => JSON.parse(val));
+      return Array.from(map.values())
+        .map(val => JSON.parse(val))
+        .sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
     }
   });
 
   const [fornecedorSelect, setFornecedorSelect] = useState('__new__');
+  const [fornecedorSearchInput, setFornecedorSearchInput] = useState('');
+  const [showFornecedoresList, setShowFornecedoresList] = useState(false);
 
   useEffect(() => {
     if (isCreateOpen) {
       setFornecedorSelect('__new__');
+      setFornecedorSearchInput('');
     }
   }, [isCreateOpen]);
 
@@ -672,7 +678,42 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     if(activeTab==='ativas') r=r.filter((c:any)=>c.status!=='ARQUIVADO');
     if(selectedMonth!=='all') r=r.filter((c:any)=>mesKey(c.data_envio)===selectedMonth||mesKey(c.data_pagamento)===selectedMonth);
     if(selectedTipo!=='all') r=r.filter((c:any)=>c.tipo_solicitacao===selectedTipo);
-    if(search.trim()){const t=normal(search);r=r.filter((c:any)=>normal(c.email_titulo||'').includes(t)||normal(c.fornecedor_nome||'').includes(t)||normal(c.obs||'').includes(t));}
+    if (selectedNfFilter !== 'all') {
+      r = r.filter((c: any) => {
+        if (c.estornado) return false;
+        const nfs = c.compras_nfs || [];
+        const isPendente = nfs.length === 0;
+        const totalNF = nfs.reduce((s: number, n: any) => s + (n.valor_nf || 0), 0);
+        const hasDiferenca = nfs.length > 0 && Math.abs(totalNF - (c.valor_pago || 0)) > 0.01;
+
+        if (selectedNfFilter === 'pendente') return isPendente;
+        if (selectedNfFilter === 'diferenca') return hasDiferenca;
+        if (selectedNfFilter === 'ambos') return isPendente || hasDiferenca;
+        return true;
+      });
+    }
+    if (search.trim()) {
+      const t = normal(search);
+      r = r.filter((c: any) => {
+        const matchText = normal(c.email_titulo || '').includes(t) ||
+          normal(c.fornecedor_nome || '').includes(t) ||
+          normal(c.obs || '').includes(t);
+        
+        const matchValues = normal(fmt(c.valor_solicitado)).includes(t) ||
+          String(c.valor_solicitado || '').includes(t) ||
+          normal(fmt(c.valor_pago)).includes(t) ||
+          String(c.valor_pago || '').includes(t);
+
+        const nfs = c.compras_nfs || [];
+        const matchNfs = nfs.some((nf: any) => 
+          normal(nf.livro_numero || '').includes(t) ||
+          normal(fmt(nf.valor_nf)).includes(t) ||
+          String(nf.valor_nf || '').includes(t)
+        );
+
+        return matchText || matchValues || matchNfs;
+      });
+    }
     // Sorting
     r.sort((a:any,b:any)=>{
       if (sortBy === 'solicitado') {
@@ -688,7 +729,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       return sortDir==='asc'?da.localeCompare(db):db.localeCompare(da);
     });
     return r;
-    },[compras,activeTab,selectedMonth,selectedTipo,search,sortBy,sortDir]);
+    },[compras,activeTab,selectedMonth,selectedTipo,selectedNfFilter,search,sortBy,sortDir]);
 
   const fornecedoresListWithStats = useMemo(() => {
     const map = new Map<string, { nome: string; cnpj: string; comprasCount: number; valorLiquido: number }>();
@@ -896,8 +937,10 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     const exists = fornecedoresUnicos.some((f: any) => f.nome.toLowerCase() === emailForn.toLowerCase());
     if (emailForn) {
       setFornecedorSelect(exists ? fornecedoresUnicos.find((f: any) => f.nome.toLowerCase() === emailForn.toLowerCase()).nome : '__new__');
+      setFornecedorSearchInput(emailForn);
     } else {
       setFornecedorSelect('__new__');
+      setFornecedorSearchInput('');
     }
     setForm(f=>({...f,email_titulo:p.titulo||'',tipo_solicitacao:p.tipo||'Materiais',fornecedor_nome:p.fornecedor||'',fornecedor_cnpj:p.cnpj||'',conta:p.conta||'',centro_custo:ccVal.toString(),cc_desc:ccD,obs:p.obs||'',qtd_parcelas:n,parcelas:p.pagamentos.slice(0,3).map((pg:any)=>({parcela:pg.parcela||'1/1',data_envio:pg.envio||'',valor_solicitado:String(pg.solicitado||''),valor_pago:String(pg.pago||''),data_pagamento:pg.dataPgto||'',estornado:pg.estornado||false}))}));
     setIsColarOpen(false);setIsCreateOpen(true);toast.success('Formulário preenchido!');
@@ -922,6 +965,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     let ccVal = c.centro_custo === 0 ? '31' : (c.centro_custo?.toString() || '');
     const exists = c.fornecedor_nome && fornecedoresUnicos.some((f: any) => f.nome.toLowerCase() === c.fornecedor_nome.trim().toLowerCase());
     setFornecedorSelect(exists ? fornecedoresUnicos.find((f: any) => f.nome.toLowerCase() === c.fornecedor_nome.trim().toLowerCase()).nome : '__new__');
+    setFornecedorSearchInput(c.fornecedor_nome || '');
     setForm({...emptyForm(),status:c.status,email_titulo:c.email_titulo||'',email_link:c.email_link||'',fornecedor_nome:c.fornecedor_nome||'',fornecedor_cnpj:c.fornecedor_cnpj||'',fornecedor_dados:c.fornecedor_dados||'',conta:c.conta||'',centro_custo:ccVal,cc_desc:c.cc_desc||'',obs:c.obs||'',tipo_solicitacao:c.tipo_solicitacao||'Materiais',qtd_parcelas:1,parcelas:[{parcela:c.parcela||'1/1',data_envio:c.data_envio||'',valor_solicitado:c.valor_solicitado?.toString()||'',valor_pago:c.valor_pago?.toString()||'',valor_estornado:c.valor_estornado?.toString()||'',data_pagamento:c.data_pagamento||'',estornado:c.estornado||false}]});
     setIsEditOpen(true);
   };
@@ -1321,6 +1365,15 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               <SelectContent className="bg-[#161f30] border-white/10 text-white">
                 <SelectItem value="all">Todos tipos</SelectItem>
                 {TIPO_OPTIONS.map(t=><SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={selectedNfFilter} onValueChange={setSelectedNfFilter}>
+              <SelectTrigger className="h-8 w-44 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Filtro NF"/></SelectTrigger>
+              <SelectContent className="bg-[#161f30] border-white/10 text-white">
+                <SelectItem value="all">Todas as NF</SelectItem>
+                <SelectItem value="pendente">⚠️ Apenas NF Pendente</SelectItem>
+                <SelectItem value="diferenca">⚖️ Apenas Diferença de NF</SelectItem>
+                <SelectItem value="ambos">🚨 Pendente ou Diferença</SelectItem>
               </SelectContent>
             </Select>
           </>
@@ -1920,54 +1973,83 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 <SelectContent>{STATUS_OPTIONS.map(s=><SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 relative">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Fornecedor</Label>
-              <Select value={fornecedorSelect} onValueChange={val => {
-                setFornecedorSelect(val);
-                if (val === '__new__') {
-                  setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '' }));
-                } else {
-                  const found = fornecedoresUnicos.find((f: any) => f.nome === val);
-                  setForm(f => ({
-                    ...f,
-                    fornecedor_nome: val,
-                    fornecedor_cnpj: found ? found.cnpj : ''
-                  }));
-                }
-              }}>
-                <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
-                  <SelectValue placeholder="Selecione um fornecedor" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
-                  <SelectItem value="__new__" className="text-emerald-400 font-semibold focus:bg-white/10 focus:text-emerald-400 cursor-pointer">
-                    + Novo Fornecedor
-                  </SelectItem>
-                  {fornecedoresUnicos.map((f: any) => (
-                    <SelectItem key={f.nome} value={f.nome} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
-                      {f.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Input
+                  value={fornecedorSearchInput}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setFornecedorSearchInput(val);
+                    setForm(f => ({ ...f, fornecedor_nome: val }));
+                    setFornecedorSelect('__new__');
+                    setShowFornecedoresList(true);
+                  }}
+                  onFocus={() => setShowFornecedoresList(true)}
+                  onBlur={() => {
+                    setTimeout(() => setShowFornecedoresList(false), 200);
+                  }}
+                  placeholder="Selecione ou busque um fornecedor..."
+                  className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10 pr-8"
+                  autoComplete="off"
+                />
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center text-white/40 pointer-events-none">
+                  <Search className="h-4 w-4" />
+                </div>
+
+                {showFornecedoresList && (
+                  <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors text-emerald-400 font-semibold text-xs min-h-[36px]"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setFornecedorSearchInput('');
+                        setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '' }));
+                        setFornecedorSelect('__new__');
+                        setShowFornecedoresList(false);
+                      }}
+                    >
+                      + Limpar / Novo Fornecedor
+                    </button>
+                    {fornecedoresUnicos
+                      .filter((f: any) => f.nome.toLowerCase().includes(fornecedorSearchInput.toLowerCase()))
+                      .map((f: any) => (
+                        <button
+                          key={f.nome}
+                          type="button"
+                          className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors text-white text-xs min-h-[36px]"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setFornecedorSearchInput(f.nome);
+                            setForm(fState => ({
+                              ...fState,
+                              fornecedor_nome: f.nome,
+                              fornecedor_cnpj: f.cnpj
+                            }));
+                            setFornecedorSelect(f.nome);
+                            setShowFornecedoresList(false);
+                          }}
+                        >
+                          {f.nome}
+                        </button>
+                      ))
+                    }
+                  </div>
+                )}
+              </div>
             </div>
 
-            {fornecedorSelect === '__new__' ? (
-              <>
-                <div className="space-y-1">
-                  <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Nome do Fornecedor</Label>
-                  <Input value={form.fornecedor_nome} onChange={e=>setForm(f=>({...f,fornecedor_nome:e.target.value}))} placeholder="Nome da empresa" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
-                  <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-1">
-                <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
-                <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
-              </div>
-            )}
+            <div className="space-y-1">
+              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
+              <Input
+                value={form.fornecedor_cnpj}
+                onChange={e => setForm(f => ({ ...f, fornecedor_cnpj: e.target.value }))}
+                placeholder="00.000.000/0000-00"
+                className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+                autoComplete="off"
+              />
+            </div>
             <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Conta / Banco</Label>
               <Input value={form.conta} onChange={e=>setForm(f=>({...f,conta:e.target.value}))} placeholder="Ag. / Conta / Banco" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
@@ -2153,54 +2235,83 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 </div>
               );
             })}
-            <div className="space-y-1">
+            <div className="space-y-1 relative">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Fornecedor</Label>
-              <Select value={fornecedorSelect} onValueChange={val => {
-                setFornecedorSelect(val);
-                if (val === '__new__') {
-                  setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '' }));
-                } else {
-                  const found = fornecedoresUnicos.find((f: any) => f.nome === val);
-                  setForm(f => ({
-                    ...f,
-                    fornecedor_nome: val,
-                    fornecedor_cnpj: found ? found.cnpj : ''
-                  }));
-                }
-              }}>
-                <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
-                  <SelectValue placeholder="Selecione um fornecedor" />
-                </SelectTrigger>
-                <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
-                  <SelectItem value="__new__" className="text-emerald-400 font-semibold focus:bg-white/10 focus:text-emerald-400 cursor-pointer">
-                    + Novo Fornecedor
-                  </SelectItem>
-                  {fornecedoresUnicos.map((f: any) => (
-                    <SelectItem key={f.nome} value={f.nome} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
-                      {f.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Input
+                  value={fornecedorSearchInput}
+                  onChange={e => {
+                    const val = e.target.value;
+                    setFornecedorSearchInput(val);
+                    setForm(f => ({ ...f, fornecedor_nome: val }));
+                    setFornecedorSelect('__new__');
+                    setShowFornecedoresList(true);
+                  }}
+                  onFocus={() => setShowFornecedoresList(true)}
+                  onBlur={() => {
+                    setTimeout(() => setShowFornecedoresList(false), 200);
+                  }}
+                  placeholder="Selecione ou busque um fornecedor..."
+                  className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10 pr-8"
+                  autoComplete="off"
+                />
+                <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center text-white/40 pointer-events-none">
+                  <Search className="h-4 w-4" />
+                </div>
+
+                {showFornecedoresList && (
+                  <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors text-emerald-400 font-semibold text-xs min-h-[36px]"
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setFornecedorSearchInput('');
+                        setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '' }));
+                        setFornecedorSelect('__new__');
+                        setShowFornecedoresList(false);
+                      }}
+                    >
+                      + Limpar / Novo Fornecedor
+                    </button>
+                    {fornecedoresUnicos
+                      .filter((f: any) => f.nome.toLowerCase().includes(fornecedorSearchInput.toLowerCase()))
+                      .map((f: any) => (
+                        <button
+                          key={f.nome}
+                          type="button"
+                          className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors text-white text-xs min-h-[36px]"
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            setFornecedorSearchInput(f.nome);
+                            setForm(fState => ({
+                              ...fState,
+                              fornecedor_nome: f.nome,
+                              fornecedor_cnpj: f.cnpj
+                            }));
+                            setFornecedorSelect(f.nome);
+                            setShowFornecedoresList(false);
+                          }}
+                        >
+                          {f.nome}
+                        </button>
+                      ))
+                    }
+                  </div>
+                )}
+              </div>
             </div>
 
-            {fornecedorSelect === '__new__' ? (
-              <>
-                <div className="space-y-1">
-                  <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Nome do Fornecedor</Label>
-                  <Input value={form.fornecedor_nome} onChange={e=>setForm(f=>({...f,fornecedor_nome:e.target.value}))} placeholder="Nome da empresa" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
-                  <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-1">
-                <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
-                <Input value={form.fornecedor_cnpj} onChange={e=>setForm(f=>({...f,fornecedor_cnpj:e.target.value}))} placeholder="00.000.000/0000-00" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
-              </div>
-            )}
+            <div className="space-y-1">
+              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
+              <Input
+                value={form.fornecedor_cnpj}
+                onChange={e => setForm(f => ({ ...f, fornecedor_cnpj: e.target.value }))}
+                placeholder="00.000.000/0000-00"
+                className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+                autoComplete="off"
+              />
+            </div>
             <div className="space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Centro de Custo</Label>
               <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
