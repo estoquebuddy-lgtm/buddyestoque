@@ -354,12 +354,27 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
   // Realtime
   useEffect(() => {
-    const ch1 = supabase.channel('compras-rt').on('postgres_changes',{event:'*',schema:'public',table:'compras',filter:`obra_id=eq.${obraId}`},()=>queryClient.invalidateQueries({queryKey:['compras',obraId]})).subscribe();
-    const ch2 = supabase.channel('compras-nfs-rt').on('postgres_changes',{event:'*',schema:'public',table:'compras_nfs'},()=>queryClient.invalidateQueries({queryKey:['compras',obraId]})).subscribe();
-    const ch3 = supabase.channel('compras-entradas-rt').on('postgres_changes',{event:'*',schema:'public',table:'entradas',filter:`obra_id=eq.${obraId}`},()=>queryClient.invalidateQueries({queryKey:['compras',obraId]})).subscribe();
-    const ch4 = supabase.channel('compras-nfs-vinculos-rt').on('postgres_changes',{event:'*',schema:'public',table:'compras_nfs_vinculos'},()=>queryClient.invalidateQueries({queryKey:['compras',obraId]})).subscribe();
-    return ()=>{supabase.removeChannel(ch1);supabase.removeChannel(ch2);supabase.removeChannel(ch3);supabase.removeChannel(ch4);};
-  },[obraId,queryClient]);
+    if (!obraId) return;
+    const uniqueId = Math.random().toString(36).substring(2, 9);
+    const channel = supabase.channel(`compras-rt-${obraId}-${uniqueId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'compras', filter: `obra_id=eq.${obraId}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['compras', obraId] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'compras_nfs' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['compras', obraId] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'entradas', filter: `obra_id=eq.${obraId}` }, () => {
+        queryClient.invalidateQueries({ queryKey: ['compras', obraId] });
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'compras_nfs_vinculos' }, () => {
+        queryClient.invalidateQueries({ queryKey: ['compras', obraId] });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [obraId, queryClient]);
 
   // Query
   const { data: compras = [], isLoading } = useQuery({

@@ -93,7 +93,9 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   });
 
   useEffect(() => {
-    const channel = supabase.channel('produtos-changes')
+    if (!obraId) return;
+    const uniqueId = Math.random().toString(36).substring(2, 9);
+    const channel = supabase.channel(`produtos-changes-${obraId}-${uniqueId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'produtos', filter: `obra_id=eq.${obraId}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
       }).subscribe();

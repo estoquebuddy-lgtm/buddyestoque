@@ -42,7 +42,9 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
   const { data: saidas = [], isLoading } = useQuery({ queryKey: ['saidas', obraId], queryFn: async () => { const { data } = await supabase.from('saidas').select('*, produtos(nome), pessoas(nome)').eq('obra_id', obraId).order('data', { ascending: false }); return data || []; } });
 
   useEffect(() => {
-    const channel = supabase.channel('saidas-changes')
+    if (!obraId) return;
+    const uniqueId = Math.random().toString(36).substring(2, 9);
+    const channel = supabase.channel(`saidas-changes-${obraId}-${uniqueId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'saidas', filter: `obra_id=eq.${obraId}` }, () => {
         queryClient.invalidateQueries({ queryKey: ['saidas', obraId] });
         queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
