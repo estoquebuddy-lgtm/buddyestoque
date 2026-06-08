@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar, Search } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar, Search, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
 import PageHeader from '@/components/PageHeader';
@@ -85,9 +85,22 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const [showMyAssignedOnly, setShowMyAssignedOnly] = useState(false);
   const [selectedSolicitacao, setSelectedSolicitacao] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [observacao, setObservacao] = useState('');
+
+  const handleEditClick = (s: any) => {
+    setForm({
+      destinatario_id: s.destinatario_id || '',
+      descricao: s.descricao_materiais || '',
+      urgencia: s.urgencia || 'Normal',
+      foto_url: s.foto_url || '',
+      data_necessidade: s.data_necessidade || '',
+    });
+    setEditingId(s.id);
+    setDialogOpen(true);
+  };
   const [selectedProdutoId, setSelectedProdutoId] = useState('');
   const [selectedQtd, setSelectedQtd] = useState('');
   const [productSearch, setProductSearch] = useState('');
@@ -324,6 +337,44 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['solicitacoes', obraId] });
       toast.success('Aprovação atualizada!');
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const editSolicitacao = useMutation({
+    mutationFn: async () => {
+      if (!editingId) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      const payload = {
+        destinatario_id: form.destinatario_id,
+        descricao_materiais: form.descricao,
+        urgencia: form.urgencia,
+        foto_url: form.foto_url || null,
+        data_necessidade: form.data_necessidade || null
+      };
+
+      const { error } = await supabase
+        .from('solicitacoes_material' as any)
+        .update(payload)
+        .eq('id', editingId);
+
+      if (error) throw error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EDITAR',
+        entidade: 'SOLICITACAO',
+        detalhes: `Solicitação de material editada`
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solicitacoes', obraId] });
+      setDialogOpen(false);
+      setEditingId(null);
+      setForm(emptyForm);
+      toast.success('Solicitação atualizada com sucesso!');
     },
     onError: (e: any) => toast.error(e.message),
   });
@@ -582,6 +633,20 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                             >
                               Status
                             </Button>
+                            {s.status === 'SOLICITADO' && !s.aprovador_id && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 text-[10px] font-bold px-1.5 rounded-md hover:bg-slate-50 text-slate-500 flex items-center gap-1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEditClick(s);
+                                }}
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                                Editar
+                              </Button>
+                            )}
                             {s.status === 'ENTREGUE' && !s.arquivado && (
                               <Button
                                 variant="ghost"
@@ -713,12 +778,18 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       {isLoading ? <SkeletonList /> : renderKanban()}
 
       {/* Nova Solicitação Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => {
+        setDialogOpen(open);
+        if (!open) {
+          setEditingId(null);
+          setForm(emptyForm);
+        }
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Solicitar Material</DialogTitle>
+            <DialogTitle>{editingId ? "Editar Solicitação de Material" : "Solicitar Material"}</DialogTitle>
           </DialogHeader>
-          <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="space-y-4 pt-4">
+          <form onSubmit={e => { e.preventDefault(); if (editingId) { editSolicitacao.mutate(); } else { save.mutate(); } }} className="space-y-4 pt-4">
             
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Para quem enviar? *</label>
@@ -879,8 +950,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               />
             </div>
 
-            <Button type="submit" className="w-full h-12 text-sm font-bold" disabled={save.isPending || !user?.id || !form.destinatario_id || !form.descricao.trim()}>
-              {save.isPending ? 'Enviando...' : 'Enviar Solicitação'}
+            <Button type="submit" className="w-full h-12 text-sm font-bold" disabled={save.isPending || editSolicitacao.isPending || !user?.id || !form.destinatario_id || !form.descricao.trim()}>
+              {editingId ? (editSolicitacao.isPending ? 'Salvando...' : 'Salvar Alterações') : (save.isPending ? 'Enviando...' : 'Enviar Solicitação')}
             </Button>
           </form>
         </DialogContent>
