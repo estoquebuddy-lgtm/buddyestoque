@@ -18,6 +18,7 @@ import { Switch } from '@/components/ui/switch';
 import { useProfile } from '@/hooks/useProfile';
 import ImageUpload from '@/components/ImageUpload';
 import ImageThumbnail from '@/components/ImageThumbnail';
+import emailjs from '@emailjs/browser';
 
 const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '', foto_url: '', data_necessidade: '' };
 
@@ -76,7 +77,7 @@ const formatUserDisplay = (userObj: any) => {
 export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { isAdmin } = useProfile();
+  const { isAdmin, profile } = useProfile();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
@@ -181,6 +182,32 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         entidade: 'SOLICITACAO',
         detalhes: `Nova solicitação de material criada`
       });
+
+      try {
+        const recipient = usuarios.find((u: any) => u.id === form.destinatario_id);
+        const formattedDate = form.data_necessidade 
+          ? form.data_necessidade.split('-').reverse().join('/')
+          : 'Não informada';
+
+        const templateParams = {
+          email_destino: recipient?.email || '', 
+          usuario_destino: recipient ? formatUserDisplay(recipient) : 'Almoxarifado', 
+          obra_nome: 'Casa N&J - Preá, Ceará', 
+          prioridade: form.urgencia.toUpperCase(),
+          material_detalhes: form.descricao,
+          data_entrega: formattedDate,
+          usuario_remetente: formatUserDisplay(profile || { email: user?.email })
+        };
+
+        await emailjs.send(
+          'service_q5nfjuk',
+          'template_i77h8pk',
+          templateParams,
+          'uUAL8xHI-jKaqRpuy'
+        );
+      } catch (err) {
+        console.error('Erro ao enviar e-mail via EmailJS:', err);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['solicitacoes', obraId] });
