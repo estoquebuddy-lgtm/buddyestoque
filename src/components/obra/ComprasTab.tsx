@@ -876,7 +876,9 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         uf: nf.livro_uf || 'SC',
         vNF: nf.valor_nf || 0,
         cfop: nf.livro_cfop || '1556',
-        imposto: nf.livro_imposto || 'ICMS',
+        imposto: (nf.livro_especie || '').toLowerCase().includes('nfs')
+          ? 'ISS'
+          : (nf.livro_imposto && nf.livro_imposto !== '-' ? nf.livro_imposto : 'ICMS'),
         codigoA: nf.livro_cod_fiscal || '3',
         bCalculo: nf.livro_base_calculo || nf.valor_nf || 0,
         pICMS: nf.livro_aliquota || 0,
@@ -2586,7 +2588,18 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                     <div key={field} className="space-y-1">
                       <Label className="text-[8px] uppercase tracking-wider text-white/40 font-bold">{label}</Label>
                       {type==='select'?(
-                        <Select value={(nfForm as any)[field]||''} onValueChange={v=>setNfForm(f=>({...f,[field]:v}))}>
+                        <Select 
+                          value={(nfForm as any)[field]||''} 
+                          onValueChange={v => setNfForm(f => {
+                            const updated = { ...f, [field]: v };
+                            if (field === 'especie' && (v === 'NFS-e' || v === 'NFS-e/DPS')) {
+                              updated.livro_imposto = 'ISS';
+                            } else if (field === 'especie' && (v === 'NF-e' || v === 'CT-e') && f.livro_imposto === 'ISS') {
+                              updated.livro_imposto = 'ICMS';
+                            }
+                            return updated;
+                          })}
+                        >
                           <SelectTrigger className="text-xs h-8 bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-lg"><SelectValue/></SelectTrigger>
                           <SelectContent>{(opts||[]).map((o:string,i:number)=><SelectItem key={o} value={o}>{optLabels?optLabels[i]:o}</SelectItem>)}</SelectContent>
                         </Select>

@@ -171,7 +171,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
           uf,
           vNF,
           cfop: Array.from(fiscalLinesMap.values())[0]?.cfop || '1556',
-          imposto: especie === 'NFS-e' ? 'ISS' : 'ICMS',
+          imposto: (especie || '').toLowerCase().includes('nfs') ? 'ISS' : 'ICMS',
           codigoA: Array.from(fiscalLinesMap.values())[0]?.codigoA || '3',
           bCalculo: vNF,
           linhas_fiscais: Array.from(fiscalLinesMap.values())
