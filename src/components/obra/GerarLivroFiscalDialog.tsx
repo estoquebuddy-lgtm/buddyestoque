@@ -10,6 +10,17 @@ import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect } from 'react';
 
+const getClassification = (especie: string) => {
+  const esp = (especie || '').toLowerCase().trim();
+  if (esp.includes('nfs-e') || esp.includes('nfs') || esp.includes('serviço') || esp.includes('servico')) {
+    return 'Serviço';
+  }
+  if (esp.includes('ct-e') || esp.includes('cte') || esp.includes('frete') || esp.includes('frente')) {
+    return 'Frete';
+  }
+  return 'Material';
+};
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -79,6 +90,15 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
         const dhEmiRaw = doc.getElementsByTagName('dhEmi')[0]?.textContent || doc.getElementsByTagName('dEmi')[0]?.textContent || '';
         const dhEmi = formatFiscalDate(dhEmiRaw);
         
+        let especie = 'NF-e';
+        if (doc.getElementsByTagName('infNFe').length > 0 || doc.getElementsByTagName('NFe').length > 0) {
+          especie = 'NF-e';
+        } else if (doc.getElementsByTagName('infCte').length > 0 || doc.getElementsByTagName('CTe').length > 0) {
+          especie = 'CT-e';
+        } else if (doc.getElementsByTagName('NFSe').length > 0 || doc.getElementsByTagName('tcDeclaracaoPrestacaoServico').length > 0 || doc.getElementsByTagName('DPS').length > 0) {
+          especie = 'NFS-e';
+        }
+
         const emit = doc.getElementsByTagName('emit')[0];
         const cnpjRaw = emit?.getElementsByTagName('CNPJ')[0]?.textContent?.trim() || '-';
         const uf = emit?.getElementsByTagName('UF')[0]?.textContent?.trim() || '-';
@@ -143,7 +163,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
         newRows.push({
           filename: file.name,
           dataEntrada: todayStr,
-          especie: '', 
+          especie: especie, 
           nNF,
           serie: (serie.length > 0 ? serie + '/' : ''),
           dataDoc: dhEmi,
@@ -248,7 +268,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
             formatCurr(line.vBC || 0),
             line.vICMS > 0 ? (line.pICMS ? line.pICMS.toLocaleString('pt-BR') : '') : '',
             line.vICMS > 0 ? formatCurr(line.vICMS) : '',
-            idx === 0 ? (r.observacoes || '') : ''
+            idx === 0 ? `[${getClassification(r.especie).toUpperCase()}]${r.observacoes ? ' - ' + r.observacoes : ''}` : ''
           ]);
         });
       } else {
@@ -268,7 +288,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
           formatCurr(r.bCalculo),
           r.pICMS ? r.pICMS.toLocaleString('pt-BR') : '',
           r.vICMS ? formatCurr(r.vICMS) : '',
-          r.observacoes || ''
+          `[${getClassification(r.especie).toUpperCase()}]${r.observacoes ? ' - ' + r.observacoes : ''}`
         ]);
       }
     });
@@ -380,6 +400,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
                 {rows.map((r, i) => (
                   <div key={i} className="flex items-center gap-2 p-1.5 hover:bg-white/5 rounded border-b border-white/5 last:border-0 text-white/80">
                     <span className="bg-primary/20 text-primary px-1.5 rounded text-[9px] font-bold h-4 flex items-center border border-primary/20">XML</span>
+                    <span className="bg-white/10 text-white/70 px-1.5 rounded text-[9px] font-bold h-4 flex items-center">{getClassification(r.especie).toUpperCase()}</span>
                     <span className="truncate flex-1 font-medium">{r.nNF} - {r.cnpjEmit.substring(0,8)}...</span>
                     <span className="text-white/60 shrink-0 font-bold">R$ {r.vNF.toLocaleString('pt-BR')}</span>
                   </div>
