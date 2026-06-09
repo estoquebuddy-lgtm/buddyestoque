@@ -171,7 +171,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
           uf,
           vNF,
           cfop: Array.from(fiscalLinesMap.values())[0]?.cfop || '1556',
-          imposto: 'ICMS',
+          imposto: especie === 'NFS-e' ? 'ISS' : 'ICMS',
           codigoA: Array.from(fiscalLinesMap.values())[0]?.codigoA || '3',
           bCalculo: vNF,
           linhas_fiscais: Array.from(fiscalLinesMap.values())
@@ -306,7 +306,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
         ],
         [
           'ESPÉCIE', 'NÚMERO', 'SERIE\nS.SERIE', 'DATA\nDOC.', 'CÓDIGO EMITENTE', 'UF\nOR.',
-          'CFOP', 'ICMS', 'CÓD.\n(a)',
+          'CFOP', 'ICMS/\nISS', 'CÓD.\n(a)',
           'B. CÁLCULO\nV. OPERAÇÃO', 'ALIQ', 'IMPOSTO\nCREDITADO', 'OBSERVAÇÕES'
         ]
       ],

@@ -876,7 +876,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         uf: nf.livro_uf || 'SC',
         vNF: nf.valor_nf || 0,
         cfop: nf.livro_cfop || '1556',
-        imposto: 'ICMS',
+        imposto: nf.livro_imposto || 'ICMS',
         codigoA: nf.livro_cod_fiscal || '3',
         bCalculo: nf.livro_base_calculo || nf.valor_nf || 0,
         pICMS: nf.livro_aliquota || 0,
