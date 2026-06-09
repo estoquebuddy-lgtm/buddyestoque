@@ -268,7 +268,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
             formatCurr(line.vBC || 0),
             line.vICMS > 0 ? (line.pICMS ? line.pICMS.toLocaleString('pt-BR') : '') : '',
             line.vICMS > 0 ? formatCurr(line.vICMS) : '',
-            idx === 0 ? `CLASSIFICAÇÃO: ${getClassification(r.especie).toUpperCase()}${r.observacoes ? '\n' + r.observacoes : ''}` : ''
+            idx === 0 ? (r.observacoes || '') : ''
           ]);
         });
       } else {
@@ -288,7 +288,7 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
           formatCurr(r.bCalculo),
           r.pICMS ? r.pICMS.toLocaleString('pt-BR') : '',
           r.vICMS ? formatCurr(r.vICMS) : '',
-          `CLASSIFICAÇÃO: ${getClassification(r.especie).toUpperCase()}${r.observacoes ? '\n' + r.observacoes : ''}`
+          r.observacoes || ''
         ]);
       }
     });
