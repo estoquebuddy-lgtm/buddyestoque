@@ -422,8 +422,20 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
     loadPdf(file, isAppending);
   };
 
-  const updateItem = (id: string, field: keyof XmlItem, value: any) => {
-    setItems(items.map(item => item.id === id ? { ...item, [field]: value } : item));
+  const updateItem = (
+    id: string,
+    fieldOrUpdates: keyof XmlItem | Partial<XmlItem>,
+    value?: any
+  ) => {
+    setItems(prev =>
+      prev.map(item => {
+        if (item.id !== id) return item;
+        if (typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null) {
+          return { ...item, ...fieldOrUpdates };
+        }
+        return { ...item, [fieldOrUpdates as keyof XmlItem]: value };
+      })
+    );
   };
 
   const removeItem = (id: string) => setItems(items.filter(item => item.id !== id));
@@ -791,8 +803,10 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
                           size="icon" 
                           className="h-5 w-5 text-primary-foreground hover:bg-primary/20 shrink-0"
                           onClick={() => {
-                            updateItem(item.id, 'produtoId', undefined);
-                            updateItem(item.id, 'isNewProduct', true);
+                            updateItem(item.id, {
+                              produtoId: undefined,
+                              isNewProduct: true,
+                            });
                           }}
                         >
                           <Trash2 className="h-3 w-3" />
@@ -840,17 +854,20 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
                                         className="w-full text-left px-3 py-2 hover:bg-white/5 transition-colors flex items-center justify-between text-[11px] border-b border-white/5"
                                         onMouseDown={(e) => {
                                           e.preventDefault();
-                                          updateItem(item.id, 'produtoId', p.id);
-                                          updateItem(item.id, 'nome', displayName);
-                                          updateItem(item.id, 'unidade', p.unidade || 'un');
+                                          const updates: Partial<XmlItem> = {
+                                            produtoId: p.id,
+                                            nome: displayName,
+                                            unidade: p.unidade || 'un',
+                                            isNewProduct: false,
+                                          };
                                           if (p.categoria) {
                                             if (item.tipo === 'ferramenta') {
-                                              updateItem(item.id, 'ferrCategoria', p.categoria);
+                                              updates.ferrCategoria = p.categoria;
                                             } else {
-                                              updateItem(item.id, 'matCategoria', p.categoria);
+                                              updates.matCategoria = p.categoria;
                                             }
                                           }
-                                          updateItem(item.id, 'isNewProduct', false);
+                                          updateItem(item.id, updates);
                                           setActiveDropdownRowId(null);
                                         }}
                                       >
@@ -876,8 +893,10 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
                                     className="w-full text-left px-3 py-2 hover:bg-emerald-500/10 transition-colors flex items-center gap-1.5 text-[11px] text-emerald-400 font-bold border-t border-white/10"
                                     onMouseDown={(e) => {
                                       e.preventDefault();
-                                      updateItem(item.id, 'produtoId', undefined);
-                                      updateItem(item.id, 'isNewProduct', true);
+                                      updateItem(item.id, {
+                                        produtoId: undefined,
+                                        isNewProduct: true,
+                                      });
                                       setActiveDropdownRowId(null);
                                     }}
                                   >
