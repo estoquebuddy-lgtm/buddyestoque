@@ -343,7 +343,6 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     mutationFn: async ({ id, checked }: { id: string, checked: boolean }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const aprovador_id = checked ? user?.id : null;
-      const status = checked ? 'APROVADO' : 'SOLICITADO';
       const now = new Date().toISOString();
       const data_aprovado = checked ? now : null;
       
@@ -351,7 +350,6 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         .from('solicitacoes_material' as any)
         .update({ 
           aprovador_id,
-          status,
           data_aprovado
         })
         .eq('id', id);
