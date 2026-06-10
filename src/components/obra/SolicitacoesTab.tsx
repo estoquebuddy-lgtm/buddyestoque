@@ -551,7 +551,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                               <ImageThumbnail src={s.foto_url} alt="Material solicitado" type="produto" size="sm" />
                             )}
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-base text-slate-800 leading-normal whitespace-pre-wrap">{s.titulo || s.descricao_materiais}</h4>
+                              <h4 className="font-bold text-base text-slate-800 leading-normal whitespace-pre-wrap break-all break-words">{s.titulo || s.descricao_materiais}</h4>
                               {s.titulo && s.classificacao && (
                                 <span className="inline-block text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-semibold uppercase mt-1">
                                   {s.classificacao}
@@ -793,7 +793,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     >
                       {expandedRows[s.id] ? (
                         <div className="space-y-2 py-1">
-                          <div className="font-medium text-slate-800 whitespace-pre-wrap leading-normal bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-xs">
+                          <div className="font-medium text-slate-800 whitespace-pre-wrap break-all break-words leading-normal bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-xs">
                             {s.descricao_materiais}
                           </div>
                           {s.foto_url && (
@@ -1307,7 +1307,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     />
                   </div>
                 )}
-                <p className="font-bold text-base whitespace-pre-wrap">{selectedSolicitacao.descricao_materiais}</p>
+                <p className="font-bold text-base whitespace-pre-wrap break-all break-words">{selectedSolicitacao.descricao_materiais}</p>
                 <div className="flex flex-col gap-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
                   {selectedSolicitacao.data_necessidade && (
                     <span className="flex items-center gap-1.5 text-blue-600 mb-1">
