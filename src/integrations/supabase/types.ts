@@ -754,6 +754,9 @@ export type Database = {
           solicitante_id: string
           status: string
           urgencia: string
+          numero: number
+          titulo: string | null
+          classificacao: string | null
         }
         Insert: {
           data_aprovado?: string | null
@@ -770,6 +773,9 @@ export type Database = {
           solicitante_id: string
           status?: string
           urgencia?: string
+          numero?: number
+          titulo?: string | null
+          classificacao?: string | null
         }
         Update: {
           data_aprovado?: string | null
@@ -786,6 +792,9 @@ export type Database = {
           solicitante_id?: string
           status?: string
           urgencia?: string
+          numero?: number
+          titulo?: string | null
+          classificacao?: string | null
         }
         Relationships: [
           {

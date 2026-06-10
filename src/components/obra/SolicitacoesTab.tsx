@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar, Search, Pencil } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar, Search, Pencil, LayoutGrid, List, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
 import PageHeader from '@/components/PageHeader';
@@ -20,7 +20,24 @@ import ImageUpload from '@/components/ImageUpload';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import emailjs from '@emailjs/browser';
 
-const emptyForm = { descricao: '', urgencia: 'Normal', destinatario_id: '', foto_url: '', data_necessidade: '' };
+const SOLICITACAO_CATEGORIES = [
+  'Hidráulica',
+  'Elétrica',
+  'Esgoto',
+  'Estrutural',
+  'Alvenaria',
+  'Acabamento',
+  'Pintura',
+  'Ferramentas',
+  'Segurança (EPI)',
+  'Marcenaria',
+  'Serralheria',
+  'Disco',
+  'Insumos',
+  'OUTROS'
+];
+
+const emptyForm = { titulo: '', classificacao: 'OUTROS', descricao: '', urgencia: 'Normal', destinatario_id: '', foto_url: '', data_necessidade: '' };
 
 const columnsList = [
   { 
@@ -89,9 +106,13 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState('');
   const [observacao, setObservacao] = useState('');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
 
   const handleEditClick = (s: any) => {
     setForm({
+      titulo: s.titulo || '',
+      classificacao: s.classificacao || 'OUTROS',
       destinatario_id: s.destinatario_id || '',
       descricao: s.descricao_materiais || '',
       urgencia: s.urgencia || 'Normal',
@@ -183,7 +204,9 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         urgencia: form.urgencia,
         status: 'SOLICITADO',
         foto_url: form.foto_url || null,
-        data_necessidade: form.data_necessidade || null
+        data_necessidade: form.data_necessidade || null,
+        titulo: form.titulo || null,
+        classificacao: form.classificacao || 'OUTROS'
       };
       
       const { error } = await supabase.from('solicitacoes_material' as any).insert(payload);
@@ -275,6 +298,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         updateData.data_aprovado = null;
         updateData.data_comprado = null;
         updateData.data_entregue = null;
+        updateData.aprovador_id = null;
       } else if (status === 'APROVADO') {
         updateData.data_aprovado = currentDates?.data_aprovado || now;
         updateData.data_comprado = null;
@@ -319,10 +343,17 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     mutationFn: async ({ id, checked }: { id: string, checked: boolean }) => {
       const { data: { user } } = await supabase.auth.getUser();
       const aprovador_id = checked ? user?.id : null;
+      const status = checked ? 'APROVADO' : 'SOLICITADO';
+      const now = new Date().toISOString();
+      const data_aprovado = checked ? now : null;
       
       const { error } = await supabase
         .from('solicitacoes_material' as any)
-        .update({ aprovador_id })
+        .update({ 
+          aprovador_id,
+          status,
+          data_aprovado
+        })
         .eq('id', id);
         
       if (error) throw error;
@@ -352,7 +383,9 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         descricao_materiais: form.descricao,
         urgencia: form.urgencia,
         foto_url: form.foto_url || null,
-        data_necessidade: form.data_necessidade || null
+        data_necessidade: form.data_necessidade || null,
+        titulo: form.titulo || null,
+        classificacao: form.classificacao || 'OUTROS'
       };
 
       const { error } = await supabase
@@ -437,6 +470,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const searchTerms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
   const filtered = solicitacoes.filter((s: any) => {
     const matchesSearch = searchTerms.every(term =>
+      (s.titulo && s.titulo.toLowerCase().includes(term)) ||
+      (s.classificacao && s.classificacao.toLowerCase().includes(term)) ||
       s.descricao_materiais.toLowerCase().includes(term) || 
       (s.solicitante?.email && s.solicitante.email.toLowerCase().includes(term)) ||
       (s.solicitante?.apelido && s.solicitante.apelido.toLowerCase().includes(term))
@@ -517,7 +552,14 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                             {s.foto_url && (
                               <ImageThumbnail src={s.foto_url} alt="Material solicitado" type="produto" size="sm" />
                             )}
-                            <h4 className="font-bold text-base text-slate-800 leading-normal whitespace-pre-wrap flex-1 min-w-0">{s.descricao_materiais}</h4>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-base text-slate-800 leading-normal whitespace-pre-wrap">{s.titulo || s.descricao_materiais}</h4>
+                              {s.titulo && s.classificacao && (
+                                <span className="inline-block text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-semibold uppercase mt-1">
+                                  {s.classificacao}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           {urgenciaBadge(s.urgencia)}
                         </div>
@@ -704,6 +746,237 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     );
   };
 
+  const renderList = () => {
+    return (
+      <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <table className="w-full text-left border-collapse text-xs">
+          <thead>
+            <tr className="bg-slate-50/70 text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-200">
+              <th className="px-4 py-3 font-semibold rounded-l-2xl w-14">Nº</th>
+              <th className="px-4 py-3 font-semibold">Título</th>
+              <th className="px-4 py-3 font-semibold">Classificação</th>
+              <th className="px-4 py-3 font-semibold max-w-xs">Conteúdo (Materiais)</th>
+              <th className="px-4 py-3 font-semibold">De / Para</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold">Urgência</th>
+              <th className="px-4 py-3 font-semibold">Prazo</th>
+              <th className="px-4 py-3 font-semibold text-center rounded-r-2xl w-32">Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {filtered.length === 0 ? (
+              <tr>
+                <td colSpan={9} className="px-4 py-12 text-center text-slate-400 font-semibold bg-white/40">
+                  Nenhuma solicitação encontrada.
+                </td>
+              </tr>
+            ) : (
+              filtered.map((s: any) => {
+                const colIdx = columnsList.findIndex(c => c.id === s.status);
+                return (
+                  <tr key={s.id} onClick={() => openStatusDialog(s)} className="bg-white hover:bg-slate-50/50 transition-colors cursor-pointer group">
+                    <td className="px-4 py-3.5 font-bold text-slate-700 whitespace-nowrap">
+                      {s.numero ? `#${String(s.numero).padStart(4, '0')}` : '—'}
+                    </td>
+                    <td className="px-4 py-3.5 font-semibold text-slate-800 max-w-[150px] truncate" title={s.titulo || 'Sem Título'}>
+                      {s.titulo || <span className="text-slate-400 italic">Sem Título</span>}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <span className="inline-block text-[10px] bg-slate-100 text-slate-700 border border-slate-200/60 px-2 py-0.5 rounded-full font-medium">
+                        {s.classificacao || 'OUTROS'}
+                      </span>
+                    </td>
+                    <td 
+                      className="px-4 py-3.5 max-w-xs" 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setExpandedRows(prev => ({ ...prev, [s.id]: !prev[s.id] })); 
+                      }}
+                    >
+                      {expandedRows[s.id] ? (
+                        <div className="space-y-2 py-1">
+                          <div className="font-medium text-slate-800 whitespace-pre-wrap leading-normal bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-xs">
+                            {s.descricao_materiais}
+                          </div>
+                          {s.foto_url && (
+                            <div className="mt-1" onClick={e => e.stopPropagation()}>
+                              <ImageThumbnail src={s.foto_url} alt="Material solicitado" type="produto" size="md" />
+                            </div>
+                          )}
+                          {s.observacao_resposta && (
+                            <div className="text-[10px] text-amber-600 font-semibold italic bg-amber-50/50 border border-amber-100 p-2 rounded-lg leading-normal">
+                              Obs Resposta: {s.observacao_resposta}
+                            </div>
+                          )}
+                          <span className="text-[9px] text-blue-600 hover:underline cursor-pointer font-bold block">Recolher</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 cursor-pointer font-semibold group-hover:text-blue-800">
+                          <span className="text-xs truncate max-w-[180px]">{s.descricao_materiais.split('\n')[0]}</span>
+                          <Eye className="h-3.5 w-3.5 text-blue-500/70 hover:text-blue-600 shrink-0" title="Ver mais" />
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap text-slate-600">
+                      <div className="flex flex-col text-[11px] leading-tight">
+                        <span className="font-medium"><span className="text-[9px] text-slate-400 font-bold mr-1 uppercase">De:</span>{formatUserDisplay(s.solicitante)}</span>
+                        <span className="font-medium mt-1"><span className="text-[9px] text-slate-400 font-bold mr-1 uppercase">Para:</span>{formatUserDisplay(s.destinatario)}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      <div className="flex flex-col gap-1">
+                        {statusBadge(s.status)}
+                        {s.status === 'SOLICITADO' && (
+                          <div className="flex items-center gap-1.5 mt-1" onClick={e => e.stopPropagation()}>
+                            <input 
+                              type="checkbox" 
+                              id={`approve-list-${s.id}`}
+                              className="h-3.5 w-3.5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                              checked={!!s.aprovador_id}
+                              onChange={(e) => {
+                                toggleAprovacao.mutate({ id: s.id, checked: e.target.checked });
+                              }}
+                              disabled={toggleAprovacao.isPending}
+                            />
+                            <label htmlFor={`approve-list-${s.id}`} className="text-[10px] font-bold text-slate-500 cursor-pointer select-none">
+                              Aprovar
+                            </label>
+                          </div>
+                        )}
+                        {s.aprovador_id && (
+                          <span className="text-[9px] text-slate-500 font-semibold flex items-center gap-0.5 mt-0.5">
+                            <CheckCircle2 className="h-2.5 w-2.5 text-blue-500 shrink-0" />
+                            {formatUserDisplay(s.aprovador)}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap">
+                      {urgenciaBadge(s.urgencia)}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap font-semibold text-slate-700">
+                      {s.data_necessidade ? (
+                        <span className="text-blue-600 font-bold">
+                          {new Date(s.data_necessidade).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3.5 whitespace-nowrap text-center" onClick={e => e.stopPropagation()}>
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md disabled:opacity-20 transition-all"
+                          disabled={s.status === 'SOLICITADO'}
+                          onClick={() => {
+                            const prevStatus = columnsList[colIdx - 1].id;
+                            updateStatus.mutate({ 
+                              id: s.id, 
+                              status: prevStatus, 
+                              obs: s.observacao_resposta || '',
+                              currentDates: {
+                                data_aprovado: s.data_aprovado,
+                                data_comprado: s.data_comprado,
+                                data_entregue: s.data_entregue
+                              }
+                            });
+                          }}
+                          title="Voltar Status"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md disabled:opacity-20 transition-all"
+                          disabled={s.status === 'ENTREGUE' || (s.status === 'SOLICITADO' && !s.aprovador_id)}
+                          onClick={() => {
+                            const nextStatus = columnsList[colIdx + 1].id;
+                            updateStatus.mutate({ 
+                              id: s.id, 
+                              status: nextStatus, 
+                              obs: s.observacao_resposta || '',
+                              currentDates: {
+                                data_aprovado: s.data_aprovado,
+                                data_comprado: s.data_comprado,
+                                data_entregue: s.data_entregue
+                              }
+                            });
+                          }}
+                          title="Avançar Status"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </Button>
+
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
+                          onClick={() => openStatusDialog(s)}
+                          title="Histórico/Atualizar Status"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                        </Button>
+
+                        {s.status === 'SOLICITADO' && !s.aprovador_id && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md"
+                            onClick={() => handleEditClick(s)}
+                            title="Editar"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+
+                        {s.status === 'ENTREGUE' && !s.arquivado && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-primary hover:bg-primary/5 rounded-md"
+                            onClick={() => archiveMutation.mutate({ id: s.id, arquivado: true })}
+                            title="Arquivar"
+                          >
+                            <Archive className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {s.arquivado && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md"
+                            onClick={() => archiveMutation.mutate({ id: s.id, arquivado: false })}
+                            title="Desarquivar"
+                          >
+                            <ArchiveRestore className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md"
+                            onClick={() => setDeleteId(s.id)}
+                            title="Excluir"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="bg-[#0e1629] -mx-6 -mt-6 px-6 py-8 mb-6 rounded-b-[2.5rem] shadow-2xl border-b border-white/5">
@@ -729,18 +1002,48 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                   Ver Solicitações Arquivadas
                 </label>
               </div>
-              <Button
-                variant={showMyAssignedOnly ? "default" : "outline"}
-                size="sm"
-                onClick={() => setShowMyAssignedOnly(!showMyAssignedOnly)}
-                className={`text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
-                  showMyAssignedOnly 
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/95 border-none' 
-                    : 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                {showMyAssignedOnly ? "Mostrando: Endereçadas a Mim" : "Ver Minhas Solicitações"}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2.5">
+                {/* View Mode Toggle */}
+                <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('kanban')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150 ${
+                      viewMode === 'kanban' 
+                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <LayoutGrid className="h-3.5 w-3.5" />
+                    Kanban
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode('list')}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150 ${
+                      viewMode === 'list' 
+                        ? 'bg-primary text-primary-foreground shadow-sm' 
+                        : 'text-white/60 hover:text-white hover:bg-white/5'
+                    }`}
+                  >
+                    <List className="h-3.5 w-3.5" />
+                    Lista
+                  </button>
+                </div>
+
+                <Button
+                  variant={showMyAssignedOnly ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setShowMyAssignedOnly(!showMyAssignedOnly)}
+                  className={`text-xs font-bold uppercase tracking-wider rounded-xl transition-all ${
+                    showMyAssignedOnly 
+                      ? 'bg-primary text-primary-foreground hover:bg-primary/95 border-none' 
+                      : 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  {showMyAssignedOnly ? "Mostrando: Endereçadas a Mim" : "Ver Minhas Solicitações"}
+                </Button>
+              </div>
             </div>
           </PageHeader>
         </div>
@@ -777,7 +1080,13 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
          </div>
       </div>
 
-      {isLoading ? <SkeletonList /> : renderKanban()}
+      {isLoading ? (
+        <SkeletonList />
+      ) : viewMode === 'kanban' ? (
+        renderKanban()
+      ) : (
+        renderList()
+      )}
 
       {/* Nova Solicitação Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => {
@@ -787,20 +1096,43 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
           setForm(emptyForm);
         }
       }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>{editingId ? "Editar Solicitação de Material" : "Solicitar Material"}</DialogTitle>
           </DialogHeader>
           <form onSubmit={e => { e.preventDefault(); if (editingId) { editSolicitacao.mutate(); } else { save.mutate(); } }} className="space-y-4 pt-4">
             
             <div className="space-y-2">
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Para quem enviar? *</label>
-              <Select value={form.destinatario_id} onValueChange={v => setForm(f => ({ ...f, destinatario_id: v }))}>
-                <SelectTrigger className="h-12"><SelectValue placeholder="Selecione o destinatário" /></SelectTrigger>
-                <SelectContent>
-                  {usuarios.map((u: any) => <SelectItem key={u.id} value={u.id}>{formatUserDisplay(u)} ({u.email})</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Título da Solicitação *</label>
+              <Input
+                placeholder="Ex: Instalação Hidráulica Bloco A"
+                value={form.titulo}
+                onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))}
+                className="h-11 bg-background text-sm text-foreground"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Para quem enviar? *</label>
+                <Select value={form.destinatario_id} onValueChange={v => setForm(f => ({ ...f, destinatario_id: v }))}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Selecione" /></SelectTrigger>
+                  <SelectContent>
+                    {usuarios.map((u: any) => <SelectItem key={u.id} value={u.id}>{formatUserDisplay(u)}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Classificação *</label>
+                <Select value={form.classificacao} onValueChange={v => setForm(f => ({ ...f, classificacao: v }))}>
+                  <SelectTrigger className="h-11"><SelectValue placeholder="Classificação" /></SelectTrigger>
+                  <SelectContent>
+                    {SOLICITACAO_CATEGORIES.map(cat => <SelectItem key={cat} value={cat}>{cat}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
@@ -952,7 +1284,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
               />
             </div>
 
-            <Button type="submit" className="w-full h-12 text-sm font-bold" disabled={save.isPending || editSolicitacao.isPending || !user?.id || !form.destinatario_id || !form.descricao.trim()}>
+            <Button type="submit" className="w-full h-12 text-sm font-bold" disabled={save.isPending || editSolicitacao.isPending || !user?.id || !form.destinatario_id || !form.titulo.trim() || !form.descricao.trim()}>
               {editingId ? (editSolicitacao.isPending ? 'Salvando...' : 'Salvar Alterações') : (save.isPending ? 'Enviando...' : 'Enviar Solicitação')}
             </Button>
           </form>
@@ -961,7 +1293,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
 
       {/* Atualizar Status Dialog */}
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Detalhes da Solicitação</DialogTitle>
           </DialogHeader>
