@@ -88,15 +88,13 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('entradas')
-        .select('fornecedor')
+      const { data, error } = await supabase
+        .from('fornecedores')
+        .select('nome')
         .eq('obra_id', obraId)
-        .not('fornecedor', 'is', null)
-        .neq('fornecedor', '');
-      if (!data) return [];
-      const unique = Array.from(new Set(data.map((d: any) => d.fornecedor.trim()))).filter(Boolean);
-      return unique.sort((a: any, b: any) => a.localeCompare(b));
+        .order('nome');
+      if (error) throw error;
+      return (data || []).map((f: any) => f.nome);
     },
     enabled: !!obraId && open,
   });
@@ -170,7 +168,13 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
         const supplierName = xNomeNode ? xNomeNode.textContent || '' : '';
         const trimmedSupplier = supplierName.trim();
         if (trimmedSupplier && (!fornecedor || !append)) {
-          setFornecedor(trimmedSupplier);
+          const matchForn = fornecedores.find((f: any) => f.toLowerCase() === trimmedSupplier.toLowerCase());
+          if (matchForn) {
+            setFornecedor(matchForn);
+          } else {
+            setFornecedor('');
+            toast.warning(`Fornecedor "${trimmedSupplier}" do XML não cadastrado. Cadastre-o na aba de Fornecedores.`);
+          }
         }
 
         // 2. Discount (vDesc)
@@ -448,6 +452,19 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
       return;
     }
 
+    let finalFornecedor = '';
+    if (fornecedor.trim()) {
+      const matchForn = fornecedores.find(
+        (f: any) => f.trim().toLowerCase() === fornecedor.trim().toLowerCase()
+      );
+      if (!matchForn) {
+        toast.error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
+        return;
+      }
+      finalFornecedor = matchForn;
+      setFornecedor(matchForn);
+    }
+
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -464,12 +481,12 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
           .insert({
             obra_id: obraId,
             status: 'PAGO',
-            email_titulo: `NF Importada - ${fornecedor || 'Sem Fornecedor'} - R$ ${totalComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
+            email_titulo: `NF Importada - ${finalFornecedor || 'Sem Fornecedor'} - R$ ${totalComDesconto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`,
             valor_solicitado: totalComDesconto,
             valor_pago: totalComDesconto,
             data_envio: new Date().toISOString().split('T')[0],
             data_pagamento: new Date().toISOString().split('T')[0],
-            fornecedor_nome: fornecedor || null,
+            fornecedor_nome: finalFornecedor || null,
             tipo_solicitacao: 'Materiais',
             obs: 'Importado via XML (Entrada de estoque vinculada)'
           })
@@ -519,7 +536,7 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
               quantidade: item.quantidade,
               valor_unitario: finalUnitValue,
               observacao: note,
-              fornecedor: fornecedor || null,
+              fornecedor: finalFornecedor || null,
               status_entrega: 'PENDENTE',
               comprado_por_id: user?.id || null,
               comprado_em: new Date().toISOString(),
@@ -593,7 +610,7 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
-            fornecedor: fornecedor || null,
+            fornecedor: finalFornecedor || null,
             status_entrega: 'PENDENTE',
             comprado_por_id: user?.id || null,
             comprado_em: new Date().toISOString(),
@@ -610,7 +627,7 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
         acao: 'ENTRADA', entidade: 'ESTOQUE',
         detalhes: compraToLink
           ? `Importou itens de Nota para estoque pendente vinculado à compra "${compraToLink.email_titulo}": ${itemsToImport.length} itens`
-          : `Importou itens de Nota para compra e pendente: ${itemsToImport.length} itens do fornecedor ${fornecedor || 'Sem Fornecedor'}`
+          : `Importou itens de Nota para compra e pendente: ${itemsToImport.length} itens do fornecedor ${finalFornecedor || 'Sem Fornecedor'}`
       });
 
       queryClient.invalidateQueries({ queryKey: ['compras', obraId] });

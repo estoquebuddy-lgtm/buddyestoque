@@ -494,6 +494,41 @@ export type Database = {
           },
         ]
       }
+      fornecedores: {
+        Row: {
+          id: string
+          obra_id: string
+          nome: string
+          cnpj: string | null
+          dados: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          obra_id: string
+          nome: string
+          cnpj?: string | null
+          dados?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          obra_id?: string
+          nome?: string
+          cnpj?: string | null
+          dados?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fornecedores_obra_id_fkey"
+            columns: ["obra_id"]
+            isOneToOne: false
+            referencedRelation: "obras"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       logs_atividades: {
         Row: {
           acao: string

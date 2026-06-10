@@ -221,6 +221,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [xmlOpen, setXmlOpen] = useState(false);
   const [isEditFornecedorOpen, setIsEditFornecedorOpen] = useState(false);
   const [editFornecedorForm, setEditFornecedorForm] = useState<{ oldNome: string; newNome: string; newCnpj: string } | null>(null);
+  const [isAddFornecedorOpen, setIsAddFornecedorOpen] = useState(false);
+  const [addFornecedorForm, setAddFornecedorForm] = useState({ nome: '', cnpj: '', dados: '' });
   const [selectedCompra, setSelectedCompra] = useState<any|null>(null);
   const [selectedNf, setSelectedNf] = useState<any|null>(null);
   const [viewEstoqueCompra, setViewEstoqueCompra] = useState<any|null>(null);
@@ -294,28 +296,17 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     }
   });
 
-  // Unique suppliers query from compras table
+  // Unique suppliers query from public.fornecedores table
   const { data: fornecedoresUnicos = [] } = useQuery({
     queryKey: ['fornecedores-unicos', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('compras')
-        .select('fornecedor_nome, fornecedor_cnpj')
+      const { data, error } = await supabase
+        .from('fornecedores' as any)
+        .select('nome, cnpj, dados')
         .eq('obra_id', obraId)
-        .not('fornecedor_nome', 'is', null)
-        .neq('fornecedor_nome', '');
-      
-      const map = new Map<string, string>();
-      (data || []).forEach((item: any) => {
-        const nome = item.fornecedor_nome.trim();
-        const cnpj = item.fornecedor_cnpj?.trim() || '';
-        if (nome && !map.has(nome.toLowerCase())) {
-          map.set(nome.toLowerCase(), JSON.stringify({ nome, cnpj }));
-        }
-      });
-      return Array.from(map.values())
-        .map(val => JSON.parse(val))
-        .sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+        .order('nome');
+      if (error) throw error;
+      return data || [];
     }
   });
 
@@ -498,6 +489,13 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     mutationFn: async ({ oldNome, newNome, newCnpj }: { oldNome: string; newNome: string; newCnpj: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
 
+      const { error: fError } = await supabase
+        .from('fornecedores' as any)
+        .update({ nome: newNome, cnpj: newCnpj })
+        .eq('obra_id', obraId)
+        .eq('nome', oldNome);
+      if (fError) throw fError;
+
       const comprasUpdateOld = await supabase
         .from('compras')
         .update({ fornecedor_nome: newNome, fornecedor_cnpj: newCnpj })
@@ -540,6 +538,36 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       setEditFornecedorForm(null);
     },
     onError: (e: any) => toast.error(`Erro ao atualizar fornecedor: ${e.message}`)
+  });
+  const addFornecedorMut = useMutation({
+    mutationFn: async (payload: { nome: string; cnpj: string; dados: string }) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('fornecedores' as any)
+        .insert({
+          obra_id: obraId,
+          nome: payload.nome.trim(),
+          cnpj: payload.cnpj.trim() || null,
+          dados: payload.dados.trim() || null
+        });
+      if (error) throw error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'CADASTRAR',
+        entidade: 'FORNECEDOR',
+        detalhes: `Cadastrou fornecedor: ${payload.nome.trim()} (CNPJ: ${payload.cnpj.trim()})`
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fornecedores-unicos', obraId] });
+      toast.success('Fornecedor cadastrado com sucesso!');
+      setIsAddFornecedorOpen(false);
+      setAddFornecedorForm({ nome: '', cnpj: '', dados: '' });
+    },
+    onError: (e: any) => toast.error(`Erro ao cadastrar fornecedor: ${e.message}`)
   });
   const saveNfMut = useMutation({
     mutationFn: async (payload:any) => {
@@ -753,11 +781,19 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
   const fornecedoresListWithStats = useMemo(() => {
     const map = new Map<string, { nome: string; cnpj: string; comprasCount: number; valorLiquido: number }>();
+    
+    fornecedoresUnicos.forEach((f: any) => {
+      const nome = (f.nome || '').trim();
+      const cnpj = (f.cnpj || '').trim();
+      if (!nome) return;
+      map.set(nome.toLowerCase(), { nome, cnpj, comprasCount: 0, valorLiquido: 0 });
+    });
+
     compras.forEach((c: any) => {
       const nome = (c.fornecedor_nome || '').trim();
       const cnpj = (c.fornecedor_cnpj || '').trim();
       if (!nome) return;
-      const key = nome;
+      const key = nome.toLowerCase();
       if (!map.has(key)) {
         map.set(key, { nome, cnpj, comprasCount: 0, valorLiquido: 0 });
       }
@@ -771,7 +807,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       }
     });
     return Array.from(map.values()).sort((a, b) => a.nome.localeCompare(b.nome));
-  }, [compras]);
+  }, [fornecedoresUnicos, compras]);
 
   const filteredFornecedores = useMemo(() => {
     let list = fornecedoresListWithStats;
@@ -956,15 +992,37 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       }
     }
     const emailForn = (p.fornecedor || '').trim();
-    const exists = fornecedoresUnicos.some((f: any) => f.nome.toLowerCase() === emailForn.toLowerCase());
-    if (emailForn) {
-      setFornecedorSelect(exists ? fornecedoresUnicos.find((f: any) => f.nome.toLowerCase() === emailForn.toLowerCase()).nome : '__new__');
-      setFornecedorSearchInput(emailForn);
+    const matchForn = emailForn ? fornecedoresUnicos.find((f: any) => f.nome.toLowerCase() === emailForn.toLowerCase()) : null;
+    if (matchForn) {
+      setFornecedorSelect(matchForn.nome);
+      setFornecedorSearchInput(matchForn.nome);
     } else {
       setFornecedorSelect('__new__');
       setFornecedorSearchInput('');
+      if (emailForn) {
+        toast.warning(`Fornecedor "${emailForn}" não cadastrado. Cadastre-o na aba de Fornecedores.`);
+      }
     }
-    setForm(f=>({...f,email_titulo:p.titulo||'',tipo_solicitacao:p.tipo||'Materiais',fornecedor_nome:p.fornecedor||'',fornecedor_cnpj:p.cnpj||'',conta:p.conta||'',centro_custo:ccVal.toString(),cc_desc:ccD,obs:p.obs||'',qtd_parcelas:n,parcelas:p.pagamentos.slice(0,3).map((pg:any)=>({parcela:pg.parcela||'1/1',data_envio:pg.envio||'',valor_solicitado:String(pg.solicitado||''),valor_pago:String(pg.pago||''),data_pagamento:pg.dataPgto||'',estornado:pg.estornado||false}))}));
+    setForm(f=>({...f,
+      email_titulo: p.titulo||'',
+      tipo_solicitacao: p.tipo||'Materiais',
+      fornecedor_nome: matchForn ? matchForn.nome : '',
+      fornecedor_cnpj: matchForn ? matchForn.cnpj || '' : '',
+      fornecedor_dados: matchForn ? matchForn.dados || '' : '',
+      conta: p.conta||'',
+      centro_custo: ccVal.toString(),
+      cc_desc: ccD,
+      obs: p.obs||'',
+      qtd_parcelas: n,
+      parcelas: p.pagamentos.slice(0,3).map((pg:any)=>({
+        parcela: pg.parcela||'1/1',
+        data_envio: pg.envio||'',
+        valor_solicitado: String(pg.solicitado||''),
+        valor_pago: String(pg.pago||''),
+        data_pagamento: pg.dataPgto||'',
+        estornado: pg.estornado||false
+      }))
+    }));
     setIsColarOpen(false);setIsCreateOpen(true);toast.success('Formulário preenchido!');
   };
 
@@ -1857,8 +1915,20 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   <h3 className="text-base font-bold text-white">Lista de Fornecedores</h3>
                   <p className="text-xs text-white/40">Visualize e edite as informações dos fornecedores associados a esta obra.</p>
                 </div>
-                <div className="text-xs text-white/40 font-semibold bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
-                  Total: <span className="text-white font-bold">{filteredFornecedores.length}</span> fornecedor(es)
+                <div className="flex items-center gap-2">
+                  <Button 
+                    size="sm" 
+                    className="bg-primary hover:bg-primary/90 text-white rounded-xl text-xs"
+                    onClick={() => {
+                      setAddFornecedorForm({ nome: '', cnpj: '', dados: '' });
+                      setIsAddFornecedorOpen(true);
+                    }}
+                  >
+                    + Novo Fornecedor
+                  </Button>
+                  <div className="text-xs text-white/40 font-semibold bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
+                    Total: <span className="text-white font-bold">{filteredFornecedores.length}</span> fornecedor(es)
+                  </div>
                 </div>
               </div>
 
@@ -2032,15 +2102,26 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   onChange={e => {
                     const val = e.target.value;
                     setFornecedorSearchInput(val);
-                    setForm(f => ({ ...f, fornecedor_nome: val }));
-                    setFornecedorSelect('__new__');
                     setShowFornecedoresList(true);
                   }}
                   onFocus={() => setShowFornecedoresList(true)}
                   onBlur={() => {
-                    setTimeout(() => setShowFornecedoresList(false), 200);
+                    setTimeout(() => {
+                      setShowFornecedoresList(false);
+                      const match = fornecedoresUnicos.find(
+                        (f: any) => f.nome.trim().toLowerCase() === fornecedorSearchInput.trim().toLowerCase()
+                      );
+                      if (match) {
+                        setFornecedorSearchInput(match.nome);
+                        setForm(f => ({ ...f, fornecedor_nome: match.nome, fornecedor_cnpj: match.cnpj || '', fornecedor_dados: match.dados || '' }));
+                      } else if (!fornecedorSearchInput.trim()) {
+                        setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '', fornecedor_dados: '' }));
+                      } else {
+                        setFornecedorSearchInput(form.fornecedor_nome || '');
+                      }
+                    }, 200);
                   }}
-                  placeholder="Selecione ou busque um fornecedor..."
+                  placeholder="Busque um fornecedor cadastrado..."
                   className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10 pr-8"
                   autoComplete="off"
                 />
@@ -2052,16 +2133,16 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                     <button
                       type="button"
-                      className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors text-emerald-400 font-semibold text-xs min-h-[36px]"
+                      className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors text-red-400 font-semibold text-xs min-h-[36px]"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setFornecedorSearchInput('');
-                        setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '' }));
+                        setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '', fornecedor_dados: '' }));
                         setFornecedorSelect('__new__');
                         setShowFornecedoresList(false);
                       }}
                     >
-                      + Limpar / Novo Fornecedor
+                      Limpar Seleção
                     </button>
                     {fornecedoresUnicos
                       .filter((f: any) => f.nome.toLowerCase().includes(fornecedorSearchInput.toLowerCase()))
@@ -2076,7 +2157,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                             setForm(fState => ({
                               ...fState,
                               fornecedor_nome: f.nome,
-                              fornecedor_cnpj: f.cnpj
+                              fornecedor_cnpj: f.cnpj || '',
+                              fornecedor_dados: f.dados || ''
                             }));
                             setFornecedorSelect(f.nome);
                             setShowFornecedoresList(false);
@@ -2092,12 +2174,12 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
+              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF (Cadastrado)</Label>
               <Input
                 value={form.fornecedor_cnpj}
-                onChange={e => setForm(f => ({ ...f, fornecedor_cnpj: e.target.value }))}
-                placeholder="00.000.000/0000-00"
-                className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+                disabled
+                placeholder="CNPJ puxado automaticamente..."
+                className="text-sm bg-[#0e1629]/50 border-white/10 text-white/60 placeholder:text-white/30 rounded-xl h-10 cursor-not-allowed"
                 autoComplete="off"
               />
             </div>
@@ -2294,15 +2376,26 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   onChange={e => {
                     const val = e.target.value;
                     setFornecedorSearchInput(val);
-                    setForm(f => ({ ...f, fornecedor_nome: val }));
-                    setFornecedorSelect('__new__');
                     setShowFornecedoresList(true);
                   }}
                   onFocus={() => setShowFornecedoresList(true)}
                   onBlur={() => {
-                    setTimeout(() => setShowFornecedoresList(false), 200);
+                    setTimeout(() => {
+                      setShowFornecedoresList(false);
+                      const match = fornecedoresUnicos.find(
+                        (f: any) => f.nome.trim().toLowerCase() === fornecedorSearchInput.trim().toLowerCase()
+                      );
+                      if (match) {
+                        setFornecedorSearchInput(match.nome);
+                        setForm(f => ({ ...f, fornecedor_nome: match.nome, fornecedor_cnpj: match.cnpj || '', fornecedor_dados: match.dados || '' }));
+                      } else if (!fornecedorSearchInput.trim()) {
+                        setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '', fornecedor_dados: '' }));
+                      } else {
+                        setFornecedorSearchInput(form.fornecedor_nome || '');
+                      }
+                    }, 200);
                   }}
-                  placeholder="Selecione ou busque um fornecedor..."
+                  placeholder="Busque um fornecedor cadastrado..."
                   className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10 pr-8"
                   autoComplete="off"
                 />
@@ -2314,16 +2407,16 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                     <button
                       type="button"
-                      className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors text-emerald-400 font-semibold text-xs min-h-[36px]"
+                      className="w-full text-left px-4 py-2 hover:bg-white/10 transition-colors text-red-400 font-semibold text-xs min-h-[36px]"
                       onMouseDown={(e) => {
                         e.preventDefault();
                         setFornecedorSearchInput('');
-                        setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '' }));
+                        setForm(f => ({ ...f, fornecedor_nome: '', fornecedor_cnpj: '', fornecedor_dados: '' }));
                         setFornecedorSelect('__new__');
                         setShowFornecedoresList(false);
                       }}
                     >
-                      + Limpar / Novo Fornecedor
+                      Limpar Seleção
                     </button>
                     {fornecedoresUnicos
                       .filter((f: any) => f.nome.toLowerCase().includes(fornecedorSearchInput.toLowerCase()))
@@ -2338,7 +2431,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                             setForm(fState => ({
                               ...fState,
                               fornecedor_nome: f.nome,
-                              fornecedor_cnpj: f.cnpj
+                              fornecedor_cnpj: f.cnpj || '',
+                              fornecedor_dados: f.dados || ''
                             }));
                             setFornecedorSelect(f.nome);
                             setShowFornecedoresList(false);
@@ -2354,12 +2448,12 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             </div>
 
             <div className="space-y-1">
-              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF</Label>
+              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">CNPJ/CPF (Cadastrado)</Label>
               <Input
                 value={form.fornecedor_cnpj}
-                onChange={e => setForm(f => ({ ...f, fornecedor_cnpj: e.target.value }))}
-                placeholder="00.000.000/0000-00"
-                className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+                disabled
+                placeholder="CNPJ puxado automaticamente..."
+                className="text-sm bg-[#0e1629]/50 border-white/10 text-white/60 placeholder:text-white/30 rounded-xl h-10 cursor-not-allowed"
                 autoComplete="off"
               />
             </div>
@@ -3176,6 +3270,90 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             >
               {updateFornecedorMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
               Salvar Alterações
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════ DIALOG: Cadastrar Fornecedor ══════ */}
+      <Dialog open={isAddFornecedorOpen} onOpenChange={setIsAddFornecedorOpen}>
+        <DialogContent className="max-w-md bg-[#161f30] text-white border-white/10 rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white font-display font-bold">
+              <Plus className="h-5 w-5 text-primary" />
+              Cadastrar Fornecedor
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-white/45 font-bold">Nome do Fornecedor</Label>
+              <Input
+                value={addFornecedorForm.nome}
+                onChange={e => setAddFornecedorForm(f => ({ ...f, nome: e.target.value }))}
+                placeholder="Ex: Madeireira Silva"
+                className="text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-white/45 font-bold">CNPJ / CPF</Label>
+              <Input
+                value={addFornecedorForm.cnpj}
+                onChange={e => setAddFornecedorForm(f => ({ ...f, cnpj: e.target.value }))}
+                placeholder="Ex: 00.000.000/0000-00"
+                className="text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase tracking-wider text-white/45 font-bold">Informações Adicionais / Contato</Label>
+              <Textarea
+                value={addFornecedorForm.dados}
+                onChange={e => setAddFornecedorForm(f => ({ ...f, dados: e.target.value }))}
+                placeholder="Ex: Telefone, E-mail, Chave Pix..."
+                className="text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl min-h-[80px]"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-white/5 border-white/10 hover:bg-white/10 text-white rounded-xl"
+              onClick={() => {
+                setIsAddFornecedorOpen(false);
+                setAddFornecedorForm({ nome: '', cnpj: '', dados: '' });
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              className="bg-primary hover:bg-primary/90 text-white rounded-xl"
+              disabled={addFornecedorMut.isPending}
+              onClick={() => {
+                const nomeClean = addFornecedorForm.nome.trim();
+                if (!nomeClean) {
+                  toast.error('O nome do fornecedor é obrigatório.');
+                  return;
+                }
+
+                // Check if already exists in local list
+                const exists = fornecedoresUnicos.some(
+                  (f: any) => f.nome.trim().toLowerCase() === nomeClean.toLowerCase()
+                );
+                if (exists) {
+                  toast.error('Já existe um fornecedor cadastrado com este nome.');
+                  return;
+                }
+
+                addFornecedorMut.mutate(addFornecedorForm);
+              }}
+            >
+              {addFornecedorMut.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+              Cadastrar
             </Button>
           </DialogFooter>
         </DialogContent>

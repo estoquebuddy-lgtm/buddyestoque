@@ -67,15 +67,13 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('entradas')
-        .select('fornecedor')
+      const { data, error } = await supabase
+        .from('fornecedores')
+        .select('nome')
         .eq('obra_id', obraId)
-        .not('fornecedor', 'is', null)
-        .neq('fornecedor', '');
-      if (!data) return [];
-      const unique = Array.from(new Set(data.map((d: any) => String(d.fornecedor || '').trim()))).filter(Boolean);
-      return unique.sort((a: any, b: any) => a.localeCompare(b));
+        .order('nome');
+      if (error) throw error;
+      return (data || []).map((f: any) => f.nome);
     },
     enabled: !!obraId && open,
   });
@@ -128,7 +126,13 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
         const supplierName = xNomeNode ? xNomeNode.textContent || '' : '';
         const trimmedSupplier = supplierName.trim();
         if (trimmedSupplier && (!fornecedor || !append)) {
-          setFornecedor(trimmedSupplier);
+          const matchForn = fornecedores.find((f: any) => f.toLowerCase() === trimmedSupplier.toLowerCase());
+          if (matchForn) {
+            setFornecedor(matchForn);
+          } else {
+            setFornecedor('');
+            toast.warning(`Fornecedor "${trimmedSupplier}" do XML não cadastrado. Cadastre-o na aba de Fornecedores.`);
+          }
         }
 
         // 2. Discount (vDesc)
@@ -221,6 +225,19 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
       return;
     }
 
+    let finalFornecedor = '';
+    if (fornecedor.trim()) {
+      const matchForn = fornecedores.find(
+        (f: any) => f.trim().toLowerCase() === fornecedor.trim().toLowerCase()
+      );
+      if (!matchForn) {
+        toast.error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
+        return;
+      }
+      finalFornecedor = matchForn;
+      setFornecedor(matchForn);
+    }
+
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -263,7 +280,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
-            fornecedor: fornecedor || null,
+            fornecedor: finalFornecedor || null,
           });
           if (entErr) throw entErr;
 
@@ -331,7 +348,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
-            fornecedor: fornecedor || null,
+            fornecedor: finalFornecedor || null,
           });
           if (entErr) throw entErr;
 
@@ -619,13 +636,13 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
                     }} 
                     onFocus={() => setShowFornecedorList(true)}
                     onBlur={() => setTimeout(() => setShowFornecedorList(false), 200)}
-                    className="h-9 text-sm" 
+                    className="h-9 text-sm bg-[#161f30] border-white/10 text-white placeholder:text-white/30 rounded-xl" 
                     autoComplete="off"
                   />
-                  {showFornecedorList && Array.isArray(fornecedores) && fornecedores.filter((f: any) => typeof f === 'string' && f.toLowerCase().includes((fornecedor || '').toLowerCase()) && f !== fornecedor).length > 0 && (
+                  {showFornecedorList && (
                     <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                       {fornecedores
-                        .filter((f: any) => typeof f === 'string' && f.toLowerCase().includes((fornecedor || '').toLowerCase()) && f !== fornecedor)
+                        .filter((f: any) => typeof f === 'string' && f.toLowerCase().includes((fornecedor || '').toLowerCase()))
                         .map((f: any) => (
                           <button
                             key={f}

@@ -91,32 +91,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const { data: fornecedores = [] } = useQuery({
     queryKey: ['fornecedores', obraId],
     queryFn: async () => {
-      const [comprasRes, entradasRes] = await Promise.all([
-        supabase.from('compras').select('fornecedor_nome').eq('obra_id', obraId).not('fornecedor_nome', 'is', null).neq('fornecedor_nome', ''),
-        supabase.from('entradas').select('fornecedor').eq('obra_id', obraId).not('fornecedor', 'is', null).neq('fornecedor', '')
-      ]);
-
-      const map = new Map<string, string>();
-      (comprasRes.data || []).forEach((c: any) => {
-        const name = (c.fornecedor_nome || '').trim();
-        if (name) {
-          const key = name.toLowerCase();
-          if (!map.has(key) || name === name.toUpperCase()) {
-            map.set(key, name);
-          }
-        }
-      });
-      (entradasRes.data || []).forEach((e: any) => {
-        const name = (e.fornecedor || '').trim();
-        if (name) {
-          const key = name.toLowerCase();
-          if (!map.has(key) || name === name.toUpperCase()) {
-            map.set(key, name);
-          }
-        }
-      });
-
-      return Array.from(map.values()).sort((a, b) => a.localeCompare(b));
+      const { data, error } = await supabase
+        .from('fornecedores')
+        .select('nome')
+        .eq('obra_id', obraId)
+        .order('nome');
+      if (error) throw error;
+      return (data || []).map((f: any) => f.nome);
     },
     enabled: !!obraId,
   });
@@ -1290,14 +1271,26 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     onChange={e => {
                       const val = e.target.value;
                       setFornecedorSearchInput(val);
-                      setForm(f => ({ ...f, fornecedor: val }));
                       setShowFornecedoresList(true);
                     }}
                     onFocus={() => setShowFornecedoresList(true)}
                     onBlur={() => {
-                      setTimeout(() => setShowFornecedoresList(false), 200);
+                      setTimeout(() => {
+                        setShowFornecedoresList(false);
+                        const match = safeFornecedores.find(
+                          (f: any) => typeof f === 'string' && f.trim().toLowerCase() === fornecedorSearchInput.trim().toLowerCase()
+                        );
+                        if (match) {
+                          setFornecedorSearchInput(match);
+                          setForm(f => ({ ...f, fornecedor: match }));
+                        } else if (!fornecedorSearchInput.trim()) {
+                          setForm(f => ({ ...f, fornecedor: '' }));
+                        } else {
+                          setFornecedorSearchInput(form.fornecedor || '');
+                        }
+                      }, 200);
                     }}
-                    placeholder="Selecione ou busque um fornecedor..."
+                    placeholder="Busque um fornecedor cadastrado..."
                     className="w-full bg-[#0a1020] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-12 text-sm pr-10"
                     autoComplete="off"
                     required
@@ -1310,7 +1303,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
                       <button
                         type="button"
-                        className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors text-emerald-400 font-semibold text-xs min-h-[36px]"
+                        className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors text-red-400 font-semibold text-xs min-h-[36px]"
                         onMouseDown={(e) => {
                           e.preventDefault();
                           setFornecedorSearchInput('');
@@ -1318,7 +1311,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                           setShowFornecedoresList(false);
                         }}
                       >
-                        + Limpar / Novo Fornecedor
+                        Limpar Seleção
                       </button>
                       {safeFornecedores
                         .filter((f: any) => typeof f === 'string' && f.toLowerCase().includes(fornecedorSearchInput.toLowerCase()))
