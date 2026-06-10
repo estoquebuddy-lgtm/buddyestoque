@@ -22,20 +22,22 @@ CREATE POLICY "Allow all for authenticated users"
 
 -- Migrate existing unique suppliers from public.compras
 INSERT INTO public.fornecedores (obra_id, nome, cnpj, dados)
-SELECT DISTINCT ON (obra_id, TRIM(fornecedor_nome)) 
+SELECT 
   obra_id, 
   TRIM(fornecedor_nome) AS nome, 
   MAX(fornecedor_cnpj) AS cnpj, 
   MAX(fornecedor_dados) AS dados
 FROM public.compras
 WHERE fornecedor_nome IS NOT NULL AND TRIM(fornecedor_nome) <> ''
+GROUP BY obra_id, TRIM(fornecedor_nome)
 ON CONFLICT (obra_id, nome) DO NOTHING;
 
 -- Migrate existing unique suppliers from public.entradas
 INSERT INTO public.fornecedores (obra_id, nome)
-SELECT DISTINCT ON (obra_id, TRIM(fornecedor)) 
+SELECT 
   obra_id, 
   TRIM(fornecedor) AS nome
 FROM public.entradas
 WHERE fornecedor IS NOT NULL AND TRIM(fornecedor) <> ''
+GROUP BY obra_id, TRIM(fornecedor)
 ON CONFLICT (obra_id, nome) DO NOTHING;
