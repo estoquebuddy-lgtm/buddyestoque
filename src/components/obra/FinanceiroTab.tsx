@@ -63,11 +63,48 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     }
   });
 
-  const isLoading = loadingProds || loadingEntradas || loadingSaidas;
+  const { data: ferramentas = [], isLoading: loadingFerramentas } = useQuery({
+    queryKey: ['ferramentas', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('ferramentas')
+        .select('*')
+        .eq('obra_id', obraId);
+      return data || [];
+    }
+  });
+
+  const { data: movimentacoes = [], isLoading: loadingMovimentacoes } = useQuery({
+    queryKey: ['movimentacoes-ferramentas', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('movimentacoes_ferramentas' as any)
+        .select('*, ferramentas(nome)')
+        .eq('obra_id', obraId)
+        .order('data_hora', { ascending: false });
+      return data || [];
+    }
+  });
+
+  const { data: pessoas = [], isLoading: loadingPessoas } = useQuery({
+    queryKey: ['pessoas', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('pessoas')
+        .select('id, nome')
+        .eq('obra_id', obraId);
+      return data || [];
+    }
+  });
+
+  const isLoading = loadingProds || loadingEntradas || loadingSaidas || loadingFerramentas || loadingMovimentacoes || loadingPessoas;
 
   // Process data in-memory for instant, robust, and clean calculations
   const productsWithCosts = produtos.map((prod: any) => {
-    const prodEntradas = entradas.filter((e: any) => e.produto_id === prod.id);
+    const isTool = prod.nome?.startsWith('[FERRAMENTA]');
+
+    // Only count entries that have been delivered/received (status_entrega !== 'PENDENTE')
+    const prodEntradas = entradas.filter((e: any) => e.produto_id === prod.id && e.status_entrega !== 'PENDENTE');
     const prodSaidas = saidas.filter((s: any) => s.produto_id === prod.id);
 
     // Only entries with a cost > 0
@@ -85,15 +122,35 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     // 3. Total Investido (Entradas)
     const totalInvestido = totalVal;
 
-    // 4. Total Saídas (Consumo) - Quantidade total de saídas multiplicada pelo custo médio ponderado
-    const totalSaidasQtd = prodSaidas.reduce((acc, curr) => acc + Number(curr.quantidade), 0);
-    const totalSaidasValor = totalSaidasQtd * custoMedio;
+    // 4. Stock and Saídas / Consumption
+    let estoque_atual = Number(prod.estoque_atual);
+    let totalSaidasQtd = prodSaidas.reduce((acc, curr) => acc + Number(curr.quantidade), 0);
+    let totalSaidasValor = totalSaidasQtd * custoMedio;
+
+    if (isTool) {
+      const toolName = prod.nome.replace('[FERRAMENTA] ', '').trim();
+      const prodTools = ferramentas.filter((f: any) => f.nome?.toLowerCase().trim() === toolName.toLowerCase().trim());
+
+      // Active tools (owned assets, still present: available, in use, or in maintenance)
+      const activeTools = prodTools.filter((t: any) => t.estado !== 'baixa' && t.estado !== 'extraviada' && t.estado !== 'comprado');
+      estoque_atual = activeTools.length;
+
+      // Discarded or lost tools count as consumed / lost (saídas)
+      const lostOrDiscarded = prodTools.filter((t: any) => t.estado === 'baixa' || t.estado === 'extraviada');
+
+      // Missing tools (physically deleted from database but were registered received)
+      const missingCount = Math.max(0, totalQtd - prodTools.length);
+
+      totalSaidasQtd = lostOrDiscarded.length + missingCount;
+      totalSaidasValor = totalSaidasQtd * custoMedio;
+    }
 
     // 5. Valor Estimado do Estoque
-    const valorEstoqueEstimado = Number(prod.estoque_atual) * custoMedio;
+    const valorEstoqueEstimado = estoque_atual * custoMedio;
 
     return {
       ...prod,
+      estoque_atual,
       ultimoCusto,
       custoMedio,
       totalInvestido,
@@ -107,7 +164,7 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
 
   // Base ativa: exclui produtos órfãos (sem entradas nem saídas) — igual ao que é exibido na lista
   const activeProducts = productsWithCosts.filter(
-    (p: any) => p.allEntradas.length > 0 || p.allSaidas.length > 0
+    (p: any) => p.allEntradas.length > 0 || p.allSaidas.length > 0 || p.totalSaidasQtd > 0
   );
 
   // Summary Metrics — calculadas sobre a base ativa (sem órfãos)
@@ -425,44 +482,99 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
                   <div className="border rounded-lg overflow-hidden">
                     <table className="w-full text-xs text-left">
                       <thead className="bg-muted text-muted-foreground font-semibold uppercase">
-                        <tr>
-                          <th className="px-4 py-3">Data</th>
-                          <th className="px-4 py-3">Retirado por</th>
-                          <th className="px-4 py-3 text-center">Quantidade</th>
-                          <th className="px-4 py-3 text-right">Custo Médio Ponderado</th>
-                          <th className="px-4 py-3 text-right">Custo Consumido</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {selectedProduct.allSaidas.length === 0 ? (
+                        {selectedProduct.nome.startsWith('[FERRAMENTA]') ? (
                           <tr>
-                            <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
-                              Nenhum registro de saída para este produto.
-                            </td>
+                            <th className="px-4 py-3">Data</th>
+                            <th className="px-4 py-3">Tipo / Evento</th>
+                            <th className="px-4 py-3">Responsável</th>
+                            <th className="px-4 py-3">Observação</th>
                           </tr>
                         ) : (
-                          selectedProduct.allSaidas.map((sai: any) => {
-                            const custoConsumido = Number(sai.quantidade) * selectedProduct.custoMedio;
-                            return (
-                              <tr key={sai.id} className="hover:bg-muted/10">
-                                <td className="px-4 py-3">
-                                  {new Date(sai.data).toLocaleDateString('pt-BR')}
-                                </td>
-                                <td className="px-4 py-3 truncate max-w-[150px]">
-                                  {sai.pessoas?.nome || <span className="text-muted-foreground font-light">-</span>}
-                                </td>
-                                <td className="px-4 py-3 text-center font-mono font-medium">
-                                  -{sai.quantidade} <span className="text-[10px] text-muted-foreground font-normal">{selectedProduct.unidade}</span>
-                                </td>
-                                <td className="px-4 py-3 text-right font-mono text-muted-foreground">
-                                  {selectedProduct.custoMedio > 0 ? formatCurrency(selectedProduct.custoMedio) : <span className="text-muted-foreground font-light">-</span>}
-                                </td>
-                                <td className="px-4 py-3 text-right font-mono font-semibold text-destructive">
-                                  {custoConsumido > 0 ? formatCurrency(custoConsumido) : <span className="text-muted-foreground font-light">-</span>}
-                                </td>
-                              </tr>
+                          <tr>
+                            <th className="px-4 py-3">Data</th>
+                            <th className="px-4 py-3">Retirado por</th>
+                            <th className="px-4 py-3 text-center">Quantidade</th>
+                            <th className="px-4 py-3 text-right">Custo Médio Ponderado</th>
+                            <th className="px-4 py-3 text-right">Custo Consumido</th>
+                          </tr>
+                        )}
+                      </thead>
+                      <tbody className="divide-y">
+                        {selectedProduct.nome.startsWith('[FERRAMENTA]') ? (
+                          (() => {
+                            const toolName = selectedProduct.nome.replace('[FERRAMENTA] ', '').trim();
+                            const prodMovs = movimentacoes.filter(
+                              (m: any) => m.ferramentas?.nome?.toLowerCase().trim() === toolName.toLowerCase().trim()
                             );
-                          })
+                            const pessoasMap = new Map(pessoas.map((p: any) => [p.id, p.nome]));
+                            if (prodMovs.length === 0) {
+                              return (
+                                <tr>
+                                  <td colSpan={4} className="px-4 py-6 text-center text-muted-foreground">
+                                    Nenhum registro de movimentação para esta ferramenta.
+                                  </td>
+                                </tr>
+                              );
+                            }
+                            return prodMovs.map((mov: any) => {
+                              const pessoaNome = mov.usuario_id ? pessoasMap.get(mov.usuario_id) : null;
+                              return (
+                                <tr key={mov.id} className="hover:bg-muted/10">
+                                  <td className="px-4 py-3">
+                                    {new Date(mov.data_hora).toLocaleDateString('pt-BR')}
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium ${
+                                      mov.tipo === 'RETIRADA' ? 'bg-warning/10 text-warning' :
+                                      mov.tipo === 'DEVOLUCAO' ? 'bg-success/10 text-success' :
+                                      mov.tipo === 'MANUTENCAO' ? 'bg-destructive/10 text-destructive' :
+                                      mov.tipo === 'BAIXA' ? 'bg-zinc-500/10 text-zinc-500' :
+                                      'bg-red-500/10 text-red-500'
+                                    }`}>
+                                      {mov.tipo}
+                                    </span>
+                                  </td>
+                                  <td className="px-4 py-3 truncate max-w-[150px]">
+                                    {pessoaNome || <span className="text-muted-foreground font-light">-</span>}
+                                  </td>
+                                  <td className="px-4 py-3 truncate max-w-[200px]">
+                                    {mov.observacao || <span className="text-muted-foreground font-light">-</span>}
+                                  </td>
+                                </tr>
+                              );
+                            });
+                          })()
+                        ) : (
+                          selectedProduct.allSaidas.length === 0 ? (
+                            <tr>
+                              <td colSpan={5} className="px-4 py-6 text-center text-muted-foreground">
+                                Nenhum registro de saída para este produto.
+                              </td>
+                            </tr>
+                          ) : (
+                            selectedProduct.allSaidas.map((sai: any) => {
+                              const custoConsumido = Number(sai.quantidade) * selectedProduct.custoMedio;
+                              return (
+                                <tr key={sai.id} className="hover:bg-muted/10">
+                                  <td className="px-4 py-3">
+                                    {new Date(sai.data).toLocaleDateString('pt-BR')}
+                                  </td>
+                                  <td className="px-4 py-3 truncate max-w-[150px]">
+                                    {sai.pessoas?.nome || <span className="text-muted-foreground font-light">-</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-center font-mono font-medium">
+                                    -{sai.quantidade} <span className="text-[10px] text-muted-foreground font-normal">{selectedProduct.unidade}</span>
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                                    {selectedProduct.custoMedio > 0 ? formatCurrency(selectedProduct.custoMedio) : <span className="text-muted-foreground font-light">-</span>}
+                                  </td>
+                                  <td className="px-4 py-3 text-right font-mono font-semibold text-destructive">
+                                    {custoConsumido > 0 ? formatCurrency(custoConsumido) : <span className="text-muted-foreground font-light">-</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )
                         )}
                       </tbody>
                     </table>
