@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, DollarSign, TrendingUp, BarChart3, Clock, Eye, Download, ArrowUpFromLine, ArrowDownToLine } from 'lucide-react';
+import { Search, DollarSign, TrendingUp, BarChart3, Clock, Eye, Download, ArrowUpFromLine, ArrowDownToLine, AlertTriangle } from 'lucide-react';
 import SkeletonList from '@/components/SkeletonList';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import jsPDF from 'jspdf';
@@ -22,6 +22,7 @@ interface FinanceiroTabProps {
 export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
   const [search, setSearch] = useState('');
   const [selectedProduct, setSelectedProduct] = useState<any | null>(null);
+  const [filterSemCusto, setFilterSemCusto] = useState(false);
   const queryClient = useQueryClient();
 
 
@@ -174,10 +175,12 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
   const totalProdutosComCusto = activeProducts.filter(p => p.custoMedio > 0).length;
 
   // Filtered List — aplica busca sobre a base ativa
-  const filteredProducts = activeProducts.filter((p: any) =>
-    p.nome.toLowerCase().includes(search.toLowerCase()) ||
-    (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filteredProducts = activeProducts.filter((p: any) => {
+    const matchesSearch = p.nome.toLowerCase().includes(search.toLowerCase()) ||
+      (p.categoria && p.categoria.toLowerCase().includes(search.toLowerCase()));
+    const matchesFilter = filterSemCusto ? p.custoMedio === 0 : true;
+    return matchesSearch && matchesFilter;
+  });
 
   const formatCurrency = (val: number) => {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -283,12 +286,19 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
           </CardContent>
         </Card>
 
-        <Card className="border-primary/10 border shadow-sm bg-[#161f30] text-white">
+        <Card 
+          onClick={() => setFilterSemCusto(!filterSemCusto)}
+          className={`border-primary/10 border shadow-sm bg-[#161f30] text-white cursor-pointer hover:bg-[#1f2b44] transition-all select-none duration-200 ${
+            filterSemCusto ? 'ring-2 ring-[#f59e0b] ring-offset-2 ring-offset-[#0e1629]' : ''
+          }`}
+        >
           <CardContent className="p-5 flex items-center justify-between">
             <div className="space-y-1.5 min-w-0">
               <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold truncate">Métricas de Cobertura</p>
               <h3 className="text-xl font-display font-bold text-[#f59e0b] truncate">{totalProdutosComCusto} / {activeProducts.length}</h3>
-              <p className="text-xs text-white/50 truncate">Produtos com histórico de custo</p>
+              <p className="text-xs text-white/50 truncate">
+                {filterSemCusto ? 'Mostrando apenas sem custo' : 'Clique para ver os sem custo'}
+              </p>
             </div>
             <div className="h-10 w-10 rounded-xl bg-[#f59e0b]/15 flex items-center justify-center border border-[#f59e0b]/20 shrink-0 ml-2">
               <BarChart3 className="h-5 w-5 text-[#f59e0b]" />
@@ -300,7 +310,7 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
       {/* Tabela de Produtos */}
       <Card className="border-primary/10 border shadow-sm">
         <CardContent className="p-5">
-          <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center mb-6">
+          <div className="flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center mb-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -310,6 +320,22 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
                 className="pl-9 h-10 bg-background"
               />
             </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 mb-6 px-1">
+            <Button 
+              variant={filterSemCusto ? "default" : "outline"} 
+              size="sm" 
+              onClick={() => setFilterSemCusto(!filterSemCusto)} 
+              className={`h-8 text-xs rounded-full transition-all duration-200 ${
+                filterSemCusto 
+                  ? 'bg-[#f59e0b] hover:bg-[#d97706] text-white border-none' 
+                  : 'bg-background hover:bg-muted text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              <AlertTriangle className="h-3 w-3 mr-1.5" />
+              {filterSemCusto ? 'Mostrando: Sem Histórico de Custo' : 'Filtrar: Sem Histórico de Custo'}
+            </Button>
           </div>
 
           <div className="border rounded-xl overflow-hidden bg-card/50">
