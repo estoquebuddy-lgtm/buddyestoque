@@ -681,22 +681,19 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                       {s.urgencia === 'Baixa' && <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-300"></div>}
                       
                       <CardContent className="p-4 pl-5.5 space-y-3">
-                        {/* Title and Urgency Badge */}
-                        <div className="flex justify-between items-start gap-4">
-                          <div className="flex gap-3 flex-1 min-w-0">
-                            {s.foto_url && (
-                              <ImageThumbnail src={s.foto_url} alt="Material solicitado" type="produto" size="sm" />
+                        {/* Title and Image */}
+                        <div className="flex gap-3 min-w-0">
+                          {s.foto_url && (
+                            <ImageThumbnail src={s.foto_url} alt="Material solicitado" type="produto" size="sm" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-sm text-slate-800 leading-snug whitespace-pre-wrap break-words">{s.titulo || s.descricao_materiais}</h4>
+                            {s.titulo && s.classificacao && (
+                              <span className="inline-block text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-semibold uppercase mt-1">
+                                {s.classificacao}
+                              </span>
                             )}
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-sm text-slate-800 leading-snug whitespace-pre-wrap break-words">{s.titulo || s.descricao_materiais}</h4>
-                              {s.titulo && s.classificacao && (
-                                <span className="inline-block text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-semibold uppercase mt-1">
-                                  {s.classificacao}
-                                </span>
-                              )}
-                            </div>
                           </div>
-                          {urgenciaBadge(s.urgencia)}
                         </div>
 
                         {/* Metadata Rows (User & Calendar) */}
