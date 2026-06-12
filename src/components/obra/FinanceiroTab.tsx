@@ -114,19 +114,33 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     // 1. Último Custo (most recent entry with valid cost)
     const latestCostEntry = costEntradas[0];
     const ultimoCusto = latestCostEntry ? Number(latestCostEntry.valor_unitario) : 0;
+    const safeUltimoCusto = isNaN(ultimoCusto) ? 0 : ultimoCusto;
 
     // 2. Custo Médio Ponderado
-    const totalQtd = costEntradas.reduce((acc, curr) => acc + Number(curr.quantidade), 0);
-    const totalVal = costEntradas.reduce((acc, curr) => acc + (Number(curr.quantidade) * Number(curr.valor_unitario)), 0);
+    const totalQtd = costEntradas.reduce((acc, curr) => {
+      const q = Number(curr.quantidade);
+      return acc + (isNaN(q) ? 0 : q);
+    }, 0);
+    const totalVal = costEntradas.reduce((acc, curr) => {
+      const q = Number(curr.quantidade);
+      const v = Number(curr.valor_unitario);
+      const val = (isNaN(q) ? 0 : q) * (isNaN(v) ? 0 : v);
+      return acc + (isNaN(val) ? 0 : val);
+    }, 0);
     const custoMedio = totalQtd > 0 ? totalVal / totalQtd : 0;
+    const safeCustoMedio = isNaN(custoMedio) ? 0 : custoMedio;
 
     // 3. Total Investido (Entradas)
-    const totalInvestido = totalVal;
+    const totalInvestido = isNaN(totalVal) ? 0 : totalVal;
 
     // 4. Stock and Saídas / Consumption
-    let estoque_atual = Number(prod.estoque_atual);
-    let totalSaidasQtd = prodSaidas.reduce((acc, curr) => acc + Number(curr.quantidade), 0);
-    let totalSaidasValor = totalSaidasQtd * custoMedio;
+    let estoque_atual = isNaN(Number(prod.estoque_atual)) ? 0 : Number(prod.estoque_atual);
+    let totalSaidasQtd = prodSaidas.reduce((acc, curr) => {
+      const q = Number(curr.quantidade);
+      return acc + (isNaN(q) ? 0 : q);
+    }, 0);
+    let totalSaidasValor = totalSaidasQtd * safeCustoMedio;
+    if (isNaN(totalSaidasValor)) totalSaidasValor = 0;
 
     if (isTool) {
       const toolName = prod.nome.replace('[FERRAMENTA] ', '').trim();
@@ -143,19 +157,21 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
       const missingCount = Math.max(0, totalQtd - prodTools.length);
 
       totalSaidasQtd = lostOrDiscarded.length + missingCount;
-      totalSaidasValor = totalSaidasQtd * custoMedio;
+      totalSaidasValor = totalSaidasQtd * safeCustoMedio;
+      if (isNaN(totalSaidasValor)) totalSaidasValor = 0;
     }
 
     // 5. Valor Estimado do Estoque
-    const valorEstoqueEstimado = estoque_atual * custoMedio;
+    let valorEstoqueEstimado = estoque_atual * safeCustoMedio;
+    if (isNaN(valorEstoqueEstimado)) valorEstoqueEstimado = 0;
 
     return {
       ...prod,
       estoque_atual,
-      ultimoCusto,
-      custoMedio,
+      ultimoCusto: safeUltimoCusto,
+      custoMedio: safeCustoMedio,
       totalInvestido,
-      totalSaidasQtd,
+      totalSaidasQtd: isNaN(totalSaidasQtd) ? 0 : totalSaidasQtd,
       totalSaidasValor,
       valorEstoqueEstimado,
       allEntradas: prodEntradas,

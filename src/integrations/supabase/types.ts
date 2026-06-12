@@ -93,6 +93,41 @@ export type Database = {
           },
         ]
       }
+      comentarios_solicitacoes: {
+        Row: {
+          id: string
+          solicitacao_id: string
+          created_at: string
+          usuario_id: string
+          usuario_nome: string
+          texto: string
+        }
+        Insert: {
+          id?: string
+          solicitacao_id: string
+          created_at?: string
+          usuario_id: string
+          usuario_nome: string
+          texto: string
+        }
+        Update: {
+          id?: string
+          solicitacao_id?: string
+          created_at?: string
+          usuario_id?: string
+          usuario_nome?: string
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comentarios_solicitacoes_solicitacao_id_fkey"
+            columns: ["solicitacao_id"]
+            isOneToOne: false
+            referencedRelation: "solicitacoes_material"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       compras: {
         Row: {
           id: string

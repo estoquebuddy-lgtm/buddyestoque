@@ -108,6 +108,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const [observacao, setObservacao] = useState('');
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+  const [newComentario, setNewComentario] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('todos');
 
   const handleEditClick = (s: any) => {
     setForm({
@@ -166,19 +168,44 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const { data: solicitacoes = [], isLoading } = useQuery({
     queryKey: ['solicitacoes', obraId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('solicitacoes_material' as any)
-        .select(`
-          *,
-          solicitante:profiles!solicitacoes_material_solicitante_id_fkey(email, apelido),
-          destinatario:profiles!solicitacoes_material_destinatario_id_fkey(email, apelido),
-          aprovador:profiles!solicitacoes_material_aprovador_id_fkey(email, apelido)
-        `)
-        .eq('obra_id', obraId)
-        .order('data_solicitacao', { ascending: false });
-      
-      if (error) throw error;
-      return data || [];
+      const fetchWithoutComments = async () => {
+        const { data, error } = await supabase
+          .from('solicitacoes_material' as any)
+          .select(`
+            *,
+            solicitante:profiles!solicitacoes_material_solicitante_id_fkey(email, apelido),
+            destinatario:profiles!solicitacoes_material_destinatario_id_fkey(email, apelido),
+            aprovador:profiles!solicitacoes_material_aprovador_id_fkey(email, apelido)
+          `)
+          .eq('obra_id', obraId)
+          .order('data_solicitacao', { ascending: false });
+        if (error) throw error;
+        return data || [];
+      };
+
+      try {
+        const { data, error } = await supabase
+          .from('solicitacoes_material' as any)
+          .select(`
+            *,
+            solicitante:profiles!solicitacoes_material_solicitante_id_fkey(email, apelido),
+            destinatario:profiles!solicitacoes_material_destinatario_id_fkey(email, apelido),
+            aprovador:profiles!solicitacoes_material_aprovador_id_fkey(email, apelido),
+            comentarios_solicitacoes(id)
+          `)
+          .eq('obra_id', obraId)
+          .order('data_solicitacao', { ascending: false });
+        
+        if (error) {
+          if (error.code === 'PGRST116' || error.message?.includes('comentarios_solicitacoes') || error.message?.includes('relation')) {
+            return fetchWithoutComments();
+          }
+          throw error;
+        }
+        return data || [];
+      } catch (err) {
+        return fetchWithoutComments();
+      }
     },
     enabled: !!obraId,
   });
@@ -339,6 +366,76 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const { data: comentarios = [], refetch: refetchComentarios } = useQuery({
+    queryKey: ['comentarios-solicitacao', selectedSolicitacao?.id],
+    queryFn: async () => {
+      if (!selectedSolicitacao?.id) return [];
+      try {
+        const { data, error } = await supabase
+          .from('comentarios_solicitacoes' as any)
+          .select('*')
+          .eq('solicitacao_id', selectedSolicitacao.id)
+          .order('created_at', { ascending: true });
+        
+        if (error) {
+          if (error.code === 'PGRST116' || error.message?.includes('comentarios_solicitacoes') || error.message?.includes('relation')) {
+            console.warn("Comentarios table not created yet, returning empty comments");
+            return [];
+          }
+          throw error;
+        }
+        return data || [];
+      } catch (e) {
+        return [];
+      }
+    },
+    enabled: !!selectedSolicitacao?.id
+  });
+
+  const addComentario = useMutation({
+    mutationFn: async (texto: string) => {
+      if (!selectedSolicitacao?.id) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      // Buscar o apelido do usuário
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('apelido, email')
+        .eq('id', user.id)
+        .single();
+
+      const usuarioNome = profileData?.apelido || profileData?.email?.split('@')[0] || "Usuário";
+
+      const { error } = await supabase
+        .from('comentarios_solicitacoes' as any)
+        .insert({
+          solicitacao_id: selectedSolicitacao.id,
+          usuario_id: user.id,
+          usuario_nome: usuarioNome,
+          texto: texto
+        });
+
+      if (error) throw error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EDITAR',
+        entidade: 'SOLICITACAO',
+        detalhes: `Adicionou um comentário na solicitação: "${texto.substring(0, 100)}"`
+      });
+    },
+    onSuccess: () => {
+      refetchComentarios();
+      queryClient.invalidateQueries({ queryKey: ['solicitacoes', obraId] });
+      setNewComentario('');
+      toast.success("Comentário adicionado!");
+    },
+    onError: (e: any) => toast.error(e.message)
+  });
+
   const toggleAprovacao = useMutation({
     mutationFn: async ({ id, checked }: { id: string, checked: boolean }) => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -415,6 +512,29 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
   const deleteSolicitacao = useMutation({
     mutationFn: async (id: string) => {
       const { data: { user } } = await supabase.auth.getUser();
+      
+      // Fetch request details before deletion to preserve description and comments in logs
+      const { data: reqData } = await supabase
+        .from('solicitacoes_material')
+        .select('*, profiles!solicitacoes_material_solicitante_id_fkey(email, apelido)')
+        .eq('id', id)
+        .maybeSingle();
+
+      // Fetch comments to preserve in logs before deletion cascade
+      let commData: any[] = [];
+      try {
+        const { data, error } = await supabase
+          .from('comentarios_solicitacoes' as any)
+          .select('*')
+          .eq('solicitacao_id', id)
+          .order('created_at', { ascending: true });
+        if (!error && data) {
+          commData = data;
+        }
+      } catch (e) {
+        console.warn("Could not fetch comments before delete:", e);
+      }
+
       const { error } = await supabase
         .from('solicitacoes_material' as any)
         .delete()
@@ -422,13 +542,29 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         
       if (error) throw error;
 
+      let detalhesLog = 'Solicitação de material excluída';
+      if (reqData) {
+        const solicitanteNome = reqData.profiles?.apelido || reqData.profiles?.email || 'desconhecido';
+        const titleOrDesc = reqData.titulo || reqData.descricao_materiais;
+        const cleanTitle = titleOrDesc.replace(/\n/g, ' ').substring(0, 100);
+        
+        detalhesLog = `Solicitação "${cleanTitle}" de ${solicitanteNome} excluída. Materiais: ${reqData.descricao_materiais}. Urgência: ${reqData.urgencia || 'Normal'}.`;
+        if (reqData.observacao_resposta) {
+          detalhesLog += ` Obs Resposta: ${reqData.observacao_resposta}`;
+        }
+        if (commData && commData.length > 0) {
+          const formattedComments = commData.map(c => `${c.usuario_nome}: ${c.texto}`).join(' | ');
+          detalhesLog += ` Comentários: [${formattedComments}]`;
+        }
+      }
+
       await supabase.from('logs_atividades' as any).insert({
         obra_id: obraId,
         user_id: user?.id,
         user_email: user?.email,
         acao: 'EXCLUIR',
         entidade: 'SOLICITACAO',
-        detalhes: `Solicitação de material excluída`
+        detalhes: detalhesLog
       });
     },
     onSuccess: () => {
@@ -476,7 +612,8 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     );
     const matchesArchived = showArchived ? s.arquivado === true : !s.arquivado;
     const matchesAssigned = showMyAssignedOnly ? s.destinatario_id === user?.id : true;
-    return matchesSearch && matchesArchived && matchesAssigned;
+    const matchesStatus = statusFilter === 'todos' ? true : s.status === statusFilter;
+    return matchesSearch && matchesArchived && matchesAssigned && matchesStatus;
   });
 
   const statusBadge = (status: string) => {
@@ -543,7 +680,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                       {s.urgencia === 'Normal' && <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-500"></div>}
                       {s.urgencia === 'Baixa' && <div className="absolute top-0 left-0 w-1.5 h-full bg-slate-300"></div>}
                       
-                      <CardContent className="p-5 pl-6 space-y-3.5">
+                      <CardContent className="p-4 pl-5.5 space-y-3">
                         {/* Title and Urgency Badge */}
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex gap-3 flex-1 min-w-0">
@@ -551,7 +688,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                               <ImageThumbnail src={s.foto_url} alt="Material solicitado" type="produto" size="sm" />
                             )}
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-base text-slate-800 leading-normal whitespace-pre-wrap break-all break-words">{s.titulo || s.descricao_materiais}</h4>
+                              <h4 className="font-bold text-sm text-slate-800 leading-snug whitespace-pre-wrap break-words">{s.titulo || s.descricao_materiais}</h4>
                               {s.titulo && s.classificacao && (
                                 <span className="inline-block text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-semibold uppercase mt-1">
                                   {s.classificacao}
@@ -578,6 +715,12 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                             <User className="h-3.5 w-3.5 text-slate-400 shrink-0" />
                             <span className="truncate">Para: <strong className="text-slate-700 font-semibold">{formatUserDisplay(s.destinatario)}</strong></span>
                           </div>
+                          {s.comentarios_solicitacoes && s.comentarios_solicitacoes.length > 0 && (
+                            <div className="flex items-center gap-1.5 text-blue-600 bg-blue-50/50 px-2 py-1 rounded-lg w-fit mt-1 border border-blue-100/30">
+                              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+                              <span className="font-bold text-[10px]">{s.comentarios_solicitacoes.length} {s.comentarios_solicitacoes.length === 1 ? 'comentário' : 'comentários'}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Checkbox de Aprovação */}
@@ -750,21 +893,20 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         <table className="w-full text-left border-collapse text-xs">
           <thead>
             <tr className="bg-slate-50/70 text-slate-500 text-[10px] uppercase tracking-wider border-b border-slate-200">
-              <th className="px-4 py-3 font-semibold rounded-l-2xl w-14">Nº</th>
-              <th className="px-4 py-3 font-semibold">Título</th>
-              <th className="px-4 py-3 font-semibold">Classificação</th>
-              <th className="px-4 py-3 font-semibold max-w-xs">Conteúdo (Materiais)</th>
-              <th className="px-4 py-3 font-semibold">De / Para</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Urgência</th>
-              <th className="px-4 py-3 font-semibold">Prazo</th>
+              <th className="px-4 py-3 font-semibold rounded-l-2xl w-10">Nº</th>
+              <th className="px-4 py-3 font-semibold min-w-[200px] w-[35%]">Título</th>
+              <th className="px-4 py-3 font-semibold min-w-[180px] w-[25%]">Conteúdo (Materiais)</th>
+              <th className="px-3 py-3 font-semibold w-18">De/Para</th>
+              <th className="px-4 py-3 font-semibold w-20">Status</th>
+              <th className="px-4 py-3 font-semibold w-20">Urgência</th>
+              <th className="px-3 py-3 font-semibold w-12">Prazo</th>
               <th className="px-4 py-3 font-semibold text-center rounded-r-2xl w-32">Ações</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {filtered.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-slate-400 font-semibold bg-white/40">
+                <td colSpan={8} className="px-4 py-12 text-center text-slate-400 font-semibold bg-white/40">
                   Nenhuma solicitação encontrada.
                 </td>
               </tr>
@@ -773,19 +915,14 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                 const colIdx = columnsList.findIndex(c => c.id === s.status);
                 return (
                   <tr key={s.id} onClick={() => openStatusDialog(s)} className="bg-white hover:bg-slate-50/50 transition-colors cursor-pointer group">
-                    <td className="px-4 py-3.5 font-bold text-slate-700 whitespace-nowrap">
+                    <td className="px-4 py-3.5 font-bold text-slate-700 whitespace-nowrap text-[11px] w-10">
                       {s.numero ? `#${String(s.numero).padStart(4, '0')}` : '—'}
                     </td>
-                    <td className="px-4 py-3.5 font-semibold text-slate-800 max-w-[150px] truncate" title={s.titulo || 'Sem Título'}>
-                      {s.titulo || <span className="text-slate-400 italic">Sem Título</span>}
-                    </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap">
-                      <span className="inline-block text-[10px] bg-slate-100 text-slate-700 border border-slate-200/60 px-2 py-0.5 rounded-full font-medium">
-                        {s.classificacao || 'OUTROS'}
-                      </span>
+                    <td className="px-4 py-3.5 font-bold text-slate-900 text-sm min-w-[200px]" title={s.titulo || 'Sem Título'}>
+                      {s.titulo || <span className="text-slate-400 italic font-normal">Sem Título</span>}
                     </td>
                     <td 
-                      className="px-4 py-3.5 max-w-xs" 
+                      className="px-4 py-3.5 max-w-[240px]" 
                       onClick={(e) => { 
                         e.stopPropagation(); 
                         setExpandedRows(prev => ({ ...prev, [s.id]: !prev[s.id] })); 
@@ -793,7 +930,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     >
                       {expandedRows[s.id] ? (
                         <div className="space-y-2 py-1">
-                          <div className="font-medium text-slate-800 whitespace-pre-wrap break-all break-words leading-normal bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-xs">
+                          <div className="font-medium text-slate-800 whitespace-pre-wrap break-words leading-normal bg-slate-50 border border-slate-100 p-2.5 rounded-xl text-xs">
                             {s.descricao_materiais}
                           </div>
                           {s.foto_url && (
@@ -809,16 +946,21 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                           <span className="text-[9px] text-blue-600 hover:underline cursor-pointer font-bold block">Recolher</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 cursor-pointer font-semibold group-hover:text-blue-800">
-                          <span className="text-xs truncate max-w-[180px]">{s.descricao_materiais.split('\n')[0]}</span>
-                          <Eye className="h-3.5 w-3.5 text-blue-500/70 hover:text-blue-600 shrink-0" title="Ver mais" />
+                        <div className="flex items-center gap-1.5 text-slate-700 hover:text-blue-600 cursor-pointer font-medium transition-colors">
+                          <span className="text-xs truncate max-w-[200px] font-semibold">{s.descricao_materiais.split('\n')[0]}</span>
+                          <Eye className="h-3.5 w-3.5 text-slate-400 hover:text-blue-600 shrink-0" title="Ver mais" />
+                          {s.descricao_materiais.split('\n').length > 1 && (
+                            <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded-full shrink-0 border border-slate-200/50">
+                              +{s.descricao_materiais.split('\n').length - 1}
+                            </span>
+                          )}
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap text-slate-600">
-                      <div className="flex flex-col text-[11px] leading-tight">
-                        <span className="font-medium"><span className="text-[9px] text-slate-400 font-bold mr-1 uppercase">De:</span>{formatUserDisplay(s.solicitante)}</span>
-                        <span className="font-medium mt-1"><span className="text-[9px] text-slate-400 font-bold mr-1 uppercase">Para:</span>{formatUserDisplay(s.destinatario)}</span>
+                    <td className="px-3 py-3.5 whitespace-nowrap text-slate-600 w-18">
+                      <div className="flex flex-col text-[10px] leading-tight select-none">
+                        <span className="font-semibold text-slate-750"><span className="text-[8px] text-slate-400 font-black mr-0.5 uppercase">D:</span>{formatUserDisplay(s.solicitante)}</span>
+                        <span className="font-semibold text-slate-755 mt-0.5"><span className="text-[8px] text-slate-400 font-black mr-0.5 uppercase">P:</span>{formatUserDisplay(s.destinatario)}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3.5 whitespace-nowrap">
@@ -852,13 +994,20 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     <td className="px-4 py-3.5 whitespace-nowrap">
                       {urgenciaBadge(s.urgencia)}
                     </td>
-                    <td className="px-4 py-3.5 whitespace-nowrap font-semibold text-slate-700">
+                    <td className="px-3 py-3.5 whitespace-nowrap font-bold text-slate-700 text-[10px] w-12">
                       {s.data_necessidade ? (
-                        <span className="text-blue-600 font-bold">
-                          {new Date(s.data_necessidade).toLocaleDateString('pt-BR', {timeZone: 'UTC'})}
+                        <span>
+                          {(() => {
+                            const dateOnly = s.data_necessidade.split('T')[0];
+                            const parts = dateOnly.split('-');
+                            if (parts.length === 3) {
+                              return `${parts[2]}/${parts[1]}/${parts[0].substring(2)}`;
+                            }
+                            return new Date(s.data_necessidade).toLocaleDateString('pt-BR', {timeZone: 'UTC'}).substring(0, 8);
+                          })()}
                         </span>
                       ) : (
-                        <span className="text-slate-300">—</span>
+                        <span className="text-slate-300 font-normal">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3.5 whitespace-nowrap text-center" onClick={e => e.stopPropagation()}>
@@ -911,11 +1060,20 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md"
+                          className={`h-7 w-7 rounded-md relative ${
+                            s.comentarios_solicitacoes?.length > 0 
+                              ? 'text-primary hover:bg-primary/10' 
+                              : 'text-slate-400 hover:text-blue-600 hover:bg-blue-50'
+                          }`}
                           onClick={() => openStatusDialog(s)}
-                          title="Histórico/Atualizar Status"
+                          title="Detalhes e Comentários"
                         >
                           <MessageSquare className="h-3.5 w-3.5" />
+                          {s.comentarios_solicitacoes?.length > 0 && (
+                            <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-bold h-4 w-4 rounded-full flex items-center justify-center border border-white">
+                              {s.comentarios_solicitacoes.length}
+                            </span>
+                          )}
                         </Button>
 
                         {s.status === 'SOLICITADO' && !s.aprovador_id && (
@@ -1028,6 +1186,19 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     Lista
                   </button>
                 </div>
+
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="h-9 w-40 text-xs font-bold uppercase tracking-wider rounded-xl bg-white/5 border-white/10 text-white hover:bg-white/10 focus:ring-0">
+                    <SelectValue placeholder="Status: Todos" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0e1629] border-white/10 text-white text-xs">
+                    <SelectItem value="todos">Status: Todos</SelectItem>
+                    <SelectItem value="SOLICITADO">Solicitado</SelectItem>
+                    <SelectItem value="APROVADO">Em Cotação</SelectItem>
+                    <SelectItem value="COMPRADO">Comprado</SelectItem>
+                    <SelectItem value="ENTREGUE">Entregue</SelectItem>
+                  </SelectContent>
+                </Select>
 
                 <Button
                   variant={showMyAssignedOnly ? "default" : "outline"}
@@ -1296,7 +1467,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
             <DialogTitle>Detalhes da Solicitação</DialogTitle>
           </DialogHeader>
           {selectedSolicitacao && (
-            <div className="space-y-4 pt-4">
+            <div className="space-y-4 pt-4 max-h-[75vh] overflow-y-auto pr-1">
               <div className="bg-muted/30 p-4 rounded-xl text-sm mb-4 space-y-3">
                 {selectedSolicitacao.foto_url && (
                   <div className="relative aspect-video rounded-xl overflow-hidden bg-black/5 flex items-center justify-center border border-border">
@@ -1307,7 +1478,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     />
                   </div>
                 )}
-                <p className="font-bold text-base whitespace-pre-wrap break-all break-words">{selectedSolicitacao.descricao_materiais}</p>
+                <p className="font-bold text-base whitespace-pre-wrap break-words">{selectedSolicitacao.descricao_materiais}</p>
                 <div className="flex flex-col gap-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
                   {selectedSolicitacao.data_necessidade && (
                     <span className="flex items-center gap-1.5 text-blue-600 mb-1">
@@ -1345,6 +1516,68 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                       <span className="font-medium text-slate-700">{new Date(selectedSolicitacao.data_entregue).toLocaleDateString('pt-BR')}</span>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Seção de Comentários */}
+              <div className="space-y-3 pt-2 pb-4 border-b">
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4 text-slate-400" />
+                  Comentários ({comentarios.length})
+                </label>
+                
+                {/* Lista de Comentários */}
+                <div className="bg-slate-50/50 border border-slate-100 rounded-xl p-3 max-h-[220px] overflow-y-auto space-y-3">
+                  {comentarios.length === 0 ? (
+                    <p className="text-center text-xs text-slate-400 py-4 font-medium">Nenhum comentário ainda. Comece a conversa!</p>
+                  ) : (
+                    comentarios.map((c: any) => {
+                      const isMe = c.usuario_id === user?.id;
+                      return (
+                        <div key={c.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`}>
+                          <div className="flex items-center gap-1.5 text-[9px] text-slate-500 px-1">
+                            <span className="font-bold text-slate-700">{c.usuario_nome}</span>
+                            <span>•</span>
+                            <span>{new Date(c.created_at).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}</span>
+                          </div>
+                          <div className={`p-2.5 rounded-2xl max-w-[85%] text-xs shadow-sm ${
+                            isMe 
+                              ? 'bg-blue-600 text-white rounded-tr-none' 
+                              : 'bg-white border border-slate-100 text-slate-800 rounded-tl-none'
+                          }`}>
+                            <p className="whitespace-pre-wrap break-words leading-relaxed">{c.texto}</p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {/* Input de Novo Comentário */}
+                <div className="flex gap-2 items-end pt-1">
+                  <Textarea
+                    placeholder="Escreva um comentário... (Enter para enviar)"
+                    value={newComentario}
+                    onChange={(e) => setNewComentario(e.target.value)}
+                    className="min-h-[44px] max-h-[120px] resize-y text-xs py-2.5 px-3 rounded-xl bg-white border border-slate-200"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (newComentario.trim() && !addComentario.isPending) {
+                          addComentario.mutate(newComentario.trim());
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-10 px-4 rounded-xl font-bold shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                    disabled={!newComentario.trim() || addComentario.isPending}
+                    onClick={() => addComentario.mutate(newComentario.trim())}
+                  >
+                    {addComentario.isPending ? 'Enviando...' : 'Comentar'}
+                  </Button>
                 </div>
               </div>
 

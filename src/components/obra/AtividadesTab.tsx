@@ -94,7 +94,7 @@ export default function AtividadesTab({ obraId }: { obraId: string }) {
                             {new Date(log.data).toLocaleDateString('pt-BR')} {new Date(log.data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        <p className="text-xs text-foreground font-medium mt-0.5 truncate">{log.detalhes}</p>
+                        <p className="text-xs text-foreground font-medium mt-0.5 whitespace-pre-wrap break-words">{log.detalhes}</p>
                       </div>
                     </div>
                   ))}

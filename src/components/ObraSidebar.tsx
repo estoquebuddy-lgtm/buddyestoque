@@ -140,7 +140,7 @@ export default function ObraSidebar({ obraNome, obraEndereco, activeTab, onTabCh
 
       <Separator className="bg-sidebar-border" />
 
-      <SidebarContent className="pt-2">
+      <SidebarContent className="pt-2 no-scrollbar">
         {menuGroups(isAdmin).map((group) => {
           if (group.type === 'separator') {
             return <Separator key={group.id} className="my-2 bg-sidebar-border" />;
