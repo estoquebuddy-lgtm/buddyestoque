@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar, Search, Pencil, LayoutGrid, List, Eye } from 'lucide-react';
+import { ShoppingCart, Clock, CheckCircle2, XCircle, FilePlus2, MessageSquare, ShieldAlert, Trash2, ChevronLeft, ChevronRight, Archive, ArchiveRestore, User, Calendar, Search, Pencil, LayoutGrid, List, Eye, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
 import PageHeader from '@/components/PageHeader';
@@ -606,7 +606,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     const matchesSearch = searchTerms.every(term =>
       (s.titulo && s.titulo.toLowerCase().includes(term)) ||
       (s.classificacao && s.classificacao.toLowerCase().includes(term)) ||
-      s.descricao_materiais.toLowerCase().includes(term) || 
+      ((s.descricao_materiais || '').toLowerCase().includes(term)) || 
       (s.solicitante?.email && s.solicitante.email.toLowerCase().includes(term)) ||
       (s.solicitante?.apelido && s.solicitante.apelido.toLowerCase().includes(term))
     );
@@ -955,11 +955,11 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5 text-slate-700 hover:text-blue-600 cursor-pointer font-medium transition-colors">
-                          <span className="text-xs truncate max-w-[200px] font-semibold">{s.descricao_materiais.split('\n')[0]}</span>
+                          <span className="text-xs truncate max-w-[200px] font-semibold">{(s.descricao_materiais || '').split('\n')[0]}</span>
                           <Eye className="h-3.5 w-3.5 text-slate-400 hover:text-blue-600 shrink-0" title="Ver mais" />
-                          {s.descricao_materiais.split('\n').length > 1 && (
+                          {(s.descricao_materiais || '').split('\n').length > 1 && (
                             <span className="text-[9px] bg-slate-100 text-slate-500 font-bold px-1.5 py-0.5 rounded-full shrink-0 border border-slate-200/50">
-                              +{s.descricao_materiais.split('\n').length - 1}
+                              +{(s.descricao_materiais || '').split('\n').length - 1}
                             </span>
                           )}
                         </div>
