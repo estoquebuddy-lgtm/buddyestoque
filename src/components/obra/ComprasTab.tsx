@@ -569,6 +569,31 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     },
     onError: (e: any) => toast.error(`Erro ao cadastrar fornecedor: ${e.message}`)
   });
+
+  const deleteFornecedorMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('fornecedores' as any)
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: 'EXCLUIR',
+        entidade: 'FORNECEDOR',
+        detalhes: `Excluiu um fornecedor`
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['fornecedores-unicos', obraId] });
+      toast.success('Fornecedor excluído com sucesso!');
+    },
+    onError: (e: any) => toast.error(`Erro ao excluir fornecedor: ${e.message}`)
+  });
   const saveNfMut = useMutation({
     mutationFn: async (payload:any) => {
       if(selectedNf){const {error}=await supabase.from('compras_nfs').update(payload).eq('id',selectedNf.id);if(error) throw error;}
@@ -1977,6 +2002,29 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                               title="Editar Fornecedor"
                             >
                               <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-7 w-7 p-0 text-red-400 hover:bg-red-400/10 hover:text-red-300 rounded-lg ml-1"
+                              onClick={() => {
+                                if (window.confirm(`Tem certeza de que deseja excluir o fornecedor "${f.nome}"?`)) {
+                                  const originalForn = fornecedoresUnicos.find((u: any) => u.nome === f.nome);
+                                  if (originalForn?.id) {
+                                    deleteFornecedorMut.mutate(originalForn.id);
+                                  } else {
+                                    toast.error('Erro: ID do fornecedor não encontrado.');
+                                  }
+                                }
+                              }}
+                              title="Excluir Fornecedor"
+                              disabled={deleteFornecedorMut.isPending}
+                            >
+                              {deleteFornecedorMut.isPending ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-3.5 w-3.5" />
+                              )}
                             </Button>
                           </td>
                         </tr>
