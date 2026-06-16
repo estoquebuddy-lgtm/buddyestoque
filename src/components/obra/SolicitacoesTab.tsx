@@ -442,14 +442,12 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       const aprovador_id = checked ? user?.id : null;
       const now = new Date().toISOString();
       const data_aprovado = checked ? now : null;
-      const status = checked ? 'APROVADO' : 'SOLICITADO';
       
       const { error } = await supabase
         .from('solicitacoes_material' as any)
         .update({ 
           aprovador_id,
-          data_aprovado,
-          status
+          data_aprovado
         })
         .eq('id', id);
         
@@ -618,13 +616,24 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     return matchesSearch && matchesArchived && matchesAssigned && matchesStatus;
   });
 
-  const statusBadge = (status: string) => {
+  const statusBadge = (s: any) => {
+    const status = s.status;
+    const hasAprovador = !!s.aprovador_id;
+    
     switch (status) {
-      case 'SOLICITADO': return <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20"><Clock className="w-3 h-3 mr-1" /> Solicitado</Badge>;
-      case 'APROVADO': return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20"><CheckCircle2 className="w-3 h-3 mr-1" /> Aprovado</Badge>;
-      case 'COMPRADO': return <Badge className="bg-purple-500/10 text-purple-500 border-purple-500/20"><ShoppingCart className="w-3 h-3 mr-1" /> Comprado</Badge>;
-      case 'ENTREGUE': return <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20"><CheckCircle2 className="w-3 h-3 mr-1" /> Entregue</Badge>;
-      default: return <Badge variant="secondary">{status}</Badge>;
+      case 'SOLICITADO': 
+        if (hasAprovador) {
+          return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20"><CheckCircle2 className="w-3 h-3 mr-1" /> Aprovado</Badge>;
+        }
+        return <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20"><Clock className="w-3 h-3 mr-1" /> Solicitado</Badge>;
+      case 'APROVADO': 
+        return <Badge className="bg-sky-500/10 text-sky-500 border-sky-500/20"><FileText className="w-3 h-3 mr-1" /> Em Cotação</Badge>;
+      case 'COMPRADO': 
+        return <Badge className="bg-purple-500/10 text-purple-500 border-purple-500/20"><ShoppingCart className="w-3 h-3 mr-1" /> Comprado</Badge>;
+      case 'ENTREGUE': 
+        return <Badge className="bg-emerald-500/10 text-emerald-500 border-emerald-500/20"><CheckCircle2 className="w-3 h-3 mr-1" /> Entregue</Badge>;
+      default: 
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
@@ -964,7 +973,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     </td>
                     <td className="px-4 py-3.5 whitespace-nowrap">
                       <div className="flex flex-col gap-1">
-                        {statusBadge(s.status)}
+                        {statusBadge(s)}
                         {s.status === 'SOLICITADO' && (
                           <div className="flex items-center gap-1.5 mt-1" onClick={e => e.stopPropagation()}>
                             <input 
