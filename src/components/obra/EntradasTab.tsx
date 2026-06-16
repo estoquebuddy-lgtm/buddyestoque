@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -12,13 +12,12 @@ import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SkeletonList from '@/components/SkeletonList';
 import ImageUpload from '@/components/ImageUpload';
-import ImportXmlDialog from '@/components/obra/ImportXmlDialog';
 import { useProfile } from '@/hooks/useProfile';
 import { Badge } from '@/components/ui/badge';
 
 interface Props { obraId: string; fabOpen?: boolean; onFabClose?: () => void; }
 
-const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '' };
+const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '', compra_id: '' };
 const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '', foto_url: '', localizacao: '' };
 const emptyNewFerramenta = { nome: '', categoria: 'Ferramentas Elétricas', localizacao: '', codigoPrefixo: '' };
 
@@ -69,6 +68,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         .select(`
           *,
           produtos(nome, unidade),
+          compras(email_titulo),
           comprado_por:profiles!entradas_comprado_por_id_fkey(email, apelido),
           responsavel:profiles!entradas_responsavel_id_fkey(email, apelido)
         `)
@@ -78,7 +78,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         // Fallback query if migration has not been applied yet
         const { data: fallbackData } = await supabase
           .from('entradas')
-          .select('*, produtos(nome, unidade)')
+          .select('*, produtos(nome, unidade), compras(email_titulo)')
           .eq('obra_id', obraId)
           .order('data', { ascending: false });
         return fallbackData || [];
@@ -102,6 +102,20 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     enabled: !!obraId,
   });
 
+  const { data: compras = [] } = useQuery({
+    queryKey: ['compras', obraId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('compras')
+        .select('id, email_titulo, fornecedor_nome, status, data_envio')
+        .eq('obra_id', obraId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!obraId
+  });
+
   // 2. Safe array wrappers derived from queries
   const safeEntradas = Array.isArray(entradas) ? entradas : [];
   const safeProdutos = Array.isArray(produtos) ? produtos : [];
@@ -115,14 +129,14 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [viewNota, setViewNota] = useState<string | null>(null);
   const [subTab, setSubTab] = useState<'almoxarifado' | 'comprados'>('almoxarifado');
-  const [xmlOpen, setXmlOpen] = useState(false);
 
-  const [fornecedorSearchInput, setFornecedorSearchInput] = useState('');
-  const [showFornecedoresList, setShowFornecedoresList] = useState(false);
-
-  useEffect(() => {
-    setFornecedorSearchInput(form.fornecedor || '');
-  }, [form.fornecedor]);
+  const filteredCompras = useMemo(() => {
+    let list = Array.isArray(compras) ? compras : [];
+    if (form.fornecedor) {
+      list = list.filter((c: any) => c.fornecedor_nome === form.fornecedor);
+    }
+    return list;
+  }, [compras, form.fornecedor]);
 
   // Entry type: 'material' or 'ferramenta'
   const [entryType, setEntryType] = useState<'material' | 'ferramenta'>('material');
@@ -247,6 +261,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           fornecedor: form.fornecedor || null,
           observacao: form.observacao || null,
           nota_fiscal_url: form.nota_fiscal_url || null,
+          compra_id: form.compra_id || null,
         };
 
         let res;
@@ -294,6 +309,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           fornecedor: form.fornecedor || null,
           observacao: form.observacao ? `[FERRAMENTA] ${form.observacao}` : '[FERRAMENTA]',
           nota_fiscal_url: form.nota_fiscal_url || null,
+          compra_id: form.compra_id || null,
         };
         const { error } = await supabase.from('entradas').update(payload).eq('id', editingId);
         if (error) throw error;
@@ -349,6 +365,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         fornecedor: form.fornecedor || null,
         observacao: form.observacao ? `[FERRAMENTA] ${form.observacao}` : '[FERRAMENTA]',
         nota_fiscal_url: form.nota_fiscal_url || null,
+        compra_id: form.compra_id || null,
       });
       if (entradaError) throw entradaError;
 
@@ -594,7 +611,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     setEditingId(e.id);
     setEntryType('material');
     setEditingFerramenta(null);
-    setForm({ produto_id: e.produto_id, quantidade: String(e.quantidade), valor_unitario: String(e.valor_unitario || ''), fornecedor: e.fornecedor || '', observacao: e.observacao || '', nota_fiscal_url: e.nota_fiscal_url || '' });
+    setForm({ produto_id: e.produto_id, quantidade: String(e.quantidade), valor_unitario: String(e.valor_unitario || ''), fornecedor: e.fornecedor || '', observacao: e.observacao || '', nota_fiscal_url: e.nota_fiscal_url || '', compra_id: e.compra_id || '' });
     setIsNewProduct(false);
     setNewProduct(emptyNewProduct);
     setProductSearch('');
@@ -607,7 +624,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     setEntryType('ferramenta');
     setEditingFerramenta({ produtoId: e.produto_id, nome: nomeSemTag });
     setNewFerramenta({ nome: nomeSemTag, categoria: 'Ferramentas Elétricas', localizacao: '', codigoPrefixo: '' });
-    setForm({ produto_id: e.produto_id, quantidade: String(e.quantidade), valor_unitario: String(e.valor_unitario || ''), fornecedor: e.fornecedor || '', observacao: e.observacao?.replace('[FERRAMENTA] ', '').replace('[FERRAMENTA]', '').trim() || '', nota_fiscal_url: e.nota_fiscal_url || '' });
+    setForm({ produto_id: e.produto_id, quantidade: String(e.quantidade), valor_unitario: String(e.valor_unitario || ''), fornecedor: e.fornecedor || '', observacao: e.observacao?.replace('[FERRAMENTA] ', '').replace('[FERRAMENTA]', '').trim() || '', nota_fiscal_url: e.nota_fiscal_url || '', compra_id: e.compra_id || '' });
     setIsNewProduct(false);
     setProductSearch('');
     setDialogOpen(true);
@@ -664,7 +681,8 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         : !!newFerramenta.nome.trim() && !!form.quantidade && !!form.valor_unitario)
     : isNewProduct
       ? !!newProduct.nome.trim() && !!form.quantidade && !!form.valor_unitario
-      : (!!form.produto_id && !!form.quantidade && !!form.valor_unitario)) && !!form.fornecedor?.trim();
+      : (!!form.produto_id && !!form.quantidade && !!form.valor_unitario)) && 
+      !!form.fornecedor?.trim();
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -690,9 +708,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
             <div className="flex flex-col gap-2 shrink-0 pt-1">
               <Button size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" onClick={resetDialog}>
                 <ArrowDownToLine className="h-4 w-4 mr-1" /> Entrada
-              </Button>
-              <Button size="sm" className="bg-info/20 hover:bg-info/30 text-info border border-info/50" onClick={() => setXmlOpen(true)}>
-                <FileText className="h-4 w-4 mr-1" /> Importar XML
               </Button>
             </div>
           </div>
@@ -778,7 +793,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                           <Badge className="bg-amber-500/10 text-amber-500 border-amber-500/20 text-[10px] font-medium">COMPRADO (Aguardando)</Badge>
                         </div>
                         <p className="text-xs text-white/50 font-medium mt-0.5">
-                          Fornecedor: {e.fornecedor || 'Não informado'}
+                          Fornecedor: {e.fornecedor || 'Não informado'}{e.compras?.email_titulo && ` • Compra: ${e.compras.email_titulo}`}
                         </p>
                       </div>
                       <div className="text-right flex flex-col items-end mr-4">
@@ -845,7 +860,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                         {isTool && <Badge className="bg-warning/10 text-warning border-warning/20 text-[10px]">Ferramenta</Badge>}
                       </div>
                       <p className="text-xs text-white/50 font-medium mt-0.5">
-                        {new Date(e.data).toLocaleDateString('pt-BR')}{e.fornecedor && ` • ${e.fornecedor}`}
+                        {new Date(e.data).toLocaleDateString('pt-BR')}{e.fornecedor && ` • ${e.fornecedor}`}{e.compras?.email_titulo && ` • Compra: ${e.compras.email_titulo}`}
                       </p>
                     </div>
                     <div className="text-right flex flex-col items-end">
@@ -1263,77 +1278,67 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 </div>
               )}
 
-              <div className="space-y-1 relative">
+              <div className="space-y-1">
                 <label className="text-xs text-muted-foreground ml-1">Fornecedor *</label>
-                <div className="relative">
-                  <Input
-                    value={fornecedorSearchInput}
-                    onChange={e => {
-                      const val = e.target.value;
-                      setFornecedorSearchInput(val);
-                      setShowFornecedoresList(true);
-                    }}
-                    onFocus={() => setShowFornecedoresList(true)}
-                    onBlur={() => {
-                      setTimeout(() => {
-                        setShowFornecedoresList(false);
-                        const match = safeFornecedores.find(
-                          (f: any) => typeof f === 'string' && f.trim().toLowerCase() === fornecedorSearchInput.trim().toLowerCase()
-                        );
-                        if (match) {
-                          setFornecedorSearchInput(match);
-                          setForm(f => ({ ...f, fornecedor: match }));
-                        } else if (!fornecedorSearchInput.trim()) {
-                          setForm(f => ({ ...f, fornecedor: '' }));
-                        } else {
-                          setFornecedorSearchInput(form.fornecedor || '');
-                        }
-                      }, 200);
-                    }}
-                    placeholder="Busque um fornecedor cadastrado..."
-                    className="w-full bg-[#0a1020] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-12 text-sm pr-10"
-                    autoComplete="off"
-                    required
-                  />
-                  <div className="absolute right-3.5 top-1/2 -translate-y-1/2 flex items-center text-white/40 pointer-events-none">
-                    <Search className="h-4 w-4" />
-                  </div>
+                <Select
+                  value={form.fornecedor}
+                  onValueChange={val => {
+                    setForm(f => ({ ...f, fornecedor: val }));
+                    // Clean selected purchase if the supplier changes and the selected purchase is from another supplier
+                    const selectedPurchase = compras.find((c: any) => c.id === form.compra_id);
+                    if (selectedPurchase && selectedPurchase.fornecedor_nome !== val) {
+                      setForm(f => ({ ...f, compra_id: '' }));
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-12 bg-[#0a1020] border-white/10 text-white rounded-xl">
+                    <SelectValue placeholder="Selecione um fornecedor cadastrado" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
+                    {safeFornecedores.length === 0 ? (
+                      <div className="p-2 text-xs text-muted-foreground text-center">Nenhum fornecedor cadastrado</div>
+                    ) : (
+                      safeFornecedores.map((f: string) => (
+                        <SelectItem key={f} value={f}>{f}</SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  {showFornecedoresList && (
-                    <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                      <button
-                        type="button"
-                        className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors text-red-400 font-semibold text-xs min-h-[36px]"
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          setFornecedorSearchInput('');
-                          setForm(f => ({ ...f, fornecedor: '' }));
-                          setShowFornecedoresList(false);
-                        }}
-                      >
-                        Limpar Seleção
-                      </button>
-                      {safeFornecedores
-                        .filter((f: any) => typeof f === 'string' && f.toLowerCase().includes(fornecedorSearchInput.toLowerCase()))
-                        .map((f: any) => (
-                          <button
-                            key={f}
-                            type="button"
-                            className="w-full text-left px-4 py-2.5 hover:bg-white/10 transition-colors text-white text-xs min-h-[36px]"
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setFornecedorSearchInput(f);
-                              setForm(fState => ({ ...fState, fornecedor: f }));
-                              setShowFornecedoresList(false);
-                            }}
-                          >
-                            {f}
-                          </button>
-                        ))
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground ml-1">Compra Associada (opcional)</label>
+                <Select
+                  value={form.compra_id || 'none'}
+                  onValueChange={val => {
+                    const compraIdVal = val === 'none' ? '' : val;
+                    setForm(f => ({ ...f, compra_id: compraIdVal }));
+                    
+                    if (compraIdVal) {
+                      // If a purchase is selected, automatically select its supplier
+                      const selectedPurchase = compras.find((c: any) => c.id === compraIdVal);
+                      if (selectedPurchase && selectedPurchase.fornecedor_nome) {
+                        setForm(f => ({ ...f, fornecedor: selectedPurchase.fornecedor_nome }));
                       }
-                    </div>
-                  )}
-                </div>
+                    }
+                  }}
+                >
+                  <SelectTrigger className="h-12 bg-[#0a1020] border-white/10 text-white rounded-xl">
+                    <SelectValue placeholder="Selecione a compra de origem" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-[#0e1629] border-white/10 text-white max-h-48 overflow-y-auto">
+                    <SelectItem value="none">Sem Compra / Entrada Avulsa</SelectItem>
+                    {filteredCompras.length > 0 && filteredCompras.map((c: any) => {
+                      const dateStr = c.data_envio ? new Date(c.data_envio).toLocaleDateString('pt-BR') : '';
+                      const label = `${c.email_titulo || 'Compra sem título'} ${c.fornecedor_nome ? `(${c.fornecedor_nome})` : ''} ${dateStr ? `• ${dateStr}` : ''}`;
+                      return (
+                        <SelectItem key={c.id} value={c.id}>
+                          {label}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-1">
@@ -1374,8 +1379,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       </Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Entrada" description="A quantidade será subtraída do estoque automaticamente." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
-
-      <ImportXmlDialog obraId={obraId} open={xmlOpen} onOpenChange={setXmlOpen} />
 
       {/* ── Confirmar Recebimento Dialog ── */}
       <Dialog open={!!receberDialog?.open} onOpenChange={(open) => !open && setReceberDialog(null)}>
