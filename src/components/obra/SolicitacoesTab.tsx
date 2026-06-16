@@ -442,12 +442,14 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       const aprovador_id = checked ? user?.id : null;
       const now = new Date().toISOString();
       const data_aprovado = checked ? now : null;
+      const status = checked ? 'APROVADO' : 'SOLICITADO';
       
       const { error } = await supabase
         .from('solicitacoes_material' as any)
         .update({ 
           aprovador_id,
-          data_aprovado
+          data_aprovado,
+          status
         })
         .eq('id', id);
         
