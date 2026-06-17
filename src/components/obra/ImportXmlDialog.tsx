@@ -225,18 +225,19 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
       return;
     }
 
-    let finalFornecedor = '';
-    if (fornecedor.trim()) {
-      const matchForn = fornecedores.find(
-        (f: any) => f.trim().toLowerCase() === fornecedor.trim().toLowerCase()
-      );
-      if (!matchForn) {
-        toast.error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
-        return;
-      }
-      finalFornecedor = matchForn;
-      setFornecedor(matchForn);
+    if (!fornecedor.trim()) {
+      toast.error('O fornecedor é obrigatório.');
+      return;
     }
+    const matchForn = fornecedores.find(
+      (f: any) => f.trim().toLowerCase() === fornecedor.trim().toLowerCase()
+    );
+    if (!matchForn) {
+      toast.error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
+      return;
+    }
+    const finalFornecedor = matchForn;
+    setFornecedor(matchForn);
 
     setLoading(true);
     try {
@@ -280,7 +281,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
-            fornecedor: finalFornecedor || 'Sem Fornecedor',
+            fornecedor: finalFornecedor,
           });
           if (entErr) throw entErr;
 
@@ -348,7 +349,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
-            fornecedor: finalFornecedor || 'Sem Fornecedor',
+            fornecedor: finalFornecedor,
           });
           if (entErr) throw entErr;
 
@@ -625,7 +626,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                 <div className="space-y-2 relative">
                   <label className="text-xs font-medium text-muted-foreground ml-1">
-                    Fornecedor (opcional)
+                    Fornecedor *
                   </label>
                   <Input 
                     placeholder="Fornecedor..." 

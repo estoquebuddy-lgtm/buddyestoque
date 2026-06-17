@@ -208,6 +208,16 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
+      if (!form.fornecedor || !form.fornecedor.trim()) {
+        throw new Error('Fornecedor é obrigatório');
+      }
+      const matchForn = safeFornecedores.find(
+        (f: any) => f.trim().toLowerCase() === form.fornecedor.trim().toLowerCase()
+      );
+      if (!matchForn) {
+        throw new Error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
+      }
+
       const itemsToSave = [...entryItems];
       if (form.produto_id || isNewProduct) {
         if (isNewProduct && !newProduct.nome.trim()) throw new Error('Nome do produto é obrigatório');
@@ -258,7 +268,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           obra_id: obraId, produto_id: produtoId,
           quantidade: Number(item.quantidade),
           valor_unitario: Number(item.valor_unitario) || 0,
-          fornecedor: form.fornecedor || 'Sem Fornecedor',
+          fornecedor: form.fornecedor.trim(),
           observacao: form.observacao || null,
           nota_fiscal_url: form.nota_fiscal_url || null,
           compra_id: form.compra_id || null,
@@ -301,12 +311,22 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       const quantidade = Number(form.quantidade);
       const valorUnitario = Number(form.valor_unitario) || 0;
 
+      if (!form.fornecedor || !form.fornecedor.trim()) {
+        throw new Error('Fornecedor é obrigatório');
+      }
+      const matchForn = safeFornecedores.find(
+        (f: any) => f.trim().toLowerCase() === form.fornecedor.trim().toLowerCase()
+      );
+      if (!matchForn) {
+        throw new Error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
+      }
+
       // ── EDIT MODE: only update the financial entry ──────────────────────
       if (editingId) {
         const payload = {
           quantidade,
           valor_unitario: valorUnitario,
-          fornecedor: form.fornecedor || 'Sem Fornecedor',
+          fornecedor: form.fornecedor.trim(),
           observacao: form.observacao ? `[FERRAMENTA] ${form.observacao}` : '[FERRAMENTA]',
           nota_fiscal_url: form.nota_fiscal_url || null,
           compra_id: form.compra_id || null,
@@ -362,7 +382,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         produto_id: produtoId,
         quantidade: quantidade,
         valor_unitario: valorUnitario,
-        fornecedor: form.fornecedor || 'Sem Fornecedor',
+        fornecedor: form.fornecedor.trim(),
         observacao: form.observacao ? `[FERRAMENTA] ${form.observacao}` : '[FERRAMENTA]',
         nota_fiscal_url: form.nota_fiscal_url || null,
         compra_id: form.compra_id || null,

@@ -452,18 +452,19 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
       return;
     }
 
-    let finalFornecedor = '';
-    if (fornecedor.trim()) {
-      const matchForn = fornecedores.find(
-        (f: any) => f.trim().toLowerCase() === fornecedor.trim().toLowerCase()
-      );
-      if (!matchForn) {
-        toast.error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
-        return;
-      }
-      finalFornecedor = matchForn;
-      setFornecedor(matchForn);
+    if (!fornecedor.trim()) {
+      toast.error('O fornecedor é obrigatório.');
+      return;
     }
+    const matchForn = fornecedores.find(
+      (f: any) => f.trim().toLowerCase() === fornecedor.trim().toLowerCase()
+    );
+    if (!matchForn) {
+      toast.error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
+      return;
+    }
+    const finalFornecedor = matchForn;
+    setFornecedor(matchForn);
 
     setLoading(true);
     try {
@@ -536,7 +537,7 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
               quantidade: item.quantidade,
               valor_unitario: finalUnitValue,
               observacao: note,
-              fornecedor: finalFornecedor || 'Sem Fornecedor',
+              fornecedor: finalFornecedor,
               status_entrega: 'PENDENTE',
               comprado_por_id: user?.id || null,
               comprado_em: new Date().toISOString(),
@@ -610,7 +611,7 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
-            fornecedor: finalFornecedor || 'Sem Fornecedor',
+            fornecedor: finalFornecedor,
             status_entrega: 'PENDENTE',
             comprado_por_id: user?.id || null,
             comprado_em: new Date().toISOString(),
@@ -1086,7 +1087,7 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                 <div className="space-y-2 relative">
                   <label className="text-[10px] font-bold uppercase tracking-wider text-white/40 ml-1">
-                    Fornecedor (opcional)
+                    Fornecedor *
                   </label>
                   <Input 
                     placeholder="Fornecedor da compra..." 
