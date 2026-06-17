@@ -76,10 +76,32 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const { data: produtos = [], isLoading } = useQuery({
     queryKey: ['produtos', obraId],
     queryFn: async () => {
-      const { data, error } = await supabase.from('produtos').select('*').eq('obra_id', obraId).order('nome');
-      if (error) throw error;
+      let allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('*')
+          .eq('obra_id', obraId)
+          .order('nome')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        
+        allData = [...allData, ...(data || [])];
+        
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+
       // Filter out virtual [FERRAMENTA] products — they exist only for financial tracking
-      return (data || []).filter((p: any) => !p.nome?.startsWith('[FERRAMENTA]'));
+      return allData.filter((p: any) => !p.nome?.startsWith('[FERRAMENTA]'));
     },
   });
 

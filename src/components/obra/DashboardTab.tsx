@@ -25,8 +25,30 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
   const { data: produtos = [], isLoading: loadingProdutos } = useQuery({
     queryKey: ['produtos', obraId],
     queryFn: async () => {
-      const { data } = await supabase.from('produtos').select('*').eq('obra_id', obraId).order('nome');
-      return data || [];
+      let allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('*')
+          .eq('obra_id', obraId)
+          .order('nome')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        
+        allData = [...allData, ...(data || [])];
+        
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+      return allData;
     },
   });
 

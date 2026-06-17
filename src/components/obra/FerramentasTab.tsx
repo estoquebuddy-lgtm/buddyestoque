@@ -71,10 +71,32 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const { data: ferramentas = [], isLoading } = useQuery({
     queryKey: ['ferramentas', obraId, pessoas],
     queryFn: async () => {
-      const { data, error } = await supabase.from('ferramentas').select('*').eq('obra_id', obraId).order('nome');
-      if (error) throw error;
+      let allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('ferramentas')
+          .select('*')
+          .eq('obra_id', obraId)
+          .order('nome')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        
+        allData = [...allData, ...(data || [])];
+        
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+
       const pessoasMap = new Map(pessoas.map((p: any) => [p.id, p.nome]));
-      return (data || []).map((f: any) => {
+      return allData.map((f: any) => {
         const catMatch = f.observacoes?.match(/\[CAT:(.*?)\]/);
         const locMatch = f.observacoes?.match(/\[LOC:(.*?)\]/);
         const categoria = catMatch ? catMatch[1] : null;
