@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, LayoutDashboard, Bell, Clock, ShieldAlert, ChevronDown, ChevronUp, MessageSquarePlus } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, LayoutDashboard, Bell, Clock, ShieldAlert, ChevronDown, ChevronUp, MessageSquarePlus, FileText } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SkeletonCards } from '@/components/SkeletonList';
@@ -160,6 +160,15 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             TEMPO REAL
           </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onTabChange?.('solicitacoes')}
+            className="lg:hidden h-8 px-2.5 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 text-white hover:text-white border-none rounded-xl flex items-center gap-1 shadow-sm active:scale-95 transition-all shrink-0"
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Solicitações
+          </Button>
         </div>
       </div>
 
