@@ -280,7 +280,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
-            fornecedor: finalFornecedor || null,
+            fornecedor: finalFornecedor || 'Sem Fornecedor',
           });
           if (entErr) throw entErr;
 
@@ -348,7 +348,7 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
             obra_id: obraId, produto_id: produtoId,
             quantidade: item.quantidade, valor_unitario: finalUnitValue,
             observacao: note,
-            fornecedor: finalFornecedor || null,
+            fornecedor: finalFornecedor || 'Sem Fornecedor',
           });
           if (entErr) throw entErr;
 
