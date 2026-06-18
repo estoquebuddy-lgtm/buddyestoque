@@ -303,7 +303,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('fornecedores' as any)
-        .select('nome, cnpj, dados')
+        .select('id, nome, cnpj, dados')
         .eq('obra_id', obraId)
         .order('nome');
       if (error) throw error;
@@ -2027,7 +2027,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                               className="h-7 w-7 p-0 text-red-400 hover:bg-red-400/10 hover:text-red-300 rounded-lg ml-1"
                               onClick={() => {
                                 if (window.confirm(`Tem certeza de que deseja excluir o fornecedor "${f.nome}"?`)) {
-                                  const originalForn = fornecedoresUnicos.find((u: any) => u.nome === f.nome);
+                                  const originalForn = fornecedoresUnicos.find((u: any) => (u.nome || '').trim().toLowerCase() === (f.nome || '').trim().toLowerCase());
                                   if (originalForn?.id) {
                                     deleteFornecedorMut.mutate(originalForn.id);
                                   } else {
