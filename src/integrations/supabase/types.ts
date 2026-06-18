@@ -644,6 +644,7 @@ export type Database = {
           nome: string
           obra_id: string
           telefone: string | null
+          status: string
         }
         Insert: {
           created_at?: string
@@ -653,6 +654,7 @@ export type Database = {
           nome: string
           obra_id: string
           telefone?: string | null
+          status?: string
         }
         Update: {
           created_at?: string
@@ -662,6 +664,7 @@ export type Database = {
           nome?: string
           obra_id?: string
           telefone?: string | null
+          status?: string
         }
         Relationships: [
           {

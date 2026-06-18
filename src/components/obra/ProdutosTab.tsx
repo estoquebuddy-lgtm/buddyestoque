@@ -109,7 +109,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const { data: pessoas = [] } = useQuery({
     queryKey: ['pessoas', obraId],
     queryFn: async () => {
-      const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome');
+      const { data } = await supabase.from('pessoas').select('id, nome, status').eq('obra_id', obraId).order('nome');
       return data || [];
     },
     enabled: !!obraId,
@@ -549,7 +549,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
               {showDestinoList && !quickPessoaId && (
                 <div className="absolute z-50 w-full mt-1 bg-[#0e1629] border border-white/10 rounded-lg shadow-xl max-h-44 overflow-y-auto">
                   {(pessoas as any[])
-                    .filter((p: any) => p.nome.toLowerCase().includes(quickPessoaSearch.toLowerCase()))
+                    .filter((p: any) => p.status !== 'DEMITIDO' && p.nome.toLowerCase().includes(quickPessoaSearch.toLowerCase()))
                     .map((p: any) => (
                       <button
                         key={p.id}
@@ -566,7 +566,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                       </button>
                     ))
                   }
-                  {(pessoas as any[]).filter((p: any) => p.nome.toLowerCase().includes(quickPessoaSearch.toLowerCase())).length === 0 && (
+                  {(pessoas as any[]).filter((p: any) => p.status !== 'DEMITIDO' && p.nome.toLowerCase().includes(quickPessoaSearch.toLowerCase())).length === 0 && (
                     <p className="text-xs text-white/40 p-3 text-center">Nenhuma pessoa encontrada</p>
                   )}
                 </div>

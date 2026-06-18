@@ -65,7 +65,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
   const { data: pessoas = [] } = useQuery({
     queryKey: ['pessoas', obraId],
-    queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome'); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome, status').eq('obra_id', obraId).order('nome'); return data || []; },
   });
 
   const { data: ferramentas = [], isLoading } = useQuery({
@@ -803,7 +803,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             {retirarTipo !== 'baixa' && (
               <Select value={retirarPessoaId} onValueChange={setRetirarPessoaId}>
                 <SelectTrigger className="h-12"><SelectValue placeholder={retirarTipo === 'uso' ? "Responsável *" : "Responsável (opcional)"} /></SelectTrigger>
-                <SelectContent>{pessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+                <SelectContent>{pessoas.filter((p: any) => p.status !== 'DEMITIDO').map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
               </Select>
             )}
 
@@ -1072,7 +1072,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                     <Select value={scanPessoaId} onValueChange={setScanPessoaId}>
                       <SelectTrigger className="h-11"><SelectValue placeholder={scanRetirarTipo === 'uso' ? "Selecione o responsável..." : "Responsável (opcional)"} /></SelectTrigger>
                       <SelectContent>
-                        {pessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+                        {pessoas.filter((p: any) => p.status !== 'DEMITIDO').map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>

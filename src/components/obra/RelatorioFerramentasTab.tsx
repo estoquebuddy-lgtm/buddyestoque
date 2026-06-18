@@ -39,7 +39,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
   const { data: filterPessoas = [] } = useQuery({
     queryKey: ['pessoas-relatorios', obraId],
     queryFn: async () => {
-      const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome');
+      const { data } = await supabase.from('pessoas').select('id, nome, status').eq('obra_id', obraId).order('nome');
       return data || [];
     }
   });
@@ -360,7 +360,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos</SelectItem>
-                    {filterPessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+                    {filterPessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}{p.status === 'DEMITIDO' ? ' (Saiu)' : ''}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

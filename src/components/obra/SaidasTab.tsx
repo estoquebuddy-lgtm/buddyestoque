@@ -38,7 +38,7 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
   }, [dialogOpen]);
 
   const { data: produtos = [] } = useQuery({ queryKey: ['produtos', obraId], queryFn: async () => { const { data } = await supabase.from('produtos').select('id, nome, estoque_atual, unidade').eq('obra_id', obraId).order('nome'); return data || []; } });
-  const { data: pessoas = [] } = useQuery({ queryKey: ['pessoas', obraId], queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome').eq('obra_id', obraId).order('nome'); return data || []; } });
+  const { data: pessoas = [] } = useQuery({ queryKey: ['pessoas', obraId], queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome, status').eq('obra_id', obraId).order('nome'); return data || []; } });
   const [limit, setLimit] = useState(15);
   const { data: saidas = [], isLoading } = useQuery({
     queryKey: ['saidas', obraId],
@@ -266,7 +266,7 @@ export default function SaidasTab({ obraId, fabOpen, onFabClose }: Props) {
             <Input placeholder="Quantidade *" type="number" value={form.quantidade} onChange={e => setForm(f => ({ ...f, quantidade: e.target.value }))} required className="h-12" />
             <Select value={form.pessoa_id} onValueChange={v => setForm(f => ({ ...f, pessoa_id: v }))}>
               <SelectTrigger className="h-12"><SelectValue placeholder="Pessoa (opcional)" /></SelectTrigger>
-              <SelectContent>{pessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
+              <SelectContent>{pessoas.filter((p: any) => p.status !== 'DEMITIDO').map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}</SelectContent>
             </Select>
             <Input placeholder="Observação" value={form.observacao} onChange={e => setForm(f => ({ ...f, observacao: e.target.value }))} className="h-12" />
             <Button type="submit" variant="destructive" className="w-full h-12" disabled={save.isPending || !form.produto_id}>{save.isPending ? 'Registrando...' : editingId ? 'Atualizar' : 'Registrar Saída'}</Button>

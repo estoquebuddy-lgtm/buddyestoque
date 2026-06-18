@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Pencil, Trash2, Phone } from 'lucide-react';
+import { Pencil, Trash2, Phone, UserX, UserCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import ImageUpload from '@/components/ImageUpload';
@@ -13,6 +13,7 @@ import PageHeader from '@/components/PageHeader';
 import ConfirmDialog from '@/components/ConfirmDialog';
 import SkeletonList from '@/components/SkeletonList';
 import { useProfile } from '@/hooks/useProfile';
+import { Badge } from '@/components/ui/badge';
 
 const emptyForm = { nome: '', funcao: '', telefone: '', foto_url: '' };
 
@@ -24,10 +25,49 @@ export default function PessoasTab({ obraId }: { obraId: string }) {
   const [form, setForm] = useState(emptyForm);
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [dismissConfirm, setDismissConfirm] = useState<{ id: string; nome: string; status: string } | null>(null);
 
   const { data: pessoas = [], isLoading } = useQuery({
     queryKey: ['pessoas', obraId],
     queryFn: async () => { const { data, error } = await supabase.from('pessoas').select('*').eq('obra_id', obraId).order('nome'); if (error) throw error; return data; },
+  });
+
+  const toggleStatus = useMutation({
+    mutationFn: async ({ id, currentStatus, nome }: { id: string; currentStatus: string; nome: string }) => {
+      const newStatus = currentStatus === 'DEMITIDO' ? 'ATIVO' : 'DEMITIDO';
+      
+      if (newStatus === 'DEMITIDO') {
+        const { data: tools, error: toolsError } = await supabase
+          .from('ferramentas')
+          .select('id, nome')
+          .eq('responsavel_id', id)
+          .eq('estado', 'em_uso');
+        
+        if (toolsError) throw toolsError;
+        if (tools && tools.length > 0) {
+          throw new Error(`Este colaborador possui ${tools.length} ferramenta(s) em uso (ex: ${tools[0].nome}). Por favor, devolva as ferramentas antes de demiti-lo.`);
+        }
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase.from('pessoas').update({ status: newStatus }).eq('id', id);
+      if (error) throw error;
+
+      await supabase.from('logs_atividades' as any).insert({
+        obra_id: obraId,
+        user_id: user?.id,
+        user_email: user?.email,
+        acao: newStatus === 'DEMITIDO' ? 'DEMITIR' : 'READMITIR',
+        entidade: 'EQUIPE',
+        detalhes: `${newStatus === 'DEMITIDO' ? 'Demitou' : 'Readmitiu'} o colaborador: ${nome}`
+      });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['pessoas', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
+      toast.success(variables.currentStatus === 'DEMITIDO' ? 'Colaborador readmitido!' : 'Colaborador demitido!');
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const save = useMutation({
@@ -93,8 +133,8 @@ export default function PessoasTab({ obraId }: { obraId: string }) {
            <div className="bg-white/5 border border-white/10 rounded-2xl p-5 flex-1 backdrop-blur-sm">
               <p className="text-white/40 text-[10px] mb-1 uppercase tracking-[0.2em] font-bold">Total Equipe</p>
               <div className="flex items-end gap-2">
-                <span className="text-3xl font-display font-bold text-white leading-none">{pessoas.length}</span>
-                <span className="text-xs text-white/30 mb-1">colaboradores</span>
+                <span className="text-3xl font-display font-bold text-white leading-none">{pessoas.filter((p: any) => p.status !== 'DEMITIDO').length}</span>
+                <span className="text-xs text-white/30 mb-1">ativos (de {pessoas.length} total)</span>
               </div>
            </div>
         </div>
@@ -105,11 +145,16 @@ export default function PessoasTab({ obraId }: { obraId: string }) {
       ) : (
         <div className="space-y-2">
           {filtered.map((p: any) => (
-            <Card key={p.id} className="border-none shadow-sm hover:shadow-md transition-shadow">
+            <Card key={p.id} className={`border-none shadow-sm hover:shadow-md transition-shadow ${p.status === 'DEMITIDO' ? 'opacity-60 bg-muted/20' : ''}`}>
               <CardContent className="p-4 flex items-center gap-4">
                 <ImageThumbnail src={p.foto_url} alt={p.nome} type="pessoa" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm truncate">{p.nome}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-sm truncate">{p.nome}</p>
+                    {p.status === 'DEMITIDO' && (
+                      <Badge variant="destructive" className="bg-red-500/10 text-red-500 border-red-500/20 hover:bg-red-500/10 text-[10px] px-1.5 py-0">Saiu / Demitido</Badge>
+                    )}
+                  </div>
                   {p.funcao && <p className="text-xs text-muted-foreground">{p.funcao}</p>}
                 </div>
                 {p.telefone && (
@@ -118,8 +163,13 @@ export default function PessoasTab({ obraId }: { obraId: string }) {
                   </a>
                 )}
                 <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(p)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  {isAdmin && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(p.id)}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => startEdit(p)} title="Editar"><Pencil className="h-3.5 w-3.5" /></Button>
+                  {p.status === 'DEMITIDO' ? (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10" onClick={() => setDismissConfirm({ id: p.id, nome: p.nome, status: p.status })} title="Readmitir"><UserCheck className="h-3.5 w-3.5" /></Button>
+                  ) : (
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-orange-500 hover:text-orange-600 hover:bg-orange-500/10" onClick={() => setDismissConfirm({ id: p.id, nome: p.nome, status: p.status })} title="Demitir"><UserX className="h-3.5 w-3.5" /></Button>
+                  )}
+                  {isAdmin && <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(p.id)} title="Excluir"><Trash2 className="h-3.5 w-3.5" /></Button>}
                 </div>
               </CardContent>
             </Card>
@@ -141,6 +191,20 @@ export default function PessoasTab({ obraId }: { obraId: string }) {
       </Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)} title="Excluir Pessoa" description="Tem certeza? Isso removerá permanentemente a pessoa." onConfirm={() => deleteId && remove.mutate(deleteId)} loading={remove.isPending} />
+      
+      <ConfirmDialog 
+        open={!!dismissConfirm} 
+        onOpenChange={(open) => !open && setDismissConfirm(null)} 
+        title={dismissConfirm?.status === 'DEMITIDO' ? "Readmitir Colaborador" : "Demitir Colaborador"} 
+        description={dismissConfirm?.status === 'DEMITIDO' ? `Tem certeza de que deseja readmitir ${dismissConfirm?.nome}?` : `Tem certeza de que deseja demitir ${dismissConfirm?.nome}? Ele não poderá mais receber ferramentas ou materiais.`} 
+        onConfirm={() => {
+          if (dismissConfirm) {
+            toggleStatus.mutate({ id: dismissConfirm.id, currentStatus: dismissConfirm.status, nome: dismissConfirm.nome });
+            setDismissConfirm(null);
+          }
+        }} 
+        loading={toggleStatus.isPending} 
+      />
     </div>
   );
 }
