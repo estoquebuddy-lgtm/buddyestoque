@@ -15,6 +15,15 @@ import SkeletonList from '@/components/SkeletonList';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { getBuddyLogo } from '@/lib/pdf';
 
+const TIPO_MOVIMENTACAO_LABELS: Record<string, string> = {
+  RETIRADA: 'Retirada',
+  DEVOLUCAO: 'Devolução',
+  MANUTENCAO: 'Manutenção',
+  EXTRAVIO: 'Extravio',
+  EXTRAVIADA: 'Extravio',
+  BAIXA: 'Baixa'
+};
+
 export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) {
   const [search, setSearch] = useState('');
   const [activeSubTab, setActiveSubTab] = useState<'em-uso' | 'historico'>('em-uso');
@@ -197,7 +206,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
       new Date(m.data_hora).toLocaleDateString('pt-BR') + ' ' + new Date(m.data_hora).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       m.ferramentas?.nome || 'Deletada',
       m.ferramentas?.codigo || '-',
-      m.tipo,
+      TIPO_MOVIMENTACAO_LABELS[m.tipo] || m.tipo,
       m.pessoas?.nome || 'Sistema',
       m.observacao || '-'
     ]);
@@ -221,7 +230,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
       'Data/Hora': new Date(m.data_hora).toLocaleString('pt-BR'),
       'Ferramenta': m.ferramentas?.nome || 'Deletada',
       'Código': m.ferramentas?.codigo || '-',
-      'Tipo de Movimentação': m.tipo,
+      'Tipo de Movimentação': TIPO_MOVIMENTACAO_LABELS[m.tipo] || m.tipo,
       'Responsável': m.pessoas?.nome || 'Sistema',
       'Observação': m.observacao || '-'
     }));
@@ -263,7 +272,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
             className={`rounded-lg h-9 font-semibold text-xs px-4 flex-1 sm:flex-none ${activeSubTab === 'historico' ? 'bg-[#0e1629] text-white shadow-sm' : 'text-muted-foreground'}`}
           >
             <History className="h-3.5 w-3.5 mr-1.5" />
-            Movimentações (QR)
+            Movimentações
           </Button>
         </div>
       </div>
@@ -383,6 +392,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
                     <SelectItem value="DEVOLUCAO">Devolução</SelectItem>
                     <SelectItem value="MANUTENCAO">Manutenção</SelectItem>
                     <SelectItem value="EXTRAVIO">Extravio</SelectItem>
+                    <SelectItem value="BAIXA">Baixa</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -435,7 +445,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
             ) : filteredMovimentacoes.length === 0 ? (
               <div className="p-16 text-center text-muted-foreground flex flex-col items-center justify-center">
                 <History className="h-10 w-10 opacity-10 mb-4" />
-                <p className="text-sm">Nenhuma movimentação de QR Code encontrada.</p>
+                <p className="text-sm">Nenhuma movimentação de ferramenta encontrada.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -470,6 +480,9 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
                           )}
                           {m.tipo === 'EXTRAVIO' && (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-900/10 text-red-500 uppercase border border-red-500/10">Extravio</span>
+                          )}
+                          {m.tipo === 'BAIXA' && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500/10 text-red-400 uppercase border border-red-400/10">Baixa</span>
                           )}
                         </TableCell>
                         <TableCell className="text-sm font-semibold">{m.pessoas?.nome || 'Sistema'}</TableCell>
