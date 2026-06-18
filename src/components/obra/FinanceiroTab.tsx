@@ -32,59 +32,139 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
   const { data: produtos = [], isLoading: loadingProds } = useQuery({
     queryKey: ['produtos', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('produtos')
-        .select('*')
-        .eq('obra_id', obraId)
-        .order('nome');
-      return data || [];
+      let allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('*')
+          .eq('obra_id', obraId)
+          .order('nome')
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        allData = [...allData, ...(data || [])];
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+      return allData;
     }
   });
 
   const { data: entradas = [], isLoading: loadingEntradas } = useQuery({
     queryKey: ['entradas', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('entradas')
-        .select('*')
-        .eq('obra_id', obraId)
-        .order('data', { ascending: false });
-      return data || [];
+      let allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('entradas')
+          .select('*')
+          .eq('obra_id', obraId)
+          .order('data', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        allData = [...allData, ...(data || [])];
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+      return allData;
     }
   });
 
   const { data: saidas = [], isLoading: loadingSaidas } = useQuery({
     queryKey: ['saidas', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('saidas')
-        .select('*, pessoas(nome)')
-        .eq('obra_id', obraId)
-        .order('data', { ascending: false });
-      return data || [];
+      let allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('saidas')
+          .select('*, pessoas(nome)')
+          .eq('obra_id', obraId)
+          .order('data', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        allData = [...allData, ...(data || [])];
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+      return allData;
     }
   });
 
   const { data: ferramentas = [], isLoading: loadingFerramentas } = useQuery({
     queryKey: ['ferramentas', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('ferramentas')
-        .select('*')
-        .eq('obra_id', obraId);
-      return data || [];
+      let allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('ferramentas')
+          .select('*')
+          .eq('obra_id', obraId)
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        allData = [...allData, ...(data || [])];
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+      return allData;
     }
   });
 
   const { data: movimentacoes = [], isLoading: loadingMovimentacoes } = useQuery({
     queryKey: ['movimentacoes-ferramentas', obraId],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('movimentacoes_ferramentas' as any)
-        .select('*, ferramentas(nome)')
-        .eq('obra_id', obraId)
-        .order('data_hora', { ascending: false });
-      return data || [];
+      let allData: any[] = [];
+      let page = 0;
+      const pageSize = 1000;
+      let hasMore = true;
+
+      while (hasMore) {
+        const { data, error } = await supabase
+          .from('movimentacoes_ferramentas' as any)
+          .select('*, ferramentas(nome)')
+          .eq('obra_id', obraId)
+          .order('data_hora', { ascending: false })
+          .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) throw error;
+        allData = [...allData, ...(data || [])];
+        if (!data || data.length < pageSize) {
+          hasMore = false;
+        } else {
+          page++;
+        }
+      }
+      return allData;
     }
   });
 
