@@ -14,6 +14,7 @@ import autoTable from 'jspdf-autotable';
 import { toast } from 'sonner';
 import { useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { getBuddyLogo } from '@/lib/pdf';
 
 interface FinanceiroTabProps {
   obraId: string;
@@ -202,11 +203,19 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   };
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
+    const logo = await getBuddyLogo();
     const doc = new jsPDF();
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     doc.setFontSize(18);
     doc.text('Relatório Financeiro de Estoque', 14, 22);
+    
+    if (logo) {
+      const logoSize = 18;
+      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+      doc.addImage(logo, 'PNG', x, 10, logoSize, logoSize);
+    }
+
     doc.setFontSize(11);
     doc.setTextColor(100);
     doc.text(`Data de Geração: ${dataAtual}`, 14, 30);
@@ -225,7 +234,7 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     ]);
 
     autoTable(doc, {
-      startY: 54,
+      startY: 56,
       head: [['Produto', 'Estoque', 'Último Custo', 'Custo Médio', 'Total Investido', 'Total Saídas', 'Estoque Estimado']],
       body: tableData,
       theme: 'grid',

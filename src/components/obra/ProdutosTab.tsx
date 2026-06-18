@@ -22,6 +22,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useProfile } from '@/hooks/useProfile';
+import { getBuddyLogo } from '@/lib/pdf';
 
 const CONSTRUCAO_CATEGORIES = [
   'Hidráulica',
@@ -280,13 +281,20 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     return <Badge className="bg-success/10 text-success border-success/20">OK</Badge>;
   };
   
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
+    const logo = await getBuddyLogo();
     const doc = new jsPDF();
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     
     doc.setFontSize(18);
     doc.text('Relatório de Estoque - Buddy Estoque', 14, 22);
     
+    if (logo) {
+      const logoSize = 18;
+      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+      doc.addImage(logo, 'PNG', x, 10, logoSize, logoSize);
+    }
+
     doc.setFontSize(11);
     doc.setTextColor(100);
     doc.text(`Data: ${dataAtual}`, 14, 30);
@@ -301,7 +309,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     ]);
 
     autoTable(doc, {
-      startY: 36,
+      startY: 44,
       head: [['Produto', 'Categoria', 'Estoque Atual', 'Estoque Mínimo', 'Localização', 'Fornecedor']],
       body: tableData,
       theme: 'grid',

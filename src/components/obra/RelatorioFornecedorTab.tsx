@@ -13,6 +13,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import { getBuddyLogo } from '@/lib/pdf';
 
 interface RelatorioFornecedorTabProps {
   obraId: string;
@@ -184,8 +185,9 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     };
   }, [filteredData]);
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
     if (!selectedSupplier) return;
+    const logo = await getBuddyLogo();
     const doc = new jsPDF();
     const dataAtual = new Date().toLocaleDateString('pt-BR');
 
@@ -195,6 +197,12 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
       ? `Relatório: ${selectedSupplier} (${mesLabel(selectedMonth)})`
       : `Relatório de Fornecedor: ${selectedSupplier}`;
     doc.text(title, 14, 22);
+
+    if (logo) {
+      const logoSize = 18;
+      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+      doc.addImage(logo, 'PNG', x, 10, logoSize, logoSize);
+    }
 
     doc.setFontSize(10);
     doc.setTextColor(100);
@@ -207,7 +215,7 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
     doc.text('Resumo Financeiro & Entradas', 14, 44);
 
     autoTable(doc, {
-      startY: 48,
+      startY: 50,
       head: [['Métrica', 'Valor']],
       body: [
         ['Quantidade de Lançamentos em Compras', stats.comprasCount.toString()],
@@ -225,6 +233,12 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
       doc.addPage();
       doc.setFontSize(14);
       doc.text('Histórico de Compras / Pagamentos', 14, 22);
+
+      if (logo) {
+        const logoSize = 12;
+        const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+        doc.addImage(logo, 'PNG', x, 12, logoSize, logoSize);
+      }
 
       const comprasTable = filteredData.compras.map((c: any) => [
         c.parcela || '1/1',
@@ -252,6 +266,12 @@ export default function RelatorioFornecedorTab({ obraId }: RelatorioFornecedorTa
       doc.addPage();
       doc.setFontSize(14);
       doc.text('Histórico de Entradas no Estoque', 14, 22);
+
+      if (logo) {
+        const logoSize = 12;
+        const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+        doc.addImage(logo, 'PNG', x, 12, logoSize, logoSize);
+      }
 
       const entradasTable = filteredData.entradas.map((e: any) => {
         const total = e.valor_unitario ? Number(e.quantidade) * Number(e.valor_unitario) : 0;

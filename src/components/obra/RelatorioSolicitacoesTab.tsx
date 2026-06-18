@@ -12,6 +12,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
+import { getBuddyLogo } from '@/lib/pdf';
 
 const formatUserDisplay = (userObj: any) => {
   if (!userObj) return 'Desconhecido';
@@ -124,7 +125,8 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
   const totalEntregues = filtered.filter((s: any) => s.status === 'ENTREGUE').length;
 
   // Export PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
+    const logo = await getBuddyLogo();
     const doc = new jsPDF('landscape');
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     
@@ -132,6 +134,12 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
     doc.setTextColor(15, 23, 42); // slate-900
     doc.setFont('helvetica', 'bold');
     doc.text('Relatório de Solicitações de Materiais', 14, 22);
+    
+    if (logo) {
+      const logoSize = 18;
+      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+      doc.addImage(logo, 'PNG', x, 10, logoSize, logoSize);
+    }
     
     doc.setFontSize(9);
     doc.setTextColor(100, 116, 139); // slate-500

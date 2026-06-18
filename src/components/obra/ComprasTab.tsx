@@ -23,6 +23,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import * as pdfjs from 'pdfjs-dist';
 import GerarLivroFiscalDialog from './GerarLivroFiscalDialog';
+import { getBuddyLogo } from '@/lib/pdf';
 import ImportXmlComprasDialog from './ImportXmlComprasDialog';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
@@ -1390,9 +1391,26 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     }
     const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Compras');XLSX.writeFile(wb,`compras-${format(new Date(),'dd-MM-yyyy')}.xlsx`);toast.success('Excel exportado!');
   };
-  const exportPdf = () => {
+  const exportPdf = async () => {
+    const logo = await getBuddyLogo();
     const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const dataAtual = format(new Date(), 'dd/MM/yyyy HH:mm');
+    
+    doc.setFontSize(16);
+    doc.text('Relatório de Lançamentos de Compras', 14, 18);
+    
+    if (logo) {
+      const logoSize = 16;
+      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+      doc.addImage(logo, 'PNG', x, 8, logoSize, logoSize);
+    }
+    
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Data de Emissão: ${dataAtual}`, 14, 24);
+    
     autoTable(doc,{
+      startY: 32,
       head:[['#','Status','Parcela','Envio','Solicitado','E-mail','Fornecedor','Pago','Estornado','Líquido','Dt.Pgto','CC','Tipo','NFs','Obs']],
       body:processed.map((c:any,i:number)=>{
         const valPago=c.valor_pago||0;

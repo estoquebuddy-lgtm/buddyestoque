@@ -9,6 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect } from 'react';
+import { getBuddyLogo } from '@/lib/pdf';
 
 const getClassification = (especie: string) => {
   const esp = (especie || '').toLowerCase().trim();
@@ -186,11 +187,13 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
     if (fileRef.current) fileRef.current.value = '';
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (rows.length === 0) {
       toast.error('Nenhum XML carregado.');
       return;
     }
+
+    const logo = await getBuddyLogo();
 
     const doc = new jsPDF({
       orientation: 'landscape',
@@ -238,6 +241,12 @@ export default function GerarLivroFiscalDialog({ open, onOpenChange, initialRows
       doc.text(`CNPJ:     ${cnpjEmpresa}`, margin + contentWidth - 55, margin + 12);
       doc.text(`Livro Nº:  ${livroNo}`, margin + contentWidth - 55, margin + 17);
       doc.text(`Período:   ${getPeriodStr()}`, margin + contentWidth - 55, margin + 22);
+
+      if (logo) {
+        const logoSize = 12;
+        const x = margin + contentWidth - 4 - logoSize;
+        doc.addImage(logo, 'PNG', x, margin + 6.5, logoSize, logoSize);
+      }
 
       // Fiscal Codes Bar
       doc.rect(margin, margin + 25, contentWidth, 8);

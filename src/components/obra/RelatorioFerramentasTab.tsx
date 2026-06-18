@@ -13,6 +13,7 @@ import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import SkeletonList from '@/components/SkeletonList';
 import { SidebarTrigger } from '@/components/ui/sidebar';
+import { getBuddyLogo } from '@/lib/pdf';
 
 export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) {
   const [search, setSearch] = useState('');
@@ -137,12 +138,19 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
   });
 
   // Export PDF: Tools currently in use
-  const handleExportPDFEmUso = () => {
+  const handleExportPDFEmUso = async () => {
+    const logo = await getBuddyLogo();
     const doc = new jsPDF();
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     
     doc.setFontSize(18);
     doc.text('Relatório Diário de Ferramentas em Uso', 14, 22);
+    
+    if (logo) {
+      const logoSize = 18;
+      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+      doc.addImage(logo, 'PNG', x, 10, logoSize, logoSize);
+    }
     
     doc.setFontSize(11);
     doc.setTextColor(100);
@@ -156,7 +164,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
     ]);
 
     autoTable(doc, {
-      startY: 36,
+      startY: 44,
       head: [['Ferramenta', 'Código', 'Responsável', 'Data de Retirada']],
       body: tableData,
       theme: 'grid',
@@ -167,12 +175,19 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
   };
 
   // Export PDF: Complete transaction logs
-  const handleExportPDFHistory = () => {
+  const handleExportPDFHistory = async () => {
+    const logo = await getBuddyLogo();
     const doc = new jsPDF();
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     
     doc.setFontSize(18);
     doc.text('Histórico de Movimentações de Ferramentas', 14, 22);
+    
+    if (logo) {
+      const logoSize = 18;
+      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+      doc.addImage(logo, 'PNG', x, 10, logoSize, logoSize);
+    }
     
     doc.setFontSize(11);
     doc.setTextColor(100);
@@ -188,7 +203,7 @@ export default function RelatorioFerramentasTab({ obraId }: { obraId: string }) 
     ]);
 
     autoTable(doc, {
-      startY: 36,
+      startY: 44,
       head: [['Data/Hora', 'Ferramenta', 'Código', 'Tipo', 'Responsável', 'Observações']],
       body: tableData,
       theme: 'grid',

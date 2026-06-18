@@ -11,6 +11,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
+import { getBuddyLogo } from '@/lib/pdf';
 
 export default function RelatorioSaidasTab({ obraId }: { obraId: string }) {
   const [search, setSearch] = useState('');
@@ -88,12 +89,19 @@ export default function RelatorioSaidasTab({ obraId }: { obraId: string }) {
     return acc + custoConsumido;
   }, 0);
 
-  const exportPDF = () => {
+  const exportPDF = async () => {
+    const logo = await getBuddyLogo();
     const doc = new jsPDF();
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     
     doc.setFontSize(18);
     doc.text('Relatório Mensal de Saídas', 14, 22);
+    
+    if (logo) {
+      const logoSize = 18;
+      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
+      doc.addImage(logo, 'PNG', x, 10, logoSize, logoSize);
+    }
     
     doc.setFontSize(11);
     doc.setTextColor(100);
