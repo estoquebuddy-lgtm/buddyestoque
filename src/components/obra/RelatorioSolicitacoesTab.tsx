@@ -31,6 +31,7 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
   const [filterStatus, setFilterStatus] = useState('todos');
   const [filterUrgencia, setFilterUrgencia] = useState('todos');
   const [filterSolicitanteId, setFilterSolicitanteId] = useState('todos');
+  const [filterDestinatarioId, setFilterDestinatarioId] = useState('todos');
 
   // Query: Persons for filter dropdown
   const { data: filterPessoas = [] } = useQuery({
@@ -98,6 +99,11 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
     if (filterSolicitanteId !== 'todos' && s.solicitante_id !== filterSolicitanteId) {
       return false;
     }
+
+    // 4.5. Destinatario filter
+    if (filterDestinatarioId !== 'todos' && s.destinatario_id !== filterDestinatarioId) {
+      return false;
+    }
     
     // 5. Search bar filter
     if (search) {
@@ -123,31 +129,144 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     
     doc.setFontSize(18);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.setFont('helvetica', 'bold');
     doc.text('Relatório de Solicitações de Materiais', 14, 22);
     
-    doc.setFontSize(11);
-    doc.setTextColor(100);
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.setFont('helvetica', 'normal');
     doc.text(`Período: ${filterStartDate ? new Date(filterStartDate).toLocaleDateString('pt-BR') : 'Início'} até ${filterEndDate ? new Date(filterEndDate).toLocaleDateString('pt-BR') : 'Hoje'}`, 14, 30);
     doc.text(`Emitido em: ${dataAtual}`, 14, 36);
     
     const tableData = filtered.map((s: any) => [
       new Date(s.data_solicitacao).toLocaleDateString('pt-BR'),
-      s.descricao_materiais,
-      s.solicitante_nome,
-      s.destinatario_nome,
-      s.urgencia,
+      s.descricao_materiais + (s.arquivado ? ' (Arquivado)' : ''),
+      `De: ${s.solicitante_nome}\nPara: ${s.destinatario_nome}`,
       s.status,
-      s.arquivado ? 'Sim' : 'Não'
+      s.urgencia
     ]);
 
     autoTable(doc, {
       startY: 42,
-      head: [['Data', 'Material Solicitado', 'Solicitante', 'Para', 'Urgência', 'Status', 'Arquivado']],
+      head: [['Data', 'Material Solicitado', 'Solicitante / Para', 'Status', 'Urgência']],
       body: tableData,
-      theme: 'grid',
-      headStyles: { fillColor: [41, 128, 185] },
+      theme: 'plain',
+      headStyles: {
+        fillColor: [241, 245, 249], // slate-100
+        textColor: [51, 65, 85],    // slate-700
+        fontStyle: 'bold',
+        fontSize: 9,
+        cellPadding: 5
+      },
+      bodyStyles: {
+        fontSize: 8.5,
+        cellPadding: 5,
+        textColor: [30, 41, 59],    // slate-800
+      },
       columnStyles: {
-        1: { cellWidth: 70 },
+        0: { cellWidth: 22 }, // Data
+        1: { cellWidth: 110 }, // Material
+        2: { cellWidth: 60 },  // Solicitante / Para
+        3: { cellWidth: 45, halign: 'center' },  // Status
+        4: { cellWidth: 32, halign: 'center' },  // Urgência
+      },
+      styles: {
+        valign: 'middle',
+        lineColor: [226, 232, 240], // slate-200
+        lineWidth: 0.5,
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body') {
+          if (data.column.index === 3 || data.column.index === 4) {
+            data.cell.text = [];
+          }
+        }
+      },
+      didDrawCell: (data) => {
+        if (data.section === 'body') {
+          const doc = data.doc;
+          const cell = data.cell;
+          
+          if (data.column.index === 3) {
+            const status = cell.raw;
+            if (!status) return;
+
+            let bg = [241, 245, 249];
+            let textCol = [100, 116, 139];
+            let label = 'SOLICITADO';
+
+            if (status === 'SOLICITADO') {
+              bg = [241, 245, 249];
+              textCol = [71, 85, 105];
+              label = 'SOLICITADO';
+            } else if (status === 'APROVADO' || status === 'EM COTAÇÃO') {
+              bg = [239, 246, 255]; // blue-50
+              textCol = [37, 99, 235]; // blue-600
+              label = 'EM COTAÇÃO';
+            } else if (status === 'COMPRADO') {
+              bg = [243, 232, 255]; // purple-50
+              textCol = [147, 51, 234]; // purple-600
+              label = 'COMPRADO';
+            } else if (status === 'ENTREGUE') {
+              bg = [236, 253, 245]; // emerald-50
+              textCol = [5, 150, 105]; // emerald-600
+              label = 'ENTREGUE';
+            }
+
+            const paddingX = 4;
+            const paddingY = 4;
+            const bw = cell.width - paddingX * 2;
+            const bh = cell.height - paddingY * 2;
+            const bx = cell.x + paddingX;
+            const by = cell.y + paddingY;
+
+            doc.setFillColor(bg[0], bg[1], bg[2]);
+            doc.roundedRect(bx, by, bw, bh, 3, 3, 'F');
+
+            doc.setTextColor(textCol[0], textCol[1], textCol[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.text(label, bx + bw / 2, by + bh / 2 + 0.5, { align: 'center', baseline: 'middle' });
+          }
+
+          if (data.column.index === 4) {
+            const urgencia = cell.raw;
+            if (!urgencia) return;
+
+            let bg = [241, 245, 249];
+            let textCol = [71, 85, 105];
+
+            if (urgencia === 'Urgente') {
+              bg = [254, 226, 226]; // rose-100
+              textCol = [185, 28, 28]; // rose-700
+            } else if (urgencia === 'Alta') {
+              bg = [254, 243, 199]; // amber-100
+              textCol = [180, 83, 9]; // amber-700
+            } else if (urgencia === 'Normal') {
+              bg = [219, 234, 254]; // blue-100
+              textCol = [29, 78, 216]; // blue-700
+            } else if (urgencia === 'Baixa') {
+              bg = [241, 245, 249];
+              textCol = [71, 85, 105];
+            }
+
+            const paddingX = 4;
+            const paddingY = 4;
+            const bw = cell.width - paddingX * 2;
+            const bh = cell.height - paddingY * 2;
+            const bx = cell.x + paddingX;
+            const by = cell.y + paddingY;
+
+            doc.setFillColor(bg[0], bg[1], bg[2]);
+            doc.roundedRect(bx, by, bw, bh, 3, 3, 'F');
+
+            doc.setTextColor(textCol[0], textCol[1], textCol[2]);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(7.5);
+            doc.text(urgencia.toUpperCase(), bx + bw / 2, by + bh / 2 + 0.5, { align: 'center', baseline: 'middle' });
+          }
+        }
       }
     });
 
@@ -185,6 +304,7 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
     setFilterStatus('todos');
     setFilterUrgencia('todos');
     setFilterSolicitanteId('todos');
+    setFilterDestinatarioId('todos');
     setSearch('');
   };
 
@@ -242,12 +362,12 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
               <Filter className="h-3.5 w-3.5 text-blue-400" />
               Filtros de Relatório
             </span>
-            {(filterStartDate || filterEndDate || filterStatus !== 'todos' || filterUrgencia !== 'todos' || filterSolicitanteId !== 'todos' || search) && (
+            {(filterStartDate || filterEndDate || filterStatus !== 'todos' || filterUrgencia !== 'todos' || filterSolicitanteId !== 'todos' || filterDestinatarioId !== 'todos' || search) && (
               <button onClick={clearFilters} className="text-xs text-blue-400 hover:underline">Limpar filtros</button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
             {/* Date Start */}
             <div className="space-y-1">
               <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Início</label>
@@ -312,6 +432,20 @@ export default function RelatorioSolicitacoesTab({ obraId }: { obraId: string })
             <div className="space-y-1">
               <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Solicitante</label>
               <Select value={filterSolicitanteId} onValueChange={setFilterSolicitanteId}>
+                <SelectTrigger className="h-10 bg-white/5 border-white/10 text-white rounded-lg text-xs">
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  {filterPessoas.map((p: any) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Destinatário */}
+            <div className="space-y-1">
+              <label className="text-[10px] text-white/40 uppercase font-bold tracking-wider">Destinatário</label>
+              <Select value={filterDestinatarioId} onValueChange={setFilterDestinatarioId}>
                 <SelectTrigger className="h-10 bg-white/5 border-white/10 text-white rounded-lg text-xs">
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
