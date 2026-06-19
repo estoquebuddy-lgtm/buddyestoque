@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, Hand, RotateCcw, History, ArrowUpFromLine, ArrowDownToLine, QrCode, Download, Printer, Camera } from 'lucide-react';
+import { Pencil, Trash2, Hand, RotateCcw, History, ArrowUpFromLine, ArrowDownToLine, QrCode, Download, Printer, Camera, Wrench, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import ImageUpload from '@/components/ImageUpload';
@@ -42,6 +42,11 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [groupByName, setGroupByName] = useState(true);
   const [groupDetails, setGroupDetails] = useState<{ name: string; tools: any[] } | null>(null);
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
+
+  // Rename Confirmation State
+  const [renameConfirmOpen, setRenameConfirmOpen] = useState(false);
+  const [renameOldName, setRenameOldName] = useState('');
+  const [renameNewName, setRenameNewName] = useState('');
 
 
   // QR Code Generation State
@@ -299,13 +304,13 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   };
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (renameMode?: 'type' | 'unit' | null) => {
       const { data: { user } } = await supabase.auth.getUser();
       const generatedCode = form.qr_code || `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
       
       const payload: any = { 
         obra_id: obraId, 
-        nome: form.nome, 
+        nome: form.nome.trim(), 
         codigo: form.codigo || null, 
         estado: form.estado, 
         status: form.estado.toUpperCase() === 'EM_USO' ? 'EM_USO' : (form.estado.toUpperCase() === 'MANUTENCAO' ? 'MANUTENCAO' : (form.estado.toUpperCase() === 'EXTRAVIADA' ? 'EXTRAVIADA' : 'DISPONIVEL')),
@@ -314,9 +319,112 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         observacoes: `[CAT:${form.categoria}] [LOC:${form.localizacao || ''}] ${form.observacoes || ''}`.trim()
       };
       
+      let oldName = '';
+      if (editingId) {
+        const originalTool = ferramentas.find((t: any) => t.id === editingId);
+        oldName = originalTool?.nome || '';
+      }
+
+      const newName = form.nome.trim();
+
+      if (editingId && oldName && oldName.toLowerCase().trim() !== newName.toLowerCase().trim() && renameMode) {
+        if (renameMode === 'type') {
+          const { error: ferrError } = await supabase
+            .from('ferramentas')
+            .update({ nome: newName })
+            .eq('obra_id', obraId)
+            .eq('nome', oldName);
+          if (ferrError) throw ferrError;
+
+          const { data: existingNewProd } = await supabase
+            .from('produtos')
+            .select('id')
+            .eq('obra_id', obraId)
+            .eq('nome', `[FERRAMENTA] ${newName}`)
+            .maybeSingle();
+
+          const { data: existingOldProd } = await supabase
+            .from('produtos')
+            .select('id')
+            .eq('obra_id', obraId)
+            .eq('nome', `[FERRAMENTA] ${oldName}`)
+            .maybeSingle();
+
+          if (existingNewProd && existingOldProd) {
+            const { error: updateEntradasErr } = await supabase
+              .from('entradas')
+              .update({ produto_id: existingNewProd.id })
+              .eq('obra_id', obraId)
+              .eq('produto_id', existingOldProd.id);
+            if (updateEntradasErr) throw updateEntradasErr;
+
+            const { error: updateSaidasErr } = await supabase
+              .from('saidas')
+              .update({ produto_id: existingNewProd.id })
+              .eq('obra_id', obraId)
+              .eq('produto_id', existingOldProd.id);
+            if (updateSaidasErr) throw updateSaidasErr;
+
+            const { error: deleteProdErr } = await supabase
+              .from('produtos')
+              .delete()
+              .eq('id', existingOldProd.id);
+            if (deleteProdErr) throw deleteProdErr;
+          } else if (existingOldProd) {
+            const { error: updateProdErr } = await supabase
+              .from('produtos')
+              .update({ nome: `[FERRAMENTA] ${newName}` })
+              .eq('id', existingOldProd.id);
+            if (updateProdErr) throw updateProdErr;
+          }
+        } else if (renameMode === 'unit') {
+          const { data: existingNewProd } = await supabase
+            .from('produtos')
+            .select('id')
+            .eq('obra_id', obraId)
+            .eq('nome', `[FERRAMENTA] ${newName}`)
+            .maybeSingle();
+
+          if (!existingNewProd) {
+            const { error: createProdErr } = await supabase
+              .from('produtos')
+              .insert({
+                obra_id: obraId,
+                nome: `[FERRAMENTA] ${newName}`,
+                unidade: 'un',
+                categoria: 'Ferramentas',
+                estoque_minimo: 0,
+                estoque_atual: 0,
+              });
+            if (createProdErr) throw createProdErr;
+          }
+        }
+      }
+      
       let res;
-      if (editingId) { res = await supabase.from('ferramentas').update(payload).eq('id', editingId); }
-      else { res = await supabase.from('ferramentas').insert(payload); }
+      if (editingId) { 
+        res = await supabase.from('ferramentas').update(payload).eq('id', editingId); 
+      } else { 
+        res = await supabase.from('ferramentas').insert(payload); 
+        
+        const { data: existingNewProd } = await supabase
+          .from('produtos')
+          .select('id')
+          .eq('obra_id', obraId)
+          .eq('nome', `[FERRAMENTA] ${newName}`)
+          .maybeSingle();
+
+        if (!existingNewProd) {
+          await supabase.from('produtos').insert({
+            obra_id: obraId,
+            nome: `[FERRAMENTA] ${newName}`,
+            unidade: 'un',
+            categoria: 'Ferramentas',
+            estoque_minimo: 0,
+            estoque_atual: 0,
+          });
+        }
+      }
       
       if (res.error) throw res.error;
 
@@ -329,9 +437,34 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         detalhes: `${editingId ? 'Editou' : 'Cadastrou'} a ferramenta: ${form.nome}`
       });
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] }); queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); setDialogOpen(false); setEditingId(null); setForm(emptyForm); toast.success(editingId ? 'Ferramenta atualizada!' : 'Ferramenta adicionada!'); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] }); 
+      queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] }); 
+      setDialogOpen(false); 
+      setEditingId(null); 
+      setForm(emptyForm); 
+      toast.success(editingId ? 'Ferramenta atualizada!' : 'Ferramenta adicionada!'); 
+    },
     onError: (e: any) => toast.error(e.message),
   });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingId) {
+      const originalTool = ferramentas.find((t: any) => t.id === editingId);
+      const oldName = originalTool?.nome || '';
+      const newName = form.nome.trim();
+
+      if (oldName && oldName.toLowerCase().trim() !== newName.toLowerCase().trim()) {
+        setRenameOldName(oldName);
+        setRenameNewName(newName);
+        setRenameConfirmOpen(true);
+        return;
+      }
+    }
+    save.mutate(null);
+  };
 
   const remove = useMutation({
     mutationFn: async (id: string) => { 
@@ -837,7 +970,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       <Dialog open={dialogOpen && !!editingId} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editingId ? 'Editar Ferramenta' : 'Nova Ferramenta'}</DialogTitle></DialogHeader>
-          <form onSubmit={e => { e.preventDefault(); save.mutate(); }} className="space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-3">
             <ImageUpload bucket="ferramentas" currentUrl={form.foto_url} onUpload={url => setForm(f => ({ ...f, foto_url: url }))} />
             <Input placeholder="Nome *" value={form.nome} onChange={e => setForm(f => ({ ...f, nome: e.target.value }))} required className="h-12" />
             
@@ -868,6 +1001,76 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             <Input placeholder="Observações" value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} className="h-12" />
             <Button type="submit" className="w-full h-12" disabled={save.isPending || !form.nome || !form.categoria}>{save.isPending ? 'Salvando...' : 'Salvar'}</Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Confirmation Dialog */}
+      <Dialog open={renameConfirmOpen} onOpenChange={setRenameConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="p-2 bg-amber-500/10 text-amber-500 rounded-lg">
+                <HelpCircle className="h-6 w-6" />
+              </div>
+              <DialogTitle className="font-display font-bold text-xl text-foreground">
+                Alteração de Nome de Ferramenta
+              </DialogTitle>
+            </div>
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+              Você alterou o nome da ferramenta de <strong className="text-foreground">"{renameOldName}"</strong> para <strong className="text-foreground">"{renameNewName}"</strong>.
+            </p>
+            <p className="text-sm text-muted-foreground leading-relaxed mt-1">
+              Como deseja aplicar esta alteração?
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-3 mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setRenameConfirmOpen(false);
+                save.mutate('type');
+              }}
+              className="w-full text-left p-3.5 rounded-xl border border-border bg-card hover:bg-accent/40 transition-all group flex flex-col gap-1.5 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <span className="font-semibold text-sm text-foreground flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
+                Renomear todo o tipo de ferramenta
+                <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-medium">Recomendado</span>
+              </span>
+              <span className="text-xs text-muted-foreground leading-normal">
+                Altera o nome de todas as unidades deste modelo e atualiza os custos/estoque de forma unificada na aba Financeiro.
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setRenameConfirmOpen(false);
+                save.mutate('unit');
+              }}
+              className="w-full text-left p-3.5 rounded-xl border border-border bg-card hover:bg-accent/40 transition-all group flex flex-col gap-1.5 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            >
+              <span className="font-semibold text-sm text-foreground flex items-center gap-2">
+                <Wrench className="h-4 w-4 text-muted-foreground group-hover:scale-110 transition-transform" />
+                Renomear apenas esta unidade
+              </span>
+              <span className="text-xs text-muted-foreground leading-normal">
+                Altera o nome apenas para esta ferramenta física. Cria um novo registro financeiro zerado na aba Financeiro para este novo nome.
+              </span>
+            </button>
+          </div>
+
+          <div className="flex gap-3 justify-end mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setRenameConfirmOpen(false)}
+              className="h-11 px-6 rounded-lg text-sm font-medium"
+            >
+              Cancelar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

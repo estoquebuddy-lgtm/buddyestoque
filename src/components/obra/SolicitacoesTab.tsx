@@ -233,7 +233,12 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         foto_url: form.foto_url || null,
         data_necessidade: form.data_necessidade || null,
         titulo: form.titulo || null,
-        classificacao: form.classificacao || 'OUTROS'
+        classificacao: form.classificacao || 'OUTROS',
+        itens_checklist: form.descricao
+          .split('\n')
+          .map((line: string) => line.trim())
+          .filter(Boolean)
+          .map((line: string) => ({ texto: line, comprado: false }))
       };
       
       const { error } = await supabase.from('solicitacoes_material' as any).insert(payload);
@@ -366,6 +371,50 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const updateChecklist = useMutation({
+    mutationFn: async ({ id, itens }: { id: string; itens: any[] }) => {
+      const { error } = await supabase
+        .from('solicitacoes_material' as any)
+        .update({ itens_checklist: itens } as any)
+        .eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['solicitacoes', obraId] });
+      setSelectedSolicitacao((prev: any) => {
+        if (prev && prev.id === variables.id) {
+          return { ...prev, itens_checklist: variables.itens };
+        }
+        return prev;
+      });
+    },
+    onError: (e: any) => toast.error('Erro ao atualizar checklist: ' + e.message),
+  });
+
+  const handleToggleItem = (index: number, currentChecked: boolean) => {
+    if (!selectedSolicitacao) return;
+
+    const currentItens = selectedSolicitacao.itens_checklist && selectedSolicitacao.itens_checklist.length > 0
+      ? [...selectedSolicitacao.itens_checklist]
+      : (selectedSolicitacao.descricao_materiais || '')
+          .split('\n')
+          .map((line: string) => line.trim())
+          .filter(Boolean)
+          .map((line: string) => ({ texto: line, comprado: false }));
+
+    if (index >= 0 && index < currentItens.length) {
+      currentItens[index] = {
+        ...currentItens[index],
+        comprado: !currentChecked
+      };
+      
+      updateChecklist.mutate({
+        id: selectedSolicitacao.id,
+        itens: currentItens
+      });
+    }
+  };
+
   const { data: comentarios = [], refetch: refetchComentarios } = useQuery({
     queryKey: ['comentarios-solicitacao', selectedSolicitacao?.id],
     queryFn: async () => {
@@ -473,6 +522,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     mutationFn: async () => {
       if (!editingId) return;
       const { data: { user } } = await supabase.auth.getUser();
+      const existingReq = solicitacoes.find((s: any) => s.id === editingId);
       const payload = {
         destinatario_id: form.destinatario_id,
         descricao_materiais: form.descricao,
@@ -480,7 +530,20 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
         foto_url: form.foto_url || null,
         data_necessidade: form.data_necessidade || null,
         titulo: form.titulo || null,
-        classificacao: form.classificacao || 'OUTROS'
+        classificacao: form.classificacao || 'OUTROS',
+        itens_checklist: form.descricao
+          .split('\n')
+          .map((line: string) => line.trim())
+          .filter(Boolean)
+          .map((line: string) => {
+            const matchedItem = existingReq?.itens_checklist?.find(
+              (item: any) => item.texto.toLowerCase().trim() === line.toLowerCase().trim()
+            );
+            return {
+              texto: line,
+              comprado: matchedItem ? !!matchedItem.comprado || !!matchedItem.checked : false
+            };
+          })
       };
 
       const { error } = await supabase
@@ -1486,7 +1549,48 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                     />
                   </div>
                 )}
-                <p className="font-bold text-base whitespace-pre-wrap break-words">{selectedSolicitacao.descricao_materiais}</p>
+                {/* Checklist de Itens */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block">Itens Solicitados</span>
+                  {(() => {
+                    const items = selectedSolicitacao.itens_checklist && selectedSolicitacao.itens_checklist.length > 0
+                      ? selectedSolicitacao.itens_checklist
+                      : (selectedSolicitacao.descricao_materiais || '')
+                          .split('\n')
+                          .map((line: string) => line.trim())
+                          .filter(Boolean)
+                          .map((line: string) => ({ texto: line, comprado: false }));
+                    
+                    if (items.length === 0) {
+                      return <p className="text-muted-foreground italic text-xs">Nenhum item na descrição.</p>;
+                    }
+
+                    return (
+                      <div className="space-y-1 bg-white/70 p-3 rounded-xl border border-slate-100 shadow-sm max-h-[220px] overflow-y-auto">
+                        {items.map((item: any, idx: number) => {
+                          const isComprado = !!item.comprado || !!item.checked;
+                          return (
+                            <label key={idx} className="flex items-start gap-2.5 py-1.5 cursor-pointer select-none group">
+                              <input
+                                type="checkbox"
+                                checked={isComprado}
+                                onChange={() => handleToggleItem(idx, isComprado)}
+                                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 cursor-pointer transition shrink-0"
+                              />
+                              <span className={`text-sm break-all leading-snug transition-colors ${
+                                isComprado 
+                                  ? 'text-slate-400 line-through' 
+                                  : 'text-slate-700 font-medium group-hover:text-slate-900'
+                              }`}>
+                                {item.texto}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
                 <div className="flex flex-col gap-1 mt-3 pt-3 border-t text-xs text-muted-foreground">
                   {selectedSolicitacao.data_necessidade && (
                     <span className="flex items-center gap-1.5 text-blue-600 mb-1">
