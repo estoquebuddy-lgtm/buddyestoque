@@ -1705,7 +1705,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
               {processed.length > limit && (
                 <div className="flex justify-center pt-4 pb-2">
-                  <Button onClick={() => setLimit(prev => prev + 50)} variant="outline" className="gap-2 bg-white/5 border-white/10 text-white hover:bg-white/10">
+                  <Button onClick={() => setLimit(prev => prev + 50)} variant="outline" className="gap-2 bg-[#0e1629] text-white border-white/10 hover:bg-[#0e1629]/80 shadow-md">
                     Carregar Mais ({processed.length - limit} restantes)
                   </Button>
                 </div>
