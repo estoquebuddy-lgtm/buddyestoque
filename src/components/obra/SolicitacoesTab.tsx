@@ -435,8 +435,10 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
     const text = `*Solicitação de Material - Buddy Construtora*\n\n` +
       `*Título:* ${selectedSolicitacao.titulo || 'Sem título'}\n` +
       `*Solicitante:* ${formatUserDisplay(selectedSolicitacao.solicitante)}\n` +
-      `*Urgência:* ${urgencyEmoji} ${selectedSolicitacao.urgencia}\n` +
-      `*Data de Necessidade:* ${selectedSolicitacao.data_necessidade ? new Date(selectedSolicitacao.data_necessidade).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'Não informada'}\n\n` +
+      `*Destinatário:* ${formatUserDisplay(selectedSolicitacao.destinatario)}\n` +
+      `*Data da Solicitação:* ${new Date(selectedSolicitacao.data_solicitacao).toLocaleDateString('pt-BR')}\n` +
+      `*Data de Necessidade:* ${selectedSolicitacao.data_necessidade ? new Date(selectedSolicitacao.data_necessidade).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : 'Não informada'}\n` +
+      `*Urgência:* ${urgencyEmoji} ${selectedSolicitacao.urgencia}\n\n` +
       `*Itens:*\n${checklistText}`;
 
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
