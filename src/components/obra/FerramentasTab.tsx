@@ -40,7 +40,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [showBaixadas, setShowBaixadas] = useState(false);
   const [groupByName, setGroupByName] = useState(true);
-  const [groupDetails, setGroupDetails] = useState<{ name: string; tools: any[] } | null>(null);
+  const [groupDetails, setGroupDetails] = useState<{ name: string; categoria: string | null; tools: any[] } | null>(null);
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
   // Rename Confirmation State
@@ -642,7 +642,13 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   };
 
   const groupTools = groupDetails
-    ? filtered.filter((f: any) => f.nome.toLowerCase().trim() === groupDetails.name.toLowerCase().trim())
+    ? filtered.filter((f: any) => {
+        const nameMatch = f.nome.toLowerCase().trim() === groupDetails.name.toLowerCase().trim();
+        const catMatch = groupDetails.categoria 
+          ? f.categoria === groupDetails.categoria 
+          : !f.categoria;
+        return nameMatch && catMatch;
+      })
     : [];
 
   useEffect(() => {
@@ -798,7 +804,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                           <Card 
                             key={`group-${item.nome}`} 
                             className="border-none shadow-sm hover:shadow-md transition-shadow cursor-pointer active:scale-[0.995]" 
-                            onClick={() => setGroupDetails({ name: item.nome, tools: item.tools })}
+                            onClick={() => setGroupDetails({ name: item.nome, categoria: item.categoria, tools: item.tools })}
                           >
                             <CardContent className="p-4 flex items-center gap-4">
                               <ImageThumbnail src={item.foto_url} alt={item.nome} type="ferramenta" />
