@@ -13,7 +13,7 @@ import {
   Plus, Search, Download, FileSpreadsheet, Mail, Edit, Trash2,
   FileUp, Loader2, BookOpen, ShoppingCart, DollarSign,
   FileText, CheckCircle2, AlertTriangle, Clock, Archive, ReceiptText, Boxes,
-  Link2
+  Link2, SlidersHorizontal
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -202,6 +202,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [selectedNfFilter, setSelectedNfFilter] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [sortBy, setSortBy] = useState<'envio'|'pagamento'|'solicitado'>('envio');
   const [parcelaOtros, setParcelaOtros] = useState<boolean[]>([false,false,false]);
@@ -1497,81 +1498,132 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         ))}
       </div>
 
-      {/* Filters Row */}
-      <div className="flex flex-wrap items-center gap-3 mb-3">
-        <div className="relative flex-1 min-w-[160px] max-w-xs">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40"/>
-          <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 h-8 text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary"/>
-        </div>
-        {activeTab !== 'fornecedores' && (
-          <>
-            {/* Filtro de Datas De/Até */}
-            <div className="flex items-center gap-1.5 bg-[#0e1629] border border-white/10 rounded-xl px-2.5 h-8">
-              <span className="text-[9px] text-white/40 uppercase font-bold tracking-wider">De</span>
-              <input 
-                type="date" 
-                value={startDate} 
-                onChange={e=>setStartDate(e.target.value)} 
-                className="bg-transparent border-0 text-white text-xs focus:ring-0 focus:outline-none w-[115px] [color-scheme:dark]"
-              />
-            </div>
-            <div className="flex items-center gap-1.5 bg-[#0e1629] border border-white/10 rounded-xl px-2.5 h-8">
-              <span className="text-[9px] text-white/40 uppercase font-bold tracking-wider">Até</span>
-              <input 
-                type="date" 
-                value={endDate} 
-                onChange={e=>setEndDate(e.target.value)} 
-                className="bg-transparent border-0 text-white text-xs focus:ring-0 focus:outline-none w-[115px] [color-scheme:dark]"
-              />
-            </div>
-            {(startDate || endDate) && (
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={() => { setStartDate(''); setEndDate(''); }}
-                className="h-8 px-2 text-white/60 hover:text-white hover:bg-white/5 text-[9px] uppercase font-bold"
-              >
-                Limpar
-              </Button>
-            )}
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="h-8 w-36 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Mês"/></SelectTrigger>
-              <SelectContent className="bg-[#161f30] border-white/10 text-white">
-                <SelectItem value="all">Todos os meses</SelectItem>
-                {months.map(m=><SelectItem key={m} value={m}>{mesLabel(m)}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={selectedTipo} onValueChange={setSelectedTipo}>
-              <SelectTrigger className="h-8 w-32 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Tipo"/></SelectTrigger>
-              <SelectContent className="bg-[#161f30] border-white/10 text-white">
-                <SelectItem value="all">Todos tipos</SelectItem>
-                {TIPO_OPTIONS.map(t=><SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Select value={selectedNfFilter} onValueChange={setSelectedNfFilter}>
-              <SelectTrigger className="h-8 w-44 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Filtro NF"/></SelectTrigger>
-              <SelectContent className="bg-[#161f30] border-white/10 text-white">
-                <SelectItem value="all">Todas as NF</SelectItem>
-                <SelectItem value="pendente">⚠️ Apenas NF Pendente</SelectItem>
-                <SelectItem value="diferenca">⚖️ Apenas Diferença de NF</SelectItem>
-                <SelectItem value="ambos">🚨 Pendente ou Diferença</SelectItem>
-              </SelectContent>
-            </Select>
-          </>
-        )}
-      </div>
+      {/* Calculate active advanced filters count */}
+      {(() => {
+        const activeFiltersCount = [
+          selectedMonth !== 'all',
+          selectedTipo !== 'all',
+          selectedNfFilter !== 'all',
+          !!startDate,
+          !!endDate
+        ].filter(Boolean).length;
 
-      {/* Tabs Row */}
-      <div className="flex items-center mb-4">
-        <div className="flex gap-1 p-1 bg-[#0e1629] border border-white/5 rounded-xl">
-          {(['ativas','geral','kanban','dashboard','fornecedores'] as const).map(t=>(
-            <button key={t} onClick={()=>setActiveTab(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab===t?'bg-primary text-white':'text-white/50 hover:text-white/80'}`}>
-              {t==='ativas'?'📋 Ativas':t==='geral'?'📂 Geral':t==='kanban'?'🗂 Kanban':t==='dashboard'?'📊 Dashboard':'🤝 Fornecedores'}
-            </button>
-          ))}
-        </div>
-      </div>
+        return (
+          <>
+            {/* Tabs and Search/Filter Row */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              {/* Tabs */}
+              <div className="flex gap-1 p-1 bg-[#0e1629] border border-white/5 rounded-xl">
+                {(['ativas','geral','kanban','dashboard','fornecedores'] as const).map(t=>(
+                  <button key={t} onClick={()=>setActiveTab(t)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab===t?'bg-primary text-white':'text-white/50 hover:text-white/80'}`}>
+                    {t==='ativas'?'📋 Ativas':t==='geral'?'📂 Geral':t==='kanban'?'🗂 Kanban':t==='dashboard'?'📊 Dashboard':'🤝 Fornecedores'}
+                  </button>
+                ))}
+              </div>
+
+              {/* Search and Filters Toggle */}
+              <div className="flex items-center gap-2.5">
+                <div className="relative w-48 sm:w-64">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40"/>
+                  <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 h-8 text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary"/>
+                </div>
+                {activeTab !== 'fornecedores' && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setShowFilters(!showFilters)}
+                    className={`h-8 gap-2 text-xs bg-[#0e1629] border-white/10 text-white hover:bg-white/5 hover:text-white active:scale-[0.98] transition-all ${showFilters ? 'ring-1 ring-primary border-primary bg-primary/10' : ''}`}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5 text-white/60" />
+                    <span>Filtros</span>
+                    {activeFiltersCount > 0 && (
+                      <Badge className="bg-primary hover:bg-primary text-white h-4 min-w-4 px-1 rounded-full text-[9px] font-sans flex items-center justify-center shrink-0">
+                        {activeFiltersCount}
+                      </Badge>
+                    )}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Collapsible Advanced Filters Panel */}
+            {showFilters && activeTab !== 'fornecedores' && (
+              <div className="flex flex-wrap items-center gap-3 p-3 bg-[#0a0f1d] border border-white/5 rounded-xl mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                {/* Periodo: De / Até */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-white/50 uppercase font-bold tracking-wider">Período:</span>
+                  <div className="flex items-center gap-1.5 bg-[#0e1629] border border-white/10 rounded-lg px-2.5 h-8">
+                    <span className="text-[9px] text-white/40 uppercase font-bold tracking-wider">De</span>
+                    <input 
+                      type="date" 
+                      value={startDate} 
+                      onChange={e=>setStartDate(e.target.value)} 
+                      className="bg-transparent border-0 text-white text-xs focus:ring-0 focus:outline-none w-[115px] [color-scheme:dark]"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 bg-[#0e1629] border border-white/10 rounded-lg px-2.5 h-8">
+                    <span className="text-[9px] text-white/40 uppercase font-bold tracking-wider">Até</span>
+                    <input 
+                      type="date" 
+                      value={endDate} 
+                      onChange={e=>setEndDate(e.target.value)} 
+                      className="bg-transparent border-0 text-white text-xs focus:ring-0 focus:outline-none w-[115px] [color-scheme:dark]"
+                    />
+                  </div>
+                </div>
+
+                <div className="h-4 w-px bg-white/10 hidden md:block" />
+
+                {/* Dropdowns */}
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                    <SelectTrigger className="h-8 w-36 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Mês"/></SelectTrigger>
+                    <SelectContent className="bg-[#161f30] border-white/10 text-white">
+                      <SelectItem value="all">Todos os meses</SelectItem>
+                      {months.map(m=><SelectItem key={m} value={m}>{mesLabel(m)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={selectedTipo} onValueChange={setSelectedTipo}>
+                    <SelectTrigger className="h-8 w-32 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Tipo"/></SelectTrigger>
+                    <SelectContent className="bg-[#161f30] border-white/10 text-white">
+                      <SelectItem value="all">Todos tipos</SelectItem>
+                      {TIPO_OPTIONS.map(t=><SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+
+                  <Select value={selectedNfFilter} onValueChange={setSelectedNfFilter}>
+                    <SelectTrigger className="h-8 w-44 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Filtro NF"/></SelectTrigger>
+                    <SelectContent className="bg-[#161f30] border-white/10 text-white">
+                      <SelectItem value="all">Todas as NF</SelectItem>
+                      <SelectItem value="pendente">⚠️ Apenas NF Pendente</SelectItem>
+                      <SelectItem value="diferenca">⚖️ Apenas Diferença de NF</SelectItem>
+                      <SelectItem value="ambos">🚨 Pendente ou Diferença</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {activeFiltersCount > 0 && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => {
+                      setStartDate('');
+                      setEndDate('');
+                      setSelectedMonth('all');
+                      setSelectedTipo('all');
+                      setSelectedNfFilter('all');
+                    }}
+                    className="h-8 px-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-[10px] uppercase font-bold ml-auto"
+                  >
+                    Limpar Filtros
+                  </Button>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* ── Table view (ativas / geral) ── */}
       {(activeTab==='ativas'||activeTab==='geral') && (
