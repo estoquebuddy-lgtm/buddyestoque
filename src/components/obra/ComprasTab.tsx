@@ -1497,16 +1497,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         ))}
       </div>
 
-      {/* Filters + Tabs */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex gap-1 p-1 bg-[#0e1629] border border-white/5 rounded-xl">
-          {(['ativas','geral','kanban','dashboard','fornecedores'] as const).map(t=>(
-            <button key={t} onClick={()=>setActiveTab(t)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab===t?'bg-primary text-white':'text-white/50 hover:text-white/80'}`}>
-              {t==='ativas'?'📋 Ativas':t==='geral'?'📂 Geral':t==='kanban'?'🗂 Kanban':t==='dashboard'?'📊 Dashboard':'🤝 Fornecedores'}
-            </button>
-          ))}
-        </div>
+      {/* Filters Row */}
+      <div className="flex flex-wrap items-center gap-3 mb-3">
         <div className="relative flex-1 min-w-[160px] max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/40"/>
           <Input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 h-8 text-xs bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary"/>
@@ -1567,6 +1559,18 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             </Select>
           </>
         )}
+      </div>
+
+      {/* Tabs Row */}
+      <div className="flex items-center mb-4">
+        <div className="flex gap-1 p-1 bg-[#0e1629] border border-white/5 rounded-xl">
+          {(['ativas','geral','kanban','dashboard','fornecedores'] as const).map(t=>(
+            <button key={t} onClick={()=>setActiveTab(t)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab===t?'bg-primary text-white':'text-white/50 hover:text-white/80'}`}>
+              {t==='ativas'?'📋 Ativas':t==='geral'?'📂 Geral':t==='kanban'?'🗂 Kanban':t==='dashboard'?'📊 Dashboard':'🤝 Fornecedores'}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* ── Table view (ativas / geral) ── */}
