@@ -200,6 +200,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedTipo, setSelectedTipo] = useState('all');
   const [selectedNfFilter, setSelectedNfFilter] = useState('all');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   const [sortBy, setSortBy] = useState<'envio'|'pagamento'|'solicitado'>('envio');
   const [parcelaOtros, setParcelaOtros] = useState<boolean[]>([false,false,false]);
@@ -207,7 +209,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
   useEffect(() => {
     setLimit(50);
-  }, [activeTab, search, selectedMonth, selectedTipo, selectedNfFilter]);
+  }, [activeTab, search, selectedMonth, selectedTipo, selectedNfFilter, startDate, endDate]);
 
   // Kanban drag-and-drop
   const [dragId, setDragId] = useState<string|null>(null);
@@ -766,6 +768,20 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         return true;
       });
     }
+    if (startDate) {
+      r = r.filter((c: any) => {
+        const envOk = c.data_envio ? c.data_envio.substring(0, 10) >= startDate : false;
+        const pagOk = c.data_pagamento ? c.data_pagamento.substring(0, 10) >= startDate : false;
+        return envOk || pagOk;
+      });
+    }
+    if (endDate) {
+      r = r.filter((c: any) => {
+        const envOk = c.data_envio ? c.data_envio.substring(0, 10) <= endDate : false;
+        const pagOk = c.data_pagamento ? c.data_pagamento.substring(0, 10) <= endDate : false;
+        return envOk || pagOk;
+      });
+    }
     if (search.trim()) {
       const t = normal(search);
       r = r.filter((c: any) => {
@@ -803,7 +819,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       return sortDir==='asc'?da.localeCompare(db):db.localeCompare(da);
     });
     return r;
-    },[compras,activeTab,selectedMonth,selectedTipo,selectedNfFilter,search,sortBy,sortDir]);
+    },[compras,activeTab,selectedMonth,selectedTipo,selectedNfFilter,search,sortBy,sortDir,startDate,endDate]);
 
   const fornecedoresListWithStats = useMemo(() => {
     const map = new Map<string, { nome: string; cnpj: string; comprasCount: number; valorLiquido: number }>();
@@ -1497,6 +1513,35 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         </div>
         {activeTab !== 'fornecedores' && (
           <>
+            {/* Filtro de Datas De/Até */}
+            <div className="flex items-center gap-1.5 bg-[#0e1629] border border-white/10 rounded-xl px-2.5 h-8">
+              <span className="text-[9px] text-white/40 uppercase font-bold tracking-wider">De</span>
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={e=>setStartDate(e.target.value)} 
+                className="bg-transparent border-0 text-white text-xs focus:ring-0 focus:outline-none w-[115px] [color-scheme:dark]"
+              />
+            </div>
+            <div className="flex items-center gap-1.5 bg-[#0e1629] border border-white/10 rounded-xl px-2.5 h-8">
+              <span className="text-[9px] text-white/40 uppercase font-bold tracking-wider">Até</span>
+              <input 
+                type="date" 
+                value={endDate} 
+                onChange={e=>setEndDate(e.target.value)} 
+                className="bg-transparent border-0 text-white text-xs focus:ring-0 focus:outline-none w-[115px] [color-scheme:dark]"
+              />
+            </div>
+            {(startDate || endDate) && (
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => { setStartDate(''); setEndDate(''); }}
+                className="h-8 px-2 text-white/60 hover:text-white hover:bg-white/5 text-[9px] uppercase font-bold"
+              >
+                Limpar
+              </Button>
+            )}
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
               <SelectTrigger className="h-8 w-36 text-xs bg-[#0e1629] border-white/10 text-white"><SelectValue placeholder="Mês"/></SelectTrigger>
               <SelectContent className="bg-[#161f30] border-white/10 text-white">
