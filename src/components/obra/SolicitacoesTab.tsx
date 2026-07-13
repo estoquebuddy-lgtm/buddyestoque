@@ -1572,7 +1572,12 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
       <Dialog open={statusDialogOpen} onOpenChange={setStatusDialogOpen}>
         <DialogContent className="max-w-[95vw] sm:max-w-xl">
           <DialogHeader>
-            <DialogTitle>Detalhes da Solicitação</DialogTitle>
+            <DialogTitle>
+              {selectedSolicitacao 
+                ? `${selectedSolicitacao.numero ? `#${String(selectedSolicitacao.numero).padStart(4, '0')} - ` : ''}${selectedSolicitacao.titulo || 'Sem Título'}`
+                : 'Detalhes da Solicitação'
+              }
+            </DialogTitle>
           </DialogHeader>
           {selectedSolicitacao && (
             <div className="space-y-4 pt-4 max-h-[75vh] overflow-y-auto pr-1">
