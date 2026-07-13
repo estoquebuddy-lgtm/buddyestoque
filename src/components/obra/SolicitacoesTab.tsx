@@ -178,6 +178,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
             aprovador:profiles!solicitacoes_material_aprovador_id_fkey(email, apelido)
           `)
           .eq('obra_id', obraId)
+          .order('numero', { ascending: false, nullsFirst: false })
           .order('data_solicitacao', { ascending: false });
         if (error) throw error;
         return data || [];
@@ -194,6 +195,7 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
             comentarios_solicitacoes(id)
           `)
           .eq('obra_id', obraId)
+          .order('numero', { ascending: false, nullsFirst: false })
           .order('data_solicitacao', { ascending: false });
         
         if (error) {
@@ -791,12 +793,17 @@ export default function SolicitacoesTab({ obraId }: { obraId: string }) {
                             <ImageThumbnail src={s.foto_url} alt="Material solicitado" type="produto" size="sm" />
                           )}
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-sm text-slate-800 leading-snug whitespace-pre-wrap break-words">{s.titulo || s.descricao_materiais}</h4>
-                            {s.titulo && s.classificacao && (
-                              <span className="inline-block text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-semibold uppercase mt-1">
-                                {s.classificacao}
+                            <div className="flex items-center gap-1.5 mb-1">
+                              <span className="text-[10px] font-bold text-slate-400">
+                                {s.numero ? `#${String(s.numero).padStart(4, '0')}` : '—'}
                               </span>
-                            )}
+                              {s.titulo && s.classificacao && (
+                                <span className="inline-block text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-full font-semibold uppercase">
+                                  {s.classificacao}
+                                </span>
+                              )}
+                            </div>
+                            <h4 className="font-bold text-sm text-slate-800 leading-snug whitespace-pre-wrap break-words">{s.titulo || s.descricao_materiais}</h4>
                           </div>
                         </div>
 
