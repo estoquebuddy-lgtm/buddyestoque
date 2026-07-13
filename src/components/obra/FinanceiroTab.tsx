@@ -494,23 +494,28 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
 
   const exportPDF = async () => {
     const logo = await getBuddyLogo();
-    const doc = new jsPDF();
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'pt',
+      format: 'a4'
+    });
     const dataAtual = new Date().toLocaleDateString('pt-BR');
+    
     doc.setFontSize(18);
-    doc.text('Relatório Financeiro de Estoque', 14, 22);
+    doc.text('Relatório Financeiro de Estoque', 40, 60);
     
     if (logo) {
-      const logoSize = 18;
-      const x = doc.internal.pageSize.getWidth() - 14 - logoSize;
-      doc.addImage(logo, 'PNG', x, 10, logoSize, logoSize);
+      const logoSize = 45;
+      const x = doc.internal.pageSize.getWidth() - 40 - logoSize;
+      doc.addImage(logo, 'PNG', x, 25, logoSize, logoSize);
     }
 
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(`Data de Geração: ${dataAtual}`, 14, 30);
-    doc.text(`Total Investido (Entradas): ${formatCurrency(totalInvestidoObra)}`, 14, 36);
-    doc.text(`Total Consumido (Saídas): ${formatCurrency(totalSaidasObra)}`, 14, 42);
-    doc.text(`Valor Estimado de Estoque: ${formatCurrency(totalEstoqueEstimadoObra)}`, 14, 48);
+    doc.text(`Data de Geração: ${dataAtual}`, 40, 85);
+    doc.text(`Total Investido (Entradas): ${formatCurrency(totalInvestidoObra)}`, 40, 102);
+    doc.text(`Total Consumido (Saídas): ${formatCurrency(totalSaidasObra)}`, 40, 119);
+    doc.text(`Valor Estimado de Estoque: ${formatCurrency(totalEstoqueEstimadoObra)}`, 40, 136);
     
     const tableData = filteredProducts.map((p: any) => [
       p.nome,
@@ -523,11 +528,14 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     ]);
 
     autoTable(doc, {
-      startY: 56,
+      startY: 160,
+      margin: { left: 40, right: 40, top: 40, bottom: 40 },
       head: [['Produto', 'Estoque', 'Último Custo', 'Custo Médio', 'Total Investido', 'Total Saídas', 'Estoque Estimado']],
       body: tableData,
       theme: 'grid',
-      headStyles: { fillColor: [14, 22, 41] },
+      headStyles: { fillColor: [14, 22, 41], fontSize: 8 },
+      styles: { fontSize: 8, cellPadding: 4 },
+      rowPageBreak: 'avoid',
     });
 
     doc.save(`financeiro-estoque-${dataAtual.replace(/\//g, '-')}.pdf`);
