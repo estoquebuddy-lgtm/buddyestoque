@@ -193,37 +193,37 @@ function parseEmail(txt: string) {
 }
 
 export const DEFAULT_BUDGETS: Record<number, number> = {
-  1: 15000,
-  2: 25000,
-  3: 10000,
-  4: 120000,
-  5: 45000,
-  6: 20000,
-  7: 60000,
-  8: 30000,
-  9: 80000,
-  10: 15000,
-  11: 50000,
-  12: 70000,
-  13: 25000,
-  14: 40000,
-  15: 45000,
-  16: 10000,
-  17: 5000,
-  18: 35000,
-  19: 8000,
-  20: 30000,
-  21: 25000,
-  22: 35000,
-  23: 40000,
-  24: 55000,
-  25: 15000,
-  26: 8000,
-  27: 5000,
-  28: 12000,
-  29: 30000,
-  30: 20000,
-  31: 15000
+  1: 458330.59,
+  2: 242000.00,
+  3: 644040.00,
+  4: 9149579.05,
+  5: 2751307.64,
+  6: 432475.44,
+  7: 2867605.31,
+  8: 1243121.39,
+  9: 5986818.12,
+  10: 1645004.24,
+  11: 3376417.98,
+  12: 3717666.66,
+  13: 146037.60,
+  14: 1946083.40,
+  15: 2118817.90,
+  16: 999102.17,
+  17: 42958.73,
+  18: 1355556.26,
+  19: 198000.00,
+  20: 228947.18,
+  21: 339821.86,
+  22: 881365.72,
+  23: 268893.76,
+  24: 3864176.79,
+  25: 968549.64,
+  26: 456882.47,
+  27: 198324.46,
+  28: 33600.00,
+  29: 9224467.15,
+  30: 4826146.15,
+  31: 0
 };
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -234,6 +234,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [selectedMonth, setSelectedMonth] = useState('all');
   const [selectedTipo, setSelectedTipo] = useState('all');
   const [selectedNfFilter, setSelectedNfFilter] = useState('all');
+  const [selectedCentroCusto, setSelectedCentroCusto] = useState('all');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [showFilters, setShowFilters] = useState(false);
@@ -275,7 +276,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
   useEffect(() => {
     setLimit(50);
-  }, [activeTab, search, selectedMonth, selectedTipo, selectedNfFilter, startDate, endDate]);
+  }, [activeTab, search, selectedMonth, selectedTipo, selectedNfFilter, selectedCentroCusto, startDate, endDate]);
 
   // Kanban drag-and-drop
   const [dragId, setDragId] = useState<string|null>(null);
@@ -834,6 +835,12 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         return true;
       });
     }
+    if (selectedCentroCusto !== 'all') {
+      r = r.filter((c: any) => {
+        const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
+        return ccVal === Number(selectedCentroCusto);
+      });
+    }
     if (startDate) {
       r = r.filter((c: any) => {
         const envOk = c.data_envio ? c.data_envio.substring(0, 10) >= startDate : false;
@@ -885,7 +892,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       return sortDir==='asc'?da.localeCompare(db):db.localeCompare(da);
     });
     return r;
-    },[compras,activeTab,selectedMonth,selectedTipo,selectedNfFilter,search,sortBy,sortDir,startDate,endDate]);
+    },[compras,activeTab,selectedMonth,selectedTipo,selectedNfFilter,selectedCentroCusto,search,sortBy,sortDir,startDate,endDate]);
 
   const { totalOrcado, totalRealizado, totalSaldo, ccTotals } = useMemo(() => {
     let totalOrc = 0;
@@ -1601,6 +1608,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           selectedMonth !== 'all',
           selectedTipo !== 'all',
           selectedNfFilter !== 'all',
+          selectedCentroCusto !== 'all',
           !!startDate,
           !!endDate
         ].filter(Boolean).length;
@@ -1698,6 +1706,23 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                       <SelectItem value="ambos">🚨 Pendente ou Diferença</SelectItem>
                     </SelectContent>
                   </Select>
+
+                  <Select value={selectedCentroCusto} onValueChange={setSelectedCentroCusto}>
+                    <SelectTrigger className="h-8 w-52 text-xs bg-[#0e1629] border-white/10 text-white truncate"><SelectValue placeholder="Centro de Custo"/></SelectTrigger>
+                    <SelectContent className="bg-[#161f30] border-white/10 text-white max-h-72">
+                      <SelectItem value="all">Todos Centros</SelectItem>
+                      {CENTROS_CUSTO.map(cc => {
+                        const match = cc.label.match(/^(\d+)\.\s*(.*)/);
+                        const code = match ? match[1].padStart(2, '0') : String(cc.value).padStart(2, '0');
+                        const desc = match ? match[2] : cc.label;
+                        return (
+                          <SelectItem key={cc.value} value={String(cc.value)}>
+                            {code}. {desc}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {activeFiltersCount > 0 && (
@@ -1710,6 +1735,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                       setSelectedMonth('all');
                       setSelectedTipo('all');
                       setSelectedNfFilter('all');
+                      setSelectedCentroCusto('all');
                     }}
                     className="h-8 px-3 text-red-400 hover:text-red-300 hover:bg-red-500/10 text-[10px] uppercase font-bold ml-auto"
                   >
@@ -3530,20 +3556,35 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             </div>
           </div>
 
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" onClick={() => setIsBudgetModalOpen(false)} className="hover:bg-white/5 text-white/60 hover:text-white rounded-xl">
-              Cancelar
-            </Button>
+          <DialogFooter className="gap-2 sm:gap-0 flex-col sm:flex-row justify-between w-full">
             <Button 
+              variant="outline" 
               onClick={() => {
-                localStorage.setItem(`obra_budgets_${obraId}`, JSON.stringify(ccBudgets));
-                setIsBudgetModalOpen(false);
-                toast.success('Orçamento atualizado com sucesso!');
+                if (window.confirm("Deseja restaurar o orçamento para os valores padrão da construtora (Total: R$ 60.612.097,66)?")) {
+                  setCcBudgets(DEFAULT_BUDGETS);
+                  localStorage.setItem(`obra_budgets_${obraId}`, JSON.stringify(DEFAULT_BUDGETS));
+                  toast.success('Orçamento restaurado para os padrões!');
+                }
               }} 
-              className="bg-primary hover:bg-primary-hover text-white rounded-xl"
+              className="border-white/10 hover:bg-white/5 text-white/80 rounded-xl mr-auto text-xs"
             >
-              Salvar Orçamento
+              Restaurar Padrões
             </Button>
+            <div className="flex gap-2 justify-end">
+              <Button variant="ghost" onClick={() => setIsBudgetModalOpen(false)} className="hover:bg-white/5 text-white/60 hover:text-white rounded-xl">
+                Cancelar
+              </Button>
+              <Button 
+                onClick={() => {
+                  localStorage.setItem(`obra_budgets_${obraId}`, JSON.stringify(ccBudgets));
+                  setIsBudgetModalOpen(false);
+                  toast.success('Orçamento atualizado com sucesso!');
+                }} 
+                className="bg-primary hover:bg-primary-hover text-white rounded-xl"
+              >
+                Salvar Orçamento
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
