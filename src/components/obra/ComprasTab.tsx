@@ -257,6 +257,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [limit, setLimit] = useState(50);
 
   // Budget states
+  const [ccSortBy, setCcSortBy] = useState<'codigo' | 'realizado' | 'orcado' | 'consumo' | 'saldo'>('realizado');
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [ccBudgets, setCcBudgets] = useState<Record<number, number>>(() => {
     const saved = localStorage.getItem(`obra_budgets_${obraId}`);
@@ -2326,22 +2327,58 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             </Card>
             <Card className="bg-[#0e1629] border-white/5">
               <CardContent className="p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold">Orçamento por Centro de Custo</p>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={() => setIsBudgetModalOpen(true)}
-                    className="h-7 text-[9px] font-bold px-2 rounded-md hover:bg-white/5 text-white/60 hover:text-white border border-white/10"
-                  >
-                    <Settings className="h-3 w-3 mr-1" /> Editar Orçados
-                  </Button>
+                <div className="flex flex-col gap-2.5 mb-4">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold">Orçamento por Centro de Custo</p>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setIsBudgetModalOpen(true)}
+                      className="h-7 text-[9px] font-bold px-2 rounded-md hover:bg-white/5 text-white/60 hover:text-white border border-white/10 shrink-0"
+                    >
+                      <Settings className="h-3 w-3 mr-1" /> Editar Orçados
+                    </Button>
+                  </div>
+                  
+                  {/* Sorting controls */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-white/40 uppercase font-bold tracking-wider">Ordenar por:</span>
+                    <Select value={ccSortBy} onValueChange={(val: any) => setCcSortBy(val)}>
+                      <SelectTrigger className="h-7 text-[9.5px] bg-[#0e1629]/65 border-white/5 text-white/80 w-44 hover:bg-white/5 hover:text-white transition-colors">
+                        <SelectValue placeholder="Ordenar por" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-[#161f30] border-white/10 text-white text-xs">
+                        <SelectItem value="realizado">💸 Valor Realizado (Gasto)</SelectItem>
+                        <SelectItem value="orcado">📋 Valor Orçado (Previsto)</SelectItem>
+                        <SelectItem value="codigo">🔢 Código / Número (Crescente)</SelectItem>
+                        <SelectItem value="consumo">🔥 % Consumido (Mais Críticos)</SelectItem>
+                        <SelectItem value="saldo">⚖️ Saldo Restante (Menores Primeiro)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
                 <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
                   {(() => {
                     const ccTotalsToShow = ccTotals
                       .filter(cc => cc.budget > 0 || cc.total > 0)
-                      .sort((a, b) => b.total - a.total);
+                      .sort((a, b) => {
+                        if (ccSortBy === 'codigo') {
+                          return a.value - b.value;
+                        }
+                        if (ccSortBy === 'orcado') {
+                          return b.budget - a.budget;
+                        }
+                        if (ccSortBy === 'saldo') {
+                          return a.balance - b.balance;
+                        }
+                        if (ccSortBy === 'consumo') {
+                          const pctA = a.budget > 0 ? (a.total / a.budget) : (a.total > 0 ? Infinity : 0);
+                          const pctB = b.budget > 0 ? (b.total / b.budget) : (b.total > 0 ? Infinity : 0);
+                          return pctB - pctA;
+                        }
+                        // Default: 'realizado'
+                        return b.total - a.total;
+                      });
 
                     if (ccTotalsToShow.length === 0) {
                       return (
