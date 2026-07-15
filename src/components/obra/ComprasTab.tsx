@@ -13,7 +13,7 @@ import {
   Plus, Search, Download, FileSpreadsheet, Mail, Edit, Trash2,
   FileUp, Loader2, BookOpen, ShoppingCart, DollarSign,
   FileText, CheckCircle2, AlertTriangle, Clock, Archive, ReceiptText, Boxes,
-  Link2, SlidersHorizontal
+  Link2, SlidersHorizontal, Settings, TrendingUp
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -192,6 +192,40 @@ function parseEmail(txt: string) {
   return {titulo,tipo,fornecedor:ref.fornecedor||campo(txt,'Nome da Empresa')||'',cnpj:ref.cnpj||'',conta:ref.conta||contaTrecho(txt),cc:ccM?ccM[1]:'',ccDesc:ccM?ccM[2].trim():'Não previsto em orçamento',obs:/nota fiscal/i.test(txt)?'E-mail menciona NF anexa.':'',temNF:/nota fiscal|NF/i.test(txt),pagamentos:pags};
 }
 
+export const DEFAULT_BUDGETS: Record<number, number> = {
+  1: 15000,
+  2: 25000,
+  3: 10000,
+  4: 120000,
+  5: 45000,
+  6: 20000,
+  7: 60000,
+  8: 30000,
+  9: 80000,
+  10: 15000,
+  11: 50000,
+  12: 70000,
+  13: 25000,
+  14: 40000,
+  15: 45000,
+  16: 10000,
+  17: 5000,
+  18: 35000,
+  19: 8000,
+  20: 30000,
+  21: 25000,
+  22: 35000,
+  23: 40000,
+  24: 55000,
+  25: 15000,
+  26: 8000,
+  27: 5000,
+  28: 12000,
+  29: 30000,
+  30: 20000,
+  31: 15000
+};
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ComprasTab({ obraId }: ComprasTabProps) {
   const queryClient = useQueryClient();
@@ -207,6 +241,67 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [sortBy, setSortBy] = useState<'envio'|'pagamento'|'solicitado'>('envio');
   const [parcelaOtros, setParcelaOtros] = useState<boolean[]>([false,false,false]);
   const [limit, setLimit] = useState(50);
+
+  // Budget states
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [ccBudgets, setCcBudgets] = useState<Record<number, number>>(() => {
+    const saved = localStorage.getItem(`obra_budgets_${obraId}`);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // ignore
+      }
+    }
+    return DEFAULT_BUDGETS;
+  });
+
+  useEffect(() => {
+    if (obraId) {
+      const saved = localStorage.getItem(`obra_budgets_${obraId}`);
+      if (saved) {
+        try {
+          setCcBudgets(JSON.parse(saved));
+          return;
+        } catch (e) {
+          // ignore
+        }
+      }
+      setCcBudgets(DEFAULT_BUDGETS);
+    }
+  }, [obraId]);
+
+  const { totalOrcado, totalRealizado, totalSaldo, ccTotals } = useMemo(() => {
+    let totalOrc = 0;
+    let totalReal = 0;
+
+    const totals = CENTROS_CUSTO.map(cc => {
+      const budget = ccBudgets[cc.value] ?? 0;
+      totalOrc += budget;
+
+      const items = processed.filter((c: any) => {
+        const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
+        return ccVal === cc.value;
+      });
+      const total = items.reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
+      totalReal += total;
+
+      return {
+        ...cc,
+        budget,
+        total,
+        balance: budget - total,
+        count: items.length
+      };
+    });
+
+    return {
+      totalOrcado: totalOrc,
+      totalRealizado: totalReal,
+      totalSaldo: totalOrc - totalReal,
+      ccTotals: totals
+    };
+  }, [processed, ccBudgets]);
 
   useEffect(() => {
     setLimit(50);
@@ -1977,75 +2072,140 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
       {/* ── Dashboard ── */}
       {activeTab==='dashboard'&&(
-        <div className="grid lg:grid-cols-2 gap-6">
-          <Card className="bg-[#0e1629] border-white/5">
-            <CardContent className="p-5">
-              <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold mb-4">Totais por Tipo</p>
-              <div className="space-y-2">
-                {TIPO_OPTIONS.map(t=>{
-                  const items=processed.filter((c:any)=>c.tipo_solicitacao===t.value);
-                  const total=items.reduce((s:number,c:any)=>s+(c.valor_pago||0),0);
-                  return(
-                    <div key={t.value} className="flex items-center gap-3 py-2 border-b border-white/5">
-                      <Badge className={`text-[9px] font-bold uppercase border ${TIPO_BADGE[t.value]||TIPO_BADGE['Outros']}`}>{t.label}</Badge>
-                      <span className="ml-auto font-mono font-bold text-white/80 text-sm">{fmt(total)}</span>
-                      <span className="text-[10px] text-white/30">{items.length}x</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="bg-[#0e1629] border-white/5">
-            <CardContent className="p-5">
-              <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold mb-4">Total por Centro de Custo</p>
-              <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-                {(() => {
-                  const ccTotals = CENTROS_CUSTO.map(cc => {
-                    const items = processed.filter((c: any) => {
-                      const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
-                      return ccVal === cc.value;
-                    });
-                    const total = items.reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
-                    return {
-                      ...cc,
-                      total,
-                      count: items.length
-                    };
-                  })
-                  .filter(cc => cc.count > 0 || cc.total > 0)
-                  .sort((a, b) => b.total - a.total);
+        <div className="space-y-6">
+          {/* Summary Cards */}
+          <div className="grid sm:grid-cols-3 gap-6">
+            <Card className="bg-[#0e1629] border-white/5 text-white shadow-sm">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="space-y-1.5 min-w-0">
+                  <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold truncate">Orçamento Total da Obra</p>
+                  <h3 className="text-xl font-display font-bold text-blue-300 truncate">{fmt(totalOrcado)}</h3>
+                  <p className="text-xs text-white/50 truncate">Soma de todos os centros de custo</p>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0 ml-2">
+                  <DollarSign className="h-5 w-5 text-blue-400" />
+                </div>
+              </CardContent>
+            </Card>
 
-                  if (ccTotals.length === 0) {
-                    return (
-                      <p className="text-xs text-white/40 py-4 text-center">Nenhum lançamento com centro de custo</p>
-                    );
-                  }
+            <Card className="bg-[#0e1629] border-white/5 text-white shadow-sm">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="space-y-1.5 min-w-0">
+                  <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold truncate">Total Realizado</p>
+                  <h3 className="text-xl font-display font-bold text-[#10b981] truncate">{fmt(totalRealizado)}</h3>
+                  <p className="text-xs text-white/50 truncate">Total pago em lançamentos</p>
+                </div>
+                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0 ml-2">
+                  <TrendingUp className="h-5 w-5 text-[#10b981]" />
+                </div>
+              </CardContent>
+            </Card>
 
-                  return ccTotals.map(cc => {
-                    const match = cc.label.match(/^(\d+)\.\s*(.*)/);
-                    const code = match ? match[1].padStart(2, '0') : String(cc.value).padStart(2, '0');
-                    const desc = match ? match[2] : cc.label;
+            <Card className="bg-[#0e1629] border-white/5 text-white shadow-sm">
+              <CardContent className="p-5 flex items-center justify-between">
+                <div className="space-y-1.5 min-w-0">
+                  <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold truncate">Saldo Geral</p>
+                  <h3 className={`text-xl font-display font-bold truncate ${totalSaldo < 0 ? 'text-rose-400' : 'text-amber-300'}`}>
+                    {fmt(totalSaldo)}
+                  </h3>
+                  <p className="text-xs text-white/50 truncate">Orçamento restante</p>
+                </div>
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center border shrink-0 ml-2 ${
+                  totalSaldo < 0 ? 'bg-rose-500/10 border-rose-500/25 text-rose-400' : 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                }`}>
+                  <BarChart3 className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
-                    return (
-                      <div key={cc.value} className="flex items-center gap-3 py-2 border-b border-white/5 min-w-0">
-                        <Badge variant="secondary" className="bg-white/5 text-white/60 border-white/10 text-[9px] shrink-0">
-                          CC {code}
-                        </Badge>
-                        <span className="text-white/80 font-medium text-xs truncate flex-1" title={cc.label}>
-                          {desc}
-                        </span>
-                        <span className="ml-auto font-mono font-bold text-white/80 text-sm shrink-0">
-                          {fmt(cc.total)}
-                        </span>
-                        <span className="text-[10px] text-white/30 shrink-0">{cc.count}x</span>
+          <div className="grid lg:grid-cols-2 gap-6">
+            <Card className="bg-[#0e1629] border-white/5">
+              <CardContent className="p-5">
+                <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold mb-4">Totais por Tipo</p>
+                <div className="space-y-2">
+                  {TIPO_OPTIONS.map(t=>{
+                    const items=processed.filter((c:any)=>c.tipo_solicitacao===t.value);
+                    const total=items.reduce((s:number,c:any)=>s+(c.valor_pago||0),0);
+                    return(
+                      <div key={t.value} className="flex items-center gap-3 py-2 border-b border-white/5">
+                        <Badge className={`text-[9px] font-bold uppercase border ${TIPO_BADGE[t.value]||TIPO_BADGE['Outros']}`}>{t.label}</Badge>
+                        <span className="ml-auto font-mono font-bold text-white/80 text-sm">{fmt(total)}</span>
+                        <span className="text-[10px] text-white/30">{items.length}x</span>
                       </div>
                     );
-                  });
-                })()}
-              </div>
-            </CardContent>
-          </Card>
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+            <Card className="bg-[#0e1629] border-white/5">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold">Orçamento por Centro de Custo</p>
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setIsBudgetModalOpen(true)}
+                    className="h-7 text-[9px] font-bold px-2 rounded-md hover:bg-white/5 text-white/60 hover:text-white border border-white/10"
+                  >
+                    <Settings className="h-3 w-3 mr-1" /> Editar Orçados
+                  </Button>
+                </div>
+                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                  {(() => {
+                    const ccTotalsToShow = ccTotals
+                      .filter(cc => cc.budget > 0 || cc.total > 0)
+                      .sort((a, b) => b.total - a.total);
+
+                    if (ccTotalsToShow.length === 0) {
+                      return (
+                        <p className="text-xs text-white/40 py-4 text-center">Nenhum lançamento com centro de custo</p>
+                      );
+                    }
+
+                    return ccTotalsToShow.map(cc => {
+                      const match = cc.label.match(/^(\d+)\.\s*(.*)/);
+                      const code = match ? match[1].padStart(2, '0') : String(cc.value).padStart(2, '0');
+                      const desc = match ? match[2] : cc.label;
+
+                      return (
+                        <div key={cc.value} className="py-2.5 border-b border-white/5 space-y-1.5 min-w-0">
+                          <div className="flex items-center justify-between min-w-0">
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <Badge variant="secondary" className="bg-white/5 text-white/60 border-white/10 text-[9px] shrink-0">
+                                CC {code}
+                              </Badge>
+                              <span className="text-white/80 font-semibold text-xs truncate" title={cc.label}>
+                                {desc}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-white/30 shrink-0 ml-2">{cc.count}x</span>
+                          </div>
+                          
+                          <div className="grid grid-cols-3 gap-2 text-[10px] text-center font-mono">
+                            <div className="bg-white/5 rounded px-2 py-1 text-left">
+                              <span className="text-white/40 block text-[8px] uppercase tracking-wider">Orçado</span>
+                              <span className="text-blue-300 font-bold">{fmt(cc.budget)}</span>
+                            </div>
+                            <div className="bg-white/5 rounded px-2 py-1 text-left">
+                              <span className="text-white/40 block text-[8px] uppercase tracking-wider">Realizado</span>
+                              <span className="text-[#10b981] font-bold">{fmt(cc.total)}</span>
+                            </div>
+                            <div className="bg-white/5 rounded px-2 py-1 text-left">
+                              <span className="text-white/40 block text-[8px] uppercase tracking-wider">Saldo</span>
+                              <span className={`font-bold ${cc.balance < 0 ? 'text-rose-400' : 'text-amber-300'}`}>
+                                {fmt(cc.balance)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -3321,6 +3481,70 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
       {/* Livro Fiscal */}
       <GerarLivroFiscalDialog open={isLivroOpen} onOpenChange={setIsLivroOpen} initialRows={fiscalRows}/>
+
+      {/* ══════ DIALOG: Editar Orçamento por Centro de Custo ══════ */}
+      <Dialog open={isBudgetModalOpen} onOpenChange={setIsBudgetModalOpen}>
+        <DialogContent className="max-w-2xl bg-[#161f30] text-white border-white/10 rounded-2xl flex flex-col max-h-[85vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-white font-display font-bold">
+              <SlidersHorizontal className="h-5 w-5 text-primary" />
+              Editar Orçamento por Centro de Custo
+            </DialogTitle>
+            <p className="text-xs text-white/60">
+              Defina os valores previstos (orçados) para cada centro de custo desta obra.
+            </p>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto space-y-4 pr-2 my-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {CENTROS_CUSTO.map(cc => {
+                const match = cc.label.match(/^(\d+)\.\s*(.*)/);
+                const code = match ? match[1].padStart(2, '0') : String(cc.value).padStart(2, '0');
+                const desc = match ? match[2] : cc.label;
+
+                return (
+                  <div key={cc.value} className="space-y-1 bg-white/5 p-3 rounded-xl border border-white/5">
+                    <Label htmlFor={`cc-budget-${cc.value}`} className="text-[10px] uppercase tracking-wider text-white/45 font-bold flex items-center justify-between">
+                      <span className="truncate pr-2" title={cc.label}>CC {code} - {desc}</span>
+                    </Label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-white/30">R$</span>
+                      <Input
+                        id={`cc-budget-${cc.value}`}
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={ccBudgets[cc.value] ?? 0}
+                        onChange={e => {
+                          const val = parseFloat(e.target.value) || 0;
+                          setCcBudgets(prev => ({ ...prev, [cc.value]: val }));
+                        }}
+                        className="pl-8 text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" onClick={() => setIsBudgetModalOpen(false)} className="hover:bg-white/5 text-white/60 hover:text-white rounded-xl">
+              Cancelar
+            </Button>
+            <Button 
+              onClick={() => {
+                localStorage.setItem(`obra_budgets_${obraId}`, JSON.stringify(ccBudgets));
+                setIsBudgetModalOpen(false);
+                toast.success('Orçamento atualizado com sucesso!');
+              }} 
+              className="bg-primary hover:bg-primary-hover text-white rounded-xl"
+            >
+              Salvar Orçamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Importar XML Lançamento */}
       <ImportXmlComprasDialog 
