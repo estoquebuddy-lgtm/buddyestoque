@@ -13,7 +13,7 @@ import {
   Plus, Search, Download, FileSpreadsheet, Mail, Edit, Trash2,
   FileUp, Loader2, BookOpen, ShoppingCart, DollarSign,
   FileText, CheckCircle2, AlertTriangle, Clock, Archive, ReceiptText, Boxes,
-  Link2, SlidersHorizontal, Settings, TrendingUp
+  Link2, SlidersHorizontal, Settings, TrendingUp, BarChart3
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
