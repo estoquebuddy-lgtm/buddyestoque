@@ -2220,17 +2220,20 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             <Card className="bg-[#0e1629] border-white/5 shadow-md">
               <CardContent className="p-5">
                 <div className="mb-4">
-                  <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold">Orçado vs Realizado (Top 7 Centros)</p>
-                  <p className="text-[10px] text-white/50">Comparativo das maiores despesas por centro de custo</p>
+                  <p className="text-[10px] uppercase tracking-[.2em] text-white/70 font-extrabold">Orçado vs Realizado (Top 7 Centros)</p>
+                  <p className="text-xs text-white/85">Comparativo das maiores despesas por centro de custo</p>
                 </div>
                 <div className="h-[250px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <ReBarChart data={barChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                       <ReCartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
-                      <ReXAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={9} tickLine={false} />
-                      <ReYAxis stroke="rgba(255,255,255,0.3)" fontSize={9} tickLine={false} tickFormatter={(v) => `R$ ${v >= 1000000 ? (v/1000000).toFixed(1) + 'M' : v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
+                      <ReXAxis dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.85)' }} fontSize={9} tickLine={false} />
+                      <ReYAxis stroke="rgba(255,255,255,0.2)" tick={{ fill: 'rgba(255,255,255,0.85)' }} fontSize={9} tickLine={false} tickFormatter={(v) => `R$ ${v >= 1000000 ? (v/1000000).toFixed(1) + 'M' : v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
                       <ReTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
-                      <ReLegend wrapperStyle={{ fontSize: 9, paddingTop: 10 }} />
+                      <ReLegend 
+                        wrapperStyle={{ fontSize: 9, paddingTop: 10 }} 
+                        formatter={(value) => <span className="text-white/85 font-bold">{value}</span>}
+                      />
                       <ReBar dataKey="Orçado" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                       <ReBar dataKey="Realizado" fill="#10b981" radius={[4, 4, 0, 0]} />
                     </ReBarChart>
@@ -2243,8 +2246,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             <Card className="bg-[#0e1629] border-white/5 shadow-md">
               <CardContent className="p-5">
                 <div className="mb-4">
-                  <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold">Distribuição por Tipo de Despesa</p>
-                  <p className="text-[10px] text-white/50">Percentual de despesa por categoria de insumo</p>
+                  <p className="text-[10px] uppercase tracking-[.2em] text-white/70 font-extrabold">Distribuição por Tipo de Despesa</p>
+                  <p className="text-xs text-white/85">Percentual de despesa por categoria de insumo</p>
                 </div>
                 <div className="h-[250px] flex items-center justify-center relative">
                   {donutChartData.length === 0 ? (
@@ -2278,8 +2281,8 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                             <div key={d.name} className="flex items-center gap-2">
                               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }} />
                               <div className="min-w-0 flex-1">
-                                <p className="text-white/80 font-semibold truncate leading-tight text-[11px]">{d.name}</p>
-                                <p className="text-[10px] text-white/40 font-mono">{pct}% ({fmt(d.value)})</p>
+                                <p className="text-white/95 font-bold truncate leading-tight text-[11px]">{d.name}</p>
+                                <p className="text-[10px] text-white/70 font-mono font-medium">{pct}% ({fmt(d.value)})</p>
                               </div>
                             </div>
                           );
@@ -2295,7 +2298,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           <div className="grid lg:grid-cols-2 gap-6">
             <Card className="bg-[#0e1629] border-white/5">
               <CardContent className="p-5">
-                <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold mb-4">Totais por Tipo</p>
+                <p className="text-[10px] uppercase tracking-[.2em] text-white/70 font-extrabold mb-4">Totais por Tipo</p>
                 <div className="space-y-4">
                   {TIPO_OPTIONS.map(t=>{
                     const items=processed.filter((c:any)=>c.tipo_solicitacao===t.value);
@@ -2310,12 +2313,12 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                       <div key={t.value} className="space-y-1.5 py-1">
                         <div className="flex items-center gap-3">
                           <Badge className={`text-[9px] font-bold uppercase border ${TIPO_BADGE[t.value]||TIPO_BADGE['Outros']}`}>{t.label}</Badge>
-                          <span className="ml-auto font-mono font-bold text-white/85 text-sm">{fmt(total)}</span>
-                          <span className="text-[10px] text-white/35 font-mono">{pct.toFixed(0)}%</span>
-                          <span className="text-[10px] text-white/30 shrink-0 font-mono">({items.length}x)</span>
+                          <span className="ml-auto font-mono font-extrabold text-white text-sm">{fmt(total)}</span>
+                          <span className="text-[10px] text-white/80 font-mono font-bold">{pct.toFixed(0)}%</span>
+                          <span className="text-[10px] text-white/60 shrink-0 font-mono font-semibold">({items.length}x)</span>
                         </div>
                         {total > 0 && (
-                          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                          <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                             <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
                           </div>
                         )}
@@ -2329,7 +2332,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               <CardContent className="p-5">
                 <div className="flex flex-col gap-2.5 mb-4">
                   <div className="flex items-center justify-between">
-                    <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold">Orçamento por Centro de Custo</p>
+                    <p className="text-[10px] uppercase tracking-[.2em] text-white/70 font-extrabold">Orçamento por Centro de Custo</p>
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -2342,9 +2345,9 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   
                   {/* Sorting controls */}
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] text-white/40 uppercase font-bold tracking-wider">Ordenar por:</span>
+                    <span className="text-[10px] text-white/80 uppercase font-extrabold tracking-wider">Ordenar por:</span>
                     <Select value={ccSortBy} onValueChange={(val: any) => setCcSortBy(val)}>
-                      <SelectTrigger className="h-7 text-[9.5px] bg-[#0e1629]/65 border-white/5 text-white/80 w-44 hover:bg-white/5 hover:text-white transition-colors">
+                      <SelectTrigger className="h-7 text-[9.5px] bg-[#0e1629]/65 border-white/5 text-white font-bold w-44 hover:bg-white/5 hover:text-white transition-colors">
                         <SelectValue placeholder="Ordenar por" />
                       </SelectTrigger>
                       <SelectContent className="bg-[#161f30] border-white/10 text-white text-xs">
@@ -2397,46 +2400,46 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                       
                       // Select indicator color
                       let barColor = 'bg-blue-500';
-                      let textColor = 'text-blue-300';
+                      let textColor = 'text-blue-200 font-extrabold';
                       if (cc.budget > 0) {
                         if (pct <= 80) {
                           barColor = 'bg-emerald-500';
-                          textColor = 'text-emerald-400';
+                          textColor = 'text-emerald-300 font-extrabold';
                         } else if (pct <= 100) {
                           barColor = 'bg-amber-500';
-                          textColor = 'text-amber-400';
+                          textColor = 'text-amber-300 font-extrabold';
                         } else {
                           barColor = 'bg-rose-500 animate-pulse';
-                          textColor = 'text-rose-400 font-extrabold';
+                          textColor = 'text-rose-300 font-extrabold';
                         }
                       } else if (cc.total > 0) {
                         // No budget but spent money (like CC 31)
                         barColor = 'bg-rose-600 animate-pulse';
-                        textColor = 'text-rose-400 font-extrabold';
+                        textColor = 'text-rose-300 font-extrabold';
                       }
 
                       return (
                         <div key={cc.value} className="py-3 border-b border-white/5 space-y-2 min-w-0 hover:bg-white/[0.01] px-1.5 rounded-lg transition-colors">
                           <div className="flex items-center justify-between min-w-0">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <Badge variant="secondary" className="bg-white/5 text-white/60 border-white/10 text-[9px] shrink-0">
+                              <Badge variant="secondary" className="bg-white/10 text-white border-white/20 text-[9px] shrink-0 font-bold">
                                 CC {code}
                               </Badge>
-                              <span className="text-white/80 font-bold text-xs truncate" title={cc.label}>
+                              <span className="text-white font-extrabold text-xs truncate" title={cc.label}>
                                 {desc}
                               </span>
                             </div>
                             <div className="flex items-center gap-2 shrink-0 ml-2">
                               {cc.budget > 0 ? (
-                                <span className={`text-[10px] font-mono font-bold ${textColor}`}>
+                                <span className={`text-[11px] font-mono ${textColor}`}>
                                   {pctFormatted}
                                 </span>
                               ) : cc.total > 0 ? (
-                                <Badge className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[8px] font-bold py-0 h-4 shrink-0">
+                                <Badge className="bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[8px] font-extrabold py-0 h-4 shrink-0">
                                   Estouro
                                 </Badge>
                               ) : null}
-                              <span className="text-[10px] text-white/30 shrink-0 font-mono">{cc.count}x</span>
+                              <span className="text-[10px] text-white/65 shrink-0 font-mono font-semibold">{cc.count}x</span>
                             </div>
                           </div>
 
@@ -2452,16 +2455,16 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                           
                           <div className="grid grid-cols-3 gap-2 text-[10px] text-center font-mono">
                             <div className="bg-white/5 rounded px-2 py-1 text-left border border-white/[0.02]">
-                              <span className="text-white/45 block text-[8px] uppercase tracking-wider font-semibold">Orçado</span>
-                              <span className="text-blue-300 font-bold">{fmt(cc.budget)}</span>
+                              <span className="text-white/75 block text-[8px] uppercase tracking-wider font-extrabold">Orçado</span>
+                              <span className="text-blue-200 font-extrabold text-xs">{fmt(cc.budget)}</span>
                             </div>
                             <div className="bg-white/5 rounded px-2 py-1 text-left border border-white/[0.02]">
-                              <span className="text-white/45 block text-[8px] uppercase tracking-wider font-semibold">Realizado</span>
-                              <span className="text-[#10b981] font-bold">{fmt(cc.total)}</span>
+                              <span className="text-white/75 block text-[8px] uppercase tracking-wider font-extrabold">Realizado</span>
+                              <span className="text-emerald-300 font-extrabold text-xs">{fmt(cc.total)}</span>
                             </div>
                             <div className="bg-white/5 rounded px-2 py-1 text-left border border-white/[0.02]">
-                              <span className="text-white/45 block text-[8px] uppercase tracking-wider font-semibold">Saldo</span>
-                              <span className={`font-bold ${cc.balance < 0 ? 'text-rose-400' : 'text-amber-300'}`}>
+                              <span className="text-white/75 block text-[8px] uppercase tracking-wider font-extrabold">Saldo</span>
+                              <span className={`font-extrabold text-xs ${cc.balance < 0 ? 'text-rose-300' : 'text-amber-200'}`}>
                                 {fmt(cc.balance)}
                               </span>
                             </div>
