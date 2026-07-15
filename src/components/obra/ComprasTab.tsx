@@ -25,6 +25,19 @@ import * as pdfjs from 'pdfjs-dist';
 import GerarLivroFiscalDialog from './GerarLivroFiscalDialog';
 import { getBuddyLogo } from '@/lib/pdf';
 import ImportXmlComprasDialog from './ImportXmlComprasDialog';
+import { 
+  ResponsiveContainer, 
+  BarChart as ReBarChart, 
+  Bar as ReBar, 
+  XAxis as ReXAxis, 
+  YAxis as ReYAxis, 
+  Tooltip as ReTooltip, 
+  Legend as ReLegend,
+  PieChart as RePieChart, 
+  Pie as RePie, 
+  Cell as ReCell,
+  CartesianGrid as ReCartesianGrid
+} from 'recharts';
 
 pdfjs.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
@@ -925,6 +938,51 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       ccTotals: totals
     };
   }, [processed, ccBudgets]);
+
+  const barChartData = useMemo(() => {
+    return ccTotals
+      .filter(cc => cc.budget > 0 || cc.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 7)
+      .map(cc => {
+        const match = cc.label.match(/^(\d+)\.\s*(.*)/);
+        const desc = match ? match[2] : cc.label;
+        return {
+          name: desc.substring(0, 15) + (desc.length > 15 ? '..' : ''),
+          'Orçado': cc.budget,
+          'Realizado': cc.total
+        };
+      });
+  }, [ccTotals]);
+
+  const donutChartData = useMemo(() => {
+    return TIPO_OPTIONS.map(t => {
+      const items = processed.filter((c: any) => c.tipo_solicitacao === t.value);
+      const value = items.reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
+      return {
+        name: t.label,
+        value
+      };
+    }).filter(d => d.value > 0);
+  }, [processed]);
+
+  const DONUT_COLORS = ['#10b981', '#a855f7', '#3b82f6', '#f59e0b', '#71717a'];
+
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-[#161f30] border border-white/10 p-3 rounded-xl shadow-xl text-xs space-y-1">
+          <p className="font-bold text-white/95">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} style={{ color: entry.color }} className="font-mono font-medium">
+              {entry.name}: {fmt(entry.value)}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
 
   const fornecedoresListWithStats = useMemo(() => {
     const map = new Map<string, { nome: string; cnpj: string; comprasCount: number; valorLiquido: number }>();
@@ -2103,45 +2161,131 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         <div className="space-y-6">
           {/* Summary Cards */}
           <div className="grid sm:grid-cols-3 gap-6">
-            <Card className="bg-[#0e1629] border-white/5 text-white shadow-sm">
+            <Card className="bg-gradient-to-br from-[#0e1629] to-[#121c35] border-white/5 text-white shadow-md hover:scale-[1.01] transition-all duration-300 group hover:shadow-[0_0_15px_-3px_rgba(59,130,246,0.15)]">
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1.5 min-w-0">
                   <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold truncate">Orçamento Total da Obra</p>
-                  <h3 className="text-xl font-display font-bold text-blue-300 truncate">{fmt(totalOrcado)}</h3>
+                  <h3 className="text-xl font-display font-bold text-blue-300 truncate group-hover:text-blue-200 transition-colors">{fmt(totalOrcado)}</h3>
                   <p className="text-xs text-white/50 truncate">Soma de todos os centros de custo</p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0 ml-2">
+                <div className="h-10 w-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 shrink-0 ml-2 group-hover:bg-blue-500/20 transition-colors">
                   <DollarSign className="h-5 w-5 text-blue-400" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-[#0e1629] border-white/5 text-white shadow-sm">
+            <Card className="bg-gradient-to-br from-[#0e1629] to-[#11242c] border-white/5 text-white shadow-md hover:scale-[1.01] transition-all duration-300 group hover:shadow-[0_0_15px_-3px_rgba(16,185,129,0.15)]">
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1.5 min-w-0">
                   <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold truncate">Total Realizado</p>
-                  <h3 className="text-xl font-display font-bold text-[#10b981] truncate">{fmt(totalRealizado)}</h3>
+                  <h3 className="text-xl font-display font-bold text-[#10b981] truncate group-hover:text-emerald-400 transition-colors">{fmt(totalRealizado)}</h3>
                   <p className="text-xs text-white/50 truncate">Total pago em lançamentos</p>
                 </div>
-                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0 ml-2">
+                <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shrink-0 ml-2 group-hover:bg-emerald-500/20 transition-colors">
                   <TrendingUp className="h-5 w-5 text-[#10b981]" />
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="bg-[#0e1629] border-white/5 text-white shadow-sm">
+            <Card className={`bg-gradient-to-br border-white/5 text-white shadow-md hover:scale-[1.01] transition-all duration-300 group ${
+              totalSaldo < 0 
+                ? 'from-[#0e1629] to-[#25121c] hover:shadow-[0_0_15px_-3px_rgba(244,63,94,0.15)]' 
+                : 'from-[#0e1629] to-[#251e12] hover:shadow-[0_0_15px_-3px_rgba(245,158,11,0.15)]'
+            }`}>
               <CardContent className="p-5 flex items-center justify-between">
                 <div className="space-y-1.5 min-w-0">
                   <p className="text-white/40 text-[9px] uppercase tracking-[0.2em] font-bold truncate">Saldo Geral</p>
-                  <h3 className={`text-xl font-display font-bold truncate ${totalSaldo < 0 ? 'text-rose-400' : 'text-amber-300'}`}>
+                  <h3 className={`text-xl font-display font-bold truncate transition-colors ${
+                    totalSaldo < 0 ? 'text-rose-400 group-hover:text-rose-300' : 'text-amber-300 group-hover:text-amber-200'
+                  }`}>
                     {fmt(totalSaldo)}
                   </h3>
                   <p className="text-xs text-white/50 truncate">Orçamento restante</p>
                 </div>
-                <div className={`h-10 w-10 rounded-xl flex items-center justify-center border shrink-0 ml-2 ${
-                  totalSaldo < 0 ? 'bg-rose-500/10 border-rose-500/25 text-rose-400' : 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center border shrink-0 ml-2 transition-colors ${
+                  totalSaldo < 0 
+                    ? 'bg-rose-500/10 border-rose-500/25 text-rose-400 group-hover:bg-rose-500/20' 
+                    : 'bg-amber-500/10 border-amber-500/25 text-amber-400 group-hover:bg-amber-500/20'
                 }`}>
                   <BarChart3 className="h-5 w-5" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Charts Row */}
+          <div className="grid lg:grid-cols-2 gap-6">
+            {/* Bar Chart: Orçado vs Realizado */}
+            <Card className="bg-[#0e1629] border-white/5 shadow-md">
+              <CardContent className="p-5">
+                <div className="mb-4">
+                  <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold">Orçado vs Realizado (Top 7 Centros)</p>
+                  <p className="text-[10px] text-white/50">Comparativo das maiores despesas por centro de custo</p>
+                </div>
+                <div className="h-[250px] w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <ReBarChart data={barChartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                      <ReCartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" />
+                      <ReXAxis dataKey="name" stroke="rgba(255,255,255,0.3)" fontSize={9} tickLine={false} />
+                      <ReYAxis stroke="rgba(255,255,255,0.3)" fontSize={9} tickLine={false} tickFormatter={(v) => `R$ ${v >= 1000000 ? (v/1000000).toFixed(1) + 'M' : v >= 1000 ? (v/1000).toFixed(0) + 'k' : v}`} />
+                      <ReTooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(255,255,255,0.02)' }} />
+                      <ReLegend wrapperStyle={{ fontSize: 9, paddingTop: 10 }} />
+                      <ReBar dataKey="Orçado" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                      <ReBar dataKey="Realizado" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    </ReBarChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Donut Chart: Distribuição por Tipo */}
+            <Card className="bg-[#0e1629] border-white/5 shadow-md">
+              <CardContent className="p-5">
+                <div className="mb-4">
+                  <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold">Distribuição por Tipo de Despesa</p>
+                  <p className="text-[10px] text-white/50">Percentual de despesa por categoria de insumo</p>
+                </div>
+                <div className="h-[250px] flex items-center justify-center relative">
+                  {donutChartData.length === 0 ? (
+                    <p className="text-xs text-white/40 text-center py-12">Nenhum lançamento encontrado</p>
+                  ) : (
+                    <>
+                      <div className="h-full w-[60%] shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RePieChart>
+                            <RePie
+                              data={donutChartData}
+                              innerRadius={65}
+                              outerRadius={85}
+                              paddingAngle={3}
+                              dataKey="value"
+                            >
+                              {donutChartData.map((entry, index) => (
+                                <ReCell key={`cell-${index}`} fill={DONUT_COLORS[index % DONUT_COLORS.length]} />
+                              ))}
+                            </RePie>
+                            <ReTooltip formatter={(value: number) => fmt(value)} contentStyle={{ backgroundColor: '#161f30', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontFamily: 'monospace' }} />
+                          </RePieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      {/* Custom Legend */}
+                      <div className="flex-1 space-y-2.5 text-xs pl-2 pr-1 max-h-[230px] overflow-y-auto">
+                        {donutChartData.map((d, index) => {
+                          const totalVal = donutChartData.reduce((s, x) => s + x.value, 0);
+                          const pct = ((d.value / totalVal) * 100).toFixed(1);
+                          return (
+                            <div key={d.name} className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: DONUT_COLORS[index % DONUT_COLORS.length] }} />
+                              <div className="min-w-0 flex-1">
+                                <p className="text-white/80 font-semibold truncate leading-tight text-[11px]">{d.name}</p>
+                                <p className="text-[10px] text-white/40 font-mono">{pct}% ({fmt(d.value)})</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -2151,15 +2295,29 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
             <Card className="bg-[#0e1629] border-white/5">
               <CardContent className="p-5">
                 <p className="text-[9px] uppercase tracking-[.2em] text-white/30 font-bold mb-4">Totais por Tipo</p>
-                <div className="space-y-2">
+                <div className="space-y-4">
                   {TIPO_OPTIONS.map(t=>{
                     const items=processed.filter((c:any)=>c.tipo_solicitacao===t.value);
                     const total=items.reduce((s:number,c:any)=>s+(c.valor_pago||0),0);
+                    const totalVal = TIPO_OPTIONS.reduce((acc, opt) => {
+                      const optItems = processed.filter((c:any)=>c.tipo_solicitacao===opt.value);
+                      return acc + optItems.reduce((s:number,c:any)=>s+(c.valor_pago||0), 0);
+                    }, 0);
+                    const pct = totalVal > 0 ? (total / totalVal) * 100 : 0;
+
                     return(
-                      <div key={t.value} className="flex items-center gap-3 py-2 border-b border-white/5">
-                        <Badge className={`text-[9px] font-bold uppercase border ${TIPO_BADGE[t.value]||TIPO_BADGE['Outros']}`}>{t.label}</Badge>
-                        <span className="ml-auto font-mono font-bold text-white/80 text-sm">{fmt(total)}</span>
-                        <span className="text-[10px] text-white/30">{items.length}x</span>
+                      <div key={t.value} className="space-y-1.5 py-1">
+                        <div className="flex items-center gap-3">
+                          <Badge className={`text-[9px] font-bold uppercase border ${TIPO_BADGE[t.value]||TIPO_BADGE['Outros']}`}>{t.label}</Badge>
+                          <span className="ml-auto font-mono font-bold text-white/85 text-sm">{fmt(total)}</span>
+                          <span className="text-[10px] text-white/35 font-mono">{pct.toFixed(0)}%</span>
+                          <span className="text-[10px] text-white/30 shrink-0 font-mono">({items.length}x)</span>
+                        </div>
+                        {total > 0 && (
+                          <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                            <div className="h-full bg-primary rounded-full" style={{ width: `${pct}%` }} />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2179,7 +2337,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                     <Settings className="h-3 w-3 mr-1" /> Editar Orçados
                   </Button>
                 </div>
-                <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-[460px] overflow-y-auto pr-1">
                   {(() => {
                     const ccTotalsToShow = ccTotals
                       .filter(cc => cc.budget > 0 || cc.total > 0)
@@ -2196,31 +2354,76 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                       const code = match ? match[1].padStart(2, '0') : String(cc.value).padStart(2, '0');
                       const desc = match ? match[2] : cc.label;
 
+                      // Calculate usage percentage
+                      const pct = cc.budget > 0 ? (cc.total / cc.budget) * 100 : 0;
+                      const pctFormatted = pct > 1000 ? '>999%' : `${pct.toFixed(0)}%`;
+                      
+                      // Select indicator color
+                      let barColor = 'bg-blue-500';
+                      let textColor = 'text-blue-300';
+                      if (cc.budget > 0) {
+                        if (pct <= 80) {
+                          barColor = 'bg-emerald-500';
+                          textColor = 'text-emerald-400';
+                        } else if (pct <= 100) {
+                          barColor = 'bg-amber-500';
+                          textColor = 'text-amber-400';
+                        } else {
+                          barColor = 'bg-rose-500 animate-pulse';
+                          textColor = 'text-rose-400 font-extrabold';
+                        }
+                      } else if (cc.total > 0) {
+                        // No budget but spent money (like CC 31)
+                        barColor = 'bg-rose-600 animate-pulse';
+                        textColor = 'text-rose-400 font-extrabold';
+                      }
+
                       return (
-                        <div key={cc.value} className="py-2.5 border-b border-white/5 space-y-1.5 min-w-0">
+                        <div key={cc.value} className="py-3 border-b border-white/5 space-y-2 min-w-0 hover:bg-white/[0.01] px-1.5 rounded-lg transition-colors">
                           <div className="flex items-center justify-between min-w-0">
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               <Badge variant="secondary" className="bg-white/5 text-white/60 border-white/10 text-[9px] shrink-0">
                                 CC {code}
                               </Badge>
-                              <span className="text-white/80 font-semibold text-xs truncate" title={cc.label}>
+                              <span className="text-white/80 font-bold text-xs truncate" title={cc.label}>
                                 {desc}
                               </span>
                             </div>
-                            <span className="text-[10px] text-white/30 shrink-0 ml-2">{cc.count}x</span>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              {cc.budget > 0 ? (
+                                <span className={`text-[10px] font-mono font-bold ${textColor}`}>
+                                  {pctFormatted}
+                                </span>
+                              ) : cc.total > 0 ? (
+                                <Badge className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-[8px] font-bold py-0 h-4 shrink-0">
+                                  Estouro
+                                </Badge>
+                              ) : null}
+                              <span className="text-[10px] text-white/30 shrink-0 font-mono">{cc.count}x</span>
+                            </div>
                           </div>
+
+                          {/* Progress Bar */}
+                          {(cc.budget > 0 || cc.total > 0) && (
+                            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full transition-all duration-500 ${barColor}`} 
+                                style={{ width: `${Math.min(pct || (cc.total > 0 ? 100 : 0), 100)}%` }}
+                              />
+                            </div>
+                          )}
                           
                           <div className="grid grid-cols-3 gap-2 text-[10px] text-center font-mono">
-                            <div className="bg-white/5 rounded px-2 py-1 text-left">
-                              <span className="text-white/40 block text-[8px] uppercase tracking-wider">Orçado</span>
+                            <div className="bg-white/5 rounded px-2 py-1 text-left border border-white/[0.02]">
+                              <span className="text-white/45 block text-[8px] uppercase tracking-wider font-semibold">Orçado</span>
                               <span className="text-blue-300 font-bold">{fmt(cc.budget)}</span>
                             </div>
-                            <div className="bg-white/5 rounded px-2 py-1 text-left">
-                              <span className="text-white/40 block text-[8px] uppercase tracking-wider">Realizado</span>
+                            <div className="bg-white/5 rounded px-2 py-1 text-left border border-white/[0.02]">
+                              <span className="text-white/45 block text-[8px] uppercase tracking-wider font-semibold">Realizado</span>
                               <span className="text-[#10b981] font-bold">{fmt(cc.total)}</span>
                             </div>
-                            <div className="bg-white/5 rounded px-2 py-1 text-left">
-                              <span className="text-white/40 block text-[8px] uppercase tracking-wider">Saldo</span>
+                            <div className="bg-white/5 rounded px-2 py-1 text-left border border-white/[0.02]">
+                              <span className="text-white/45 block text-[8px] uppercase tracking-wider font-semibold">Saldo</span>
                               <span className={`font-bold ${cc.balance < 0 ? 'text-rose-400' : 'text-amber-300'}`}>
                                 {fmt(cc.balance)}
                               </span>
