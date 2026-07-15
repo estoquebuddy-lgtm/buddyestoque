@@ -271,37 +271,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     }
   }, [obraId]);
 
-  const { totalOrcado, totalRealizado, totalSaldo, ccTotals } = useMemo(() => {
-    let totalOrc = 0;
-    let totalReal = 0;
 
-    const totals = CENTROS_CUSTO.map(cc => {
-      const budget = ccBudgets[cc.value] ?? 0;
-      totalOrc += budget;
-
-      const items = processed.filter((c: any) => {
-        const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
-        return ccVal === cc.value;
-      });
-      const total = items.reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
-      totalReal += total;
-
-      return {
-        ...cc,
-        budget,
-        total,
-        balance: budget - total,
-        count: items.length
-      };
-    });
-
-    return {
-      totalOrcado: totalOrc,
-      totalRealizado: totalReal,
-      totalSaldo: totalOrc - totalReal,
-      ccTotals: totals
-    };
-  }, [processed, ccBudgets]);
 
   useEffect(() => {
     setLimit(50);
@@ -916,6 +886,38 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     });
     return r;
     },[compras,activeTab,selectedMonth,selectedTipo,selectedNfFilter,search,sortBy,sortDir,startDate,endDate]);
+
+  const { totalOrcado, totalRealizado, totalSaldo, ccTotals } = useMemo(() => {
+    let totalOrc = 0;
+    let totalReal = 0;
+
+    const totals = CENTROS_CUSTO.map(cc => {
+      const budget = ccBudgets[cc.value] ?? 0;
+      totalOrc += budget;
+
+      const items = processed.filter((c: any) => {
+        const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
+        return ccVal === cc.value;
+      });
+      const total = items.reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
+      totalReal += total;
+
+      return {
+        ...cc,
+        budget,
+        total,
+        balance: budget - total,
+        count: items.length
+      };
+    });
+
+    return {
+      totalOrcado: totalOrc,
+      totalRealizado: totalReal,
+      totalSaldo: totalOrc - totalReal,
+      ccTotals: totals
+    };
+  }, [processed, ccBudgets]);
 
   const fornecedoresListWithStats = useMemo(() => {
     const map = new Map<string, { nome: string; cnpj: string; comprasCount: number; valorLiquido: number }>();
