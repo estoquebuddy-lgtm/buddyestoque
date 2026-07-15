@@ -921,7 +921,9 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         return ccVal === cc.value;
       });
       const total = items.reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
-      totalReal += total;
+      if (cc.value !== 31) {
+        totalReal += total;
+      }
 
       return {
         ...cc,
