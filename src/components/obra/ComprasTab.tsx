@@ -118,7 +118,45 @@ export const ccLabel = (n?: number | null) => {
   const num = (!n || n === 0) ? 31 : n;
   return CENTROS_CUSTO.find(c => c.value === num)?.label || '31. NÃO PREVISTO EM ORÇAMENTO';
 };
+export interface CostCenterSplit {
+  ccId: number;
+  pct: number;
+}
 
+export function parseRateio(obs: string | null): CostCenterSplit[] {
+  if (!obs) return [];
+  const match = obs.match(/\[RATEIO:\s*(\{[\s\S]*?\})\]/);
+  if (match) {
+    try {
+      const obj = JSON.parse(match[1]);
+      return Object.entries(obj).map(([k, v]) => ({
+        ccId: Number(k),
+        pct: Number(v)
+      }));
+    } catch (e) {
+      console.error("Failed to parse rateio JSON", e);
+    }
+  }
+  return [];
+}
+
+export function cleanObs(obs: string | null): string {
+  if (!obs) return '';
+  return obs.replace(/\[RATEIO:\s*\{[\s\S]*?\}\]/g, '').trim();
+}
+
+export function encodeRateio(obs: string, splits: CostCenterSplit[]): string {
+  const baseObs = cleanObs(obs);
+  if (!splits || splits.length === 0) return baseObs;
+  const obj: Record<number, number> = {};
+  splits.forEach(s => {
+    if (s.pct > 0) {
+      obj[s.ccId] = s.pct;
+    }
+  });
+  if (Object.keys(obj).length === 0) return baseObs;
+  return `${baseObs} [RATEIO: ${JSON.stringify(obj)}]`.trim();
+}
 
 // ── Row conciliation state ────────────────────────────────────────────────────
 function getConf(c: any): 'ok' | 'warn' | 'missing' | 'estornado' {
@@ -417,6 +455,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     centro_custo: '', cc_desc: 'Não previsto em orçamento',
     qtd_parcelas: 1,
     parcelas: [{ parcela: '1/1', data_envio: '', valor_solicitado: '', valor_pago: '', valor_estornado: '', data_pagamento: '', estornado: false }],
+    ccSplits: [] as CostCenterSplit[],
   });
   const [form, setForm] = useState(emptyForm());
 
@@ -874,7 +913,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       r = r.filter((c: any) => {
         const matchText = normal(c.email_titulo || '').includes(t) ||
           normal(c.fornecedor_nome || '').includes(t) ||
-          normal(c.obs || '').includes(t);
+          normal(cleanObs(c.obs) || '').includes(t);
         
         const matchValues = normal(fmt(c.valor_solicitado)).includes(t) ||
           String(c.valor_solicitado || '').includes(t) ||
@@ -912,15 +951,39 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     let totalOrc = 0;
     let totalReal = 0;
 
+    const ccRealized = new Map<number, number>();
+    const ccCount = new Map<number, number>();
+
+    CENTROS_CUSTO.forEach(cc => {
+      ccRealized.set(cc.value, 0);
+      ccCount.set(cc.value, 0);
+    });
+
+    processed.forEach((c: any) => {
+      if (c.estornado) return;
+      const parsedSplits = parseRateio(c.obs);
+      const valor = c.valor_pago || 0;
+
+      if (parsedSplits.length > 0) {
+        parsedSplits.forEach(split => {
+          const splitVal = valor * (split.pct / 100);
+          ccRealized.set(split.ccId, (ccRealized.get(split.ccId) || 0) + splitVal);
+          ccCount.set(split.ccId, (ccCount.get(split.ccId) || 0) + 1);
+        });
+      } else {
+        const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
+        ccRealized.set(ccVal, (ccRealized.get(ccVal) || 0) + valor);
+        ccCount.set(ccVal, (ccCount.get(ccVal) || 0) + 1);
+      }
+    });
+
     const totals = CENTROS_CUSTO.map(cc => {
       const budget = ccBudgets[cc.value] ?? 0;
       totalOrc += budget;
 
-      const items = processed.filter((c: any) => {
-        const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
-        return ccVal === cc.value;
-      });
-      const total = items.reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
+      const total = ccRealized.get(cc.value) || 0;
+      const count = ccCount.get(cc.value) || 0;
+
       if (cc.value !== 31) {
         totalReal += total;
       }
@@ -930,7 +993,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         budget,
         total,
         balance: budget - total,
-        count: items.length
+        count
       };
     });
 
@@ -1236,17 +1299,53 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
 
   // Submit
   const handleCreate = () => {
+    if (form.ccSplits && form.ccSplits.length > 0) {
+      const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+      if (Math.abs(sum - 100) > 0.01) {
+        toast.error('A soma das porcentagens do rateio deve ser exatamente 100%');
+        return;
+      }
+    }
+
     let ccInt = form.centro_custo ? parseInt(form.centro_custo) : null;
     if (ccInt === 0) ccInt = 31;
-    const base={obra_id:obraId,status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,fornecedor_dados:form.fornecedor_dados||null,conta:form.conta||null,centro_custo:ccInt,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null};
+
+    let finalCc = ccInt;
+    let finalCcDesc = form.cc_desc || null;
+    if (form.ccSplits && form.ccSplits.length > 0) {
+      finalCc = form.ccSplits[0].ccId;
+      const matched = CENTROS_CUSTO.find(cc => cc.value === finalCc);
+      finalCcDesc = matched ? matched.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento';
+    }
+
+    const obsEncoded = encodeRateio(form.obs || '', form.ccSplits || []);
+    const base={obra_id:obraId,status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,fornecedor_dados:form.fornecedor_dados||null,conta:form.conta||null,centro_custo:finalCc,cc_desc:finalCcDesc,tipo_solicitacao:form.tipo_solicitacao,obs:obsEncoded||null};
     createMut.mutate(form.parcelas.map((p:any)=>({...base,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,valor_estornado:p.valor_estornado?parseFloat(p.valor_estornado):0,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false})));
   };
   const handleEdit = () => {
     if(!selectedCompra)return;
+    if (form.ccSplits && form.ccSplits.length > 0) {
+      const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+      if (Math.abs(sum - 100) > 0.01) {
+        toast.error('A soma das porcentagens do rateio deve ser exatamente 100%');
+        return;
+      }
+    }
+
     const p=form.parcelas[0]||{};
     let ccInt = form.centro_custo ? parseInt(form.centro_custo) : null;
     if (ccInt === 0) ccInt = 31;
-    updateMut.mutate({id:selectedCompra.id,fields:{status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,conta:form.conta||null,centro_custo:ccInt,cc_desc:form.cc_desc||null,tipo_solicitacao:form.tipo_solicitacao,obs:form.obs||null,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,valor_estornado:p.valor_estornado?parseFloat(p.valor_estornado):0,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false}});
+
+    let finalCc = ccInt;
+    let finalCcDesc = form.cc_desc || null;
+    if (form.ccSplits && form.ccSplits.length > 0) {
+      finalCc = form.ccSplits[0].ccId;
+      const matched = CENTROS_CUSTO.find(cc => cc.value === finalCc);
+      finalCcDesc = matched ? matched.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento';
+    }
+
+    const obsEncoded = encodeRateio(form.obs || '', form.ccSplits || []);
+    updateMut.mutate({id:selectedCompra.id,fields:{status:form.status,email_titulo:form.email_titulo||null,email_link:form.email_link||null,fornecedor_nome:form.fornecedor_nome||null,fornecedor_cnpj:form.fornecedor_cnpj||null,conta:form.conta||null,centro_custo:finalCc,cc_desc:finalCcDesc,tipo_solicitacao:form.tipo_solicitacao,obs:obsEncoded||null,parcela:p.parcela||null,data_envio:p.data_envio||null,valor_solicitado:p.valor_solicitado?parseFloat(p.valor_solicitado):null,valor_pago:p.valor_pago?parseFloat(p.valor_pago):null,valor_estornado:p.valor_estornado?parseFloat(p.valor_estornado):0,data_pagamento:p.data_pagamento||null,estornado:p.estornado||false}});
   };
   const openEdit = (c:any) => {
     setSelectedCompra(c);
@@ -1254,7 +1353,10 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     const exists = c.fornecedor_nome && fornecedoresUnicos.some((f: any) => f.nome.toLowerCase() === c.fornecedor_nome.trim().toLowerCase());
     setFornecedorSelect(exists ? fornecedoresUnicos.find((f: any) => f.nome.toLowerCase() === c.fornecedor_nome.trim().toLowerCase()).nome : '__new__');
     setFornecedorSearchInput(c.fornecedor_nome || '');
-    setForm({...emptyForm(),status:c.status,email_titulo:c.email_titulo||'',email_link:c.email_link||'',fornecedor_nome:c.fornecedor_nome||'',fornecedor_cnpj:c.fornecedor_cnpj||'',fornecedor_dados:c.fornecedor_dados||'',conta:c.conta||'',centro_custo:ccVal,cc_desc:c.cc_desc||'',obs:c.obs||'',tipo_solicitacao:c.tipo_solicitacao||'Materiais',qtd_parcelas:1,parcelas:[{parcela:c.parcela||'1/1',data_envio:c.data_envio||'',valor_solicitado:c.valor_solicitado?.toString()||'',valor_pago:c.valor_pago?.toString()||'',valor_estornado:c.valor_estornado?.toString()||'',data_pagamento:c.data_pagamento||'',estornado:c.estornado||false}]});
+    
+    const parsedSplits = parseRateio(c.obs);
+    const cleanedObservation = cleanObs(c.obs);
+    setForm({...emptyForm(),status:c.status,email_titulo:c.email_titulo||'',email_link:c.email_link||'',fornecedor_nome:c.fornecedor_nome||'',fornecedor_cnpj:c.fornecedor_cnpj||'',fornecedor_dados:c.fornecedor_dados||'',conta:c.conta||'',centro_custo:ccVal,cc_desc:c.cc_desc||'',obs:cleanedObservation,ccSplits:parsedSplits,tipo_solicitacao:c.tipo_solicitacao||'Materiais',qtd_parcelas:1,parcelas:[{parcela:c.parcela||'1/1',data_envio:c.data_envio||'',valor_solicitado:c.valor_solicitado?.toString()||'',valor_pago:c.valor_pago?.toString()||'',valor_estornado:c.valor_estornado?.toString()||'',data_pagamento:c.data_pagamento||'',estornado:c.estornado||false}]});
     setIsEditOpen(true);
   };
 
@@ -1553,12 +1655,24 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
         'Valor Estornado': valEst,
         'Líquido (Pago-Est.)': valPago - valEst,
         'Data Pagamento':  fmtDate(c.data_pagamento),
-        'Centro Custo':    ccLabel(c.centro_custo),
-        'Desc CC':         c.cc_desc||'',
+        'Centro Custo':    (() => {
+          const splits = parseRateio(c.obs);
+          if (splits.length > 0) {
+            return splits.map(s => `${ccLabel(s.ccId)} (${s.pct}%)`).join(', ');
+          }
+          return ccLabel(c.centro_custo);
+        })(),
+        'Desc CC':         (() => {
+          const splits = parseRateio(c.obs);
+          if (splits.length > 0) {
+            return splits.map(s => `${ccLabel(s.ccId).replace(/^\d+\.\s*/, '')} (${s.pct}%)`).join(', ');
+          }
+          return c.cc_desc||'';
+        })(),
         'Tipo':            c.tipo_solicitacao||'',
         'NFs':             (c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),
         'Total NF':        (c.compras_nfs||[]).reduce((s:number,n:any)=>s+(n.valor_nf||0),0),
-        'Obs':             c.obs||'',
+        'Obs':             cleanObs(c.obs),
       };
     });
     const ws=XLSX.utils.json_to_sheet(data);
@@ -1597,7 +1711,14 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
       body:processed.map((c:any,i:number)=>{
         const valPago=c.valor_pago||0;
         const valEst=c.valor_estornado||0;
-        return [i+1,c.status,c.parcela||'',fmtDate(c.data_envio),fmt(c.valor_solicitado),c.email_titulo||'',c.fornecedor_nome||'',fmt(valPago),valEst>0?fmt(valEst):'—',fmt(valPago-valEst),fmtDate(c.data_pagamento),ccLabel(c.centro_custo),c.tipo_solicitacao||'',(c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),c.obs||''];
+        const ccVal = (() => {
+          const splits = parseRateio(c.obs);
+          if (splits.length > 0) {
+            return splits.map(s => `${ccLabel(s.ccId).replace(/^\d+\.\s*/, '')} (${s.pct}%)`).join(', ');
+          }
+          return ccLabel(c.centro_custo);
+        })();
+        return [i+1,c.status,c.parcela||'',fmtDate(c.data_envio),fmt(c.valor_solicitado),c.email_titulo||'',c.fornecedor_nome||'',fmt(valPago),valEst>0?fmt(valEst):'—',fmt(valPago-valEst),fmtDate(c.data_pagamento),ccVal,c.tipo_solicitacao||'',(c.compras_nfs||[]).map((n:any)=>n.livro_numero||'S/N').join(', '),cleanObs(c.obs)];
       }),
       styles:{fontSize:7,cellPadding:1.5},
       headStyles:{fillColor:[14,22,41]},
@@ -1970,11 +2091,36 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                               📎 NFs
                             </Button>
                           </td>
-                          <td className="px-3 py-2.5 max-w-[180px]">
-                            <p className="font-semibold text-white/70 truncate" title={ccLabel(c.centro_custo)}>{ccLabel(c.centro_custo)}</p>
-                            {c.cc_desc && c.cc_desc !== ccLabel(c.centro_custo).replace(/^\d+\.\s*/, '') && (
-                              <p className="text-[9px] text-white/60 truncate" title={c.cc_desc}>{c.cc_desc}</p>
-                            )}
+                          <td className="px-3 py-2.5 max-w-[180px] text-xs">
+                            {(() => {
+                              const splits = parseRateio(c.obs);
+                              if (splits.length > 0) {
+                                return (
+                                  <div className="flex flex-col gap-0.5 max-h-16 overflow-y-auto pr-1">
+                                    {splits.map(s => {
+                                      const label = ccLabel(s.ccId);
+                                      const match = label.match(/^(\d+)\.\s*(.*)/);
+                                      const code = match ? match[1].padStart(2, '0') : String(s.ccId).padStart(2, '0');
+                                      const name = match ? match[2] : label;
+                                      return (
+                                        <div key={s.ccId} className="flex items-center justify-between gap-1 text-[9px] text-white/80 bg-white/5 px-1 rounded border border-white/5">
+                                          <span className="truncate max-w-[100px] font-bold" title={label}>{code}. {name}</span>
+                                          <span className="font-mono font-bold text-primary shrink-0">{s.pct}%</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <>
+                                  <p className="font-semibold text-white/70 truncate" title={ccLabel(c.centro_custo)}>{ccLabel(c.centro_custo)}</p>
+                                  {c.cc_desc && c.cc_desc !== ccLabel(c.centro_custo).replace(/^\d+\.\s*/, '') && (
+                                    <p className="text-[9px] text-white/60 truncate" title={c.cc_desc}>{c.cc_desc}</p>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-2.5 whitespace-nowrap">
                             <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-emerald-400 hover:bg-emerald-400/10" onClick={()=>{setSelectedCompra(c);setXmlOpen(true);}} title="Entrar em estoque"><Boxes className="h-3.5 w-3.5"/></Button>
@@ -2787,27 +2933,166 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Conta / Banco</Label>
               <Input value={form.conta} onChange={e=>setForm(f=>({...f,conta:e.target.value}))} placeholder="Ag. / Conta / Banco" className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10"/>
             </div>
-            <div className="space-y-1">
-              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Centro de Custo</Label>
-              <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
-                const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(val));
-                setForm(f => ({
-                  ...f,
-                  centro_custo: val,
-                  cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento'
-                }));
-              }}>
-                <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
-                  <SelectValue placeholder="Selecione um Centro de Custo" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px] bg-[#0e1629] border-white/10 text-white">
-                  {CENTROS_CUSTO.map(cc => (
-                    <SelectItem key={cc.value} value={cc.value.toString()} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
-                      {cc.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="col-span-2 border border-white/5 bg-white/[0.02] p-4 rounded-2xl space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-[10px] uppercase tracking-wider text-white/50 font-bold">Distribuição de Centro de Custo</Label>
+                  <p className="text-[10px] text-white/40">Defina um único centro de custo ou faça o rateio percentual.</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    if (form.ccSplits && form.ccSplits.length > 0) {
+                      const ccVal = form.ccSplits[0]?.ccId.toString() || '';
+                      const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(ccVal));
+                      setForm(f => ({
+                        ...f,
+                        centro_custo: ccVal,
+                        cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento',
+                        ccSplits: []
+                      }));
+                    } else {
+                      const initialCc = form.centro_custo ? parseInt(form.centro_custo) : 1;
+                      setForm(f => ({
+                        ...f,
+                        ccSplits: [{ ccId: initialCc, pct: 100 }]
+                      }));
+                    }
+                  }}
+                  className="h-7 text-[10px] font-bold bg-white/5 border-white/10 hover:bg-white/10 rounded-lg text-white"
+                >
+                  {form.ccSplits && form.ccSplits.length > 0 ? '❌ Cancelar Rateio' : '🥞 Dividir (Rateio)'}
+                </Button>
+              </div>
+
+              {!(form.ccSplits && form.ccSplits.length > 0) ? (
+                <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
+                  const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(val));
+                  setForm(f => ({
+                    ...f,
+                    centro_custo: val,
+                    cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento'
+                  }));
+                }}>
+                  <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
+                    <SelectValue placeholder="Selecione um Centro de Custo" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px] bg-[#0e1629] border-white/10 text-white">
+                    {CENTROS_CUSTO.map(cc => (
+                      <SelectItem key={cc.value} value={cc.value.toString()} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                        {cc.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-2">
+                  {form.ccSplits.map((split, idx) => {
+                    const totalVal = form.parcelas.reduce((s, p) => s + (parseFloat(p.valor_pago || p.valor_solicitado) || 0), 0) || 0;
+                    const splitAmount = totalVal * (split.pct / 100);
+
+                    return (
+                      <div key={idx} className="flex items-center gap-2 bg-[#0e1629] p-2 rounded-xl border border-white/5">
+                        <div className="flex-1 min-w-0">
+                          <Select 
+                            value={split.ccId.toString()} 
+                            onValueChange={val => {
+                              const newSplits = [...form.ccSplits];
+                              newSplits[idx].ccId = parseInt(val);
+                              setForm(f => ({ ...f, ccSplits: newSplits }));
+                            }}
+                          >
+                            <SelectTrigger className="text-xs bg-[#0a1020] border-white/5 text-white h-9">
+                              <SelectValue placeholder="Centro de Custo" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[250px] bg-[#0e1629] border-white/10 text-white">
+                              {CENTROS_CUSTO.map(cc => (
+                                <SelectItem key={cc.value} value={cc.value.toString()} className="text-white cursor-pointer text-xs">
+                                  {cc.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="w-20 shrink-0 relative">
+                          <Input
+                            type="number"
+                            min="0"
+                            max="100"
+                            placeholder="%"
+                            value={split.pct || ''}
+                            onChange={e => {
+                              const pctVal = parseFloat(e.target.value) || 0;
+                              const newSplits = [...form.ccSplits];
+                              newSplits[idx].pct = pctVal;
+                              setForm(f => ({ ...f, ccSplits: newSplits }));
+                            }}
+                            className="text-xs bg-[#0a1020] border-white/5 text-white pr-6 h-9"
+                          />
+                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40">%</span>
+                        </div>
+                        <div className="w-24 shrink-0 text-right pr-2">
+                          <p className="text-[8px] text-white/40 uppercase font-bold tracking-wider leading-none">Valor Rateado</p>
+                          <p className="text-xs text-primary font-mono font-bold">{fmt(splitAmount)}</p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newSplits = form.ccSplits.filter((_, i) => i !== idx);
+                            setForm(f => ({ ...f, ccSplits: newSplits }));
+                          }}
+                          className="h-8 w-8 p-0 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg"
+                        >
+                          ❌
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  
+                  <div className="flex items-center justify-between pt-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+                        const rem = Math.max(100 - sum, 0);
+                        const usedCcIds = form.ccSplits.map(x => x.ccId);
+                        const nextCc = CENTROS_CUSTO.find(cc => !usedCcIds.includes(cc.value))?.value || 1;
+                        setForm(f => ({
+                          ...f,
+                          ccSplits: [...f.ccSplits, { ccId: nextCc, pct: rem }]
+                        }));
+                      }}
+                      className="h-7 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-lg"
+                    >
+                      ➕ Adicionar Centro de Custo
+                    </Button>
+                    
+                    {(() => {
+                      const totalPct = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+                      const isComplete = Math.abs(totalPct - 100) < 0.01;
+                      return (
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold font-mono">
+                          <span className="text-white/45">Total:</span>
+                          <span className={isComplete ? 'text-emerald-400' : 'text-red-400 animate-pulse'}>
+                            {totalPct}%
+                          </span>
+                          {!isComplete && (
+                            <span className="text-[9px] font-sans font-normal text-red-300">
+                              (deve somar 100%)
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="col-span-2 space-y-1">
               <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Observações</Label>

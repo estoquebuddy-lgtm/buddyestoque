@@ -15,11 +15,23 @@ import ImageUpload from '@/components/ImageUpload';
 import { useProfile } from '@/hooks/useProfile';
 import { Badge } from '@/components/ui/badge';
 
+import { CENTROS_CUSTO, ccLabel, CostCenterSplit, parseRateio, cleanObs, encodeRateio } from './ComprasTab';
+
 interface Props { obraId: string; fabOpen?: boolean; onFabClose?: () => void; }
 
-const emptyForm = { produto_id: '', quantidade: '', valor_unitario: '', fornecedor: '', observacao: '', nota_fiscal_url: '', compra_id: '' };
+const emptyForm = { 
+  produto_id: '', 
+  quantidade: '', 
+  valor_unitario: '', 
+  fornecedor: '', 
+  observacao: '', 
+  nota_fiscal_url: '', 
+  compra_id: '',
+  ccSplits: [{ ccId: 31, pct: 100 }] as CostCenterSplit[]
+};
 const emptyNewProduct = { nome: '', unidade: 'un', categoria: '', estoque_minimo: '', foto_url: '', localizacao: '' };
 const emptyNewFerramenta = { nome: '', categoria: 'Ferramentas Elétricas', localizacao: '', codigoPrefixo: '' };
+const fmt = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 interface EntryItem {
   id: string;
@@ -68,7 +80,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         .select(`
           *,
           produtos(nome, unidade),
-          compras(email_titulo),
+          compras(email_titulo, centro_custo, obs),
           comprado_por:profiles!entradas_comprado_por_id_fkey(email, apelido),
           responsavel:profiles!entradas_responsavel_id_fkey(email, apelido)
         `)
@@ -78,7 +90,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         // Fallback query if migration has not been applied yet
         const { data: fallbackData } = await supabase
           .from('entradas')
-          .select('*, produtos(nome, unidade), compras(email_titulo)')
+          .select('*, produtos(nome, unidade), compras(email_titulo, centro_custo, obs)')
           .eq('obra_id', obraId)
           .order('data', { ascending: false });
         return fallbackData || [];
@@ -208,6 +220,14 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
 
+      if (!form.ccSplits || form.ccSplits.length === 0) {
+        throw new Error('Centro de custo é obrigatório');
+      }
+      const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+      if (Math.abs(sum - 100) > 0.01) {
+        throw new Error('A soma das porcentagens do rateio deve ser exatamente 100%');
+      }
+
       if (!form.fornecedor || !form.fornecedor.trim()) {
         throw new Error('Fornecedor é obrigatório');
       }
@@ -264,12 +284,14 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
 
         const prod = safeProdutos.find((p: any) => p.id === produtoId) || { nome: item.newProduct.nome, unidade: item.newProduct.unidade || 'un' };
 
+        const obsEncoded = encodeRateio(form.observacao || '', form.ccSplits || []);
+
         const payload = {
           obra_id: obraId, produto_id: produtoId,
           quantidade: Number(item.quantidade),
           valor_unitario: Number(item.valor_unitario) || 0,
           fornecedor: form.fornecedor.trim(),
-          observacao: form.observacao || null,
+          observacao: obsEncoded || null,
           nota_fiscal_url: form.nota_fiscal_url || null,
           compra_id: form.compra_id || null,
         };
@@ -304,12 +326,19 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     onError: (e: any) => toast.error(e.message),
   });
 
-  // Save entry for FERRAMENTA: creates N individual tools + 1 financial entry (or just updates if editing)
   const saveFerramenta = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
       const quantidade = Number(form.quantidade);
       const valorUnitario = Number(form.valor_unitario) || 0;
+
+      if (!form.ccSplits || form.ccSplits.length === 0) {
+        throw new Error('Centro de custo é obrigatório');
+      }
+      const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+      if (Math.abs(sum - 100) > 0.01) {
+        throw new Error('A soma das porcentagens do rateio deve ser exatamente 100%');
+      }
 
       if (!form.fornecedor || !form.fornecedor.trim()) {
         throw new Error('Fornecedor é obrigatório');
@@ -321,13 +350,15 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         throw new Error('O fornecedor informado não está cadastrado. Cadastre-o na aba de Fornecedores.');
       }
 
+      const obsEncoded = encodeRateio(form.observacao ? `[FERRAMENTA] ${form.observacao}` : '[FERRAMENTA]', form.ccSplits || []);
+
       // ── EDIT MODE: only update the financial entry ──────────────────────
       if (editingId) {
         const payload = {
           quantidade,
           valor_unitario: valorUnitario,
           fornecedor: form.fornecedor.trim(),
-          observacao: form.observacao ? `[FERRAMENTA] ${form.observacao}` : '[FERRAMENTA]',
+          observacao: obsEncoded,
           nota_fiscal_url: form.nota_fiscal_url || null,
           compra_id: form.compra_id || null,
         };
@@ -383,7 +414,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         quantidade: quantidade,
         valor_unitario: valorUnitario,
         fornecedor: form.fornecedor.trim(),
-        observacao: form.observacao ? `[FERRAMENTA] ${form.observacao}` : '[FERRAMENTA]',
+        observacao: obsEncoded,
         nota_fiscal_url: form.nota_fiscal_url || null,
         compra_id: form.compra_id || null,
       });
@@ -631,7 +662,34 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     setEditingId(e.id);
     setEntryType('material');
     setEditingFerramenta(null);
-    setForm({ produto_id: e.produto_id, quantidade: String(e.quantidade), valor_unitario: String(e.valor_unitario || ''), fornecedor: e.fornecedor || '', observacao: e.observacao || '', nota_fiscal_url: e.nota_fiscal_url || '', compra_id: e.compra_id || '' });
+    const parsedSplits = parseRateio(e.observacao);
+    const cleanedObservation = cleanObs(e.observacao);
+    
+    let finalSplits = parsedSplits;
+    if (finalSplits.length === 0) {
+      if (e.compras) {
+        const compraSplits = parseRateio(e.compras.obs);
+        if (compraSplits.length > 0) {
+          finalSplits = compraSplits;
+        } else {
+          const cc = (e.compras.centro_custo && e.compras.centro_custo !== 0) ? e.compras.centro_custo : 31;
+          finalSplits = [{ ccId: cc, pct: 100 }];
+        }
+      } else {
+        finalSplits = [{ ccId: 31, pct: 100 }];
+      }
+    }
+
+    setForm({ 
+      produto_id: e.produto_id, 
+      quantidade: String(e.quantidade), 
+      valor_unitario: String(e.valor_unitario || ''), 
+      fornecedor: e.fornecedor || '', 
+      observacao: cleanedObservation, 
+      nota_fiscal_url: e.nota_fiscal_url || '', 
+      compra_id: e.compra_id || '',
+      ccSplits: finalSplits
+    });
     setIsNewProduct(false);
     setNewProduct(emptyNewProduct);
     setProductSearch('');
@@ -644,7 +702,34 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     setEntryType('ferramenta');
     setEditingFerramenta({ produtoId: e.produto_id, nome: nomeSemTag });
     setNewFerramenta({ nome: nomeSemTag, categoria: 'Ferramentas Elétricas', localizacao: '', codigoPrefixo: '' });
-    setForm({ produto_id: e.produto_id, quantidade: String(e.quantidade), valor_unitario: String(e.valor_unitario || ''), fornecedor: e.fornecedor || '', observacao: e.observacao?.replace('[FERRAMENTA] ', '').replace('[FERRAMENTA]', '').trim() || '', nota_fiscal_url: e.nota_fiscal_url || '', compra_id: e.compra_id || '' });
+    const parsedSplits = parseRateio(e.observacao);
+    const cleanedObservation = cleanObs(e.observacao).replace('[FERRAMENTA] ', '').replace('[FERRAMENTA]', '').trim();
+    
+    let finalSplits = parsedSplits;
+    if (finalSplits.length === 0) {
+      if (e.compras) {
+        const compraSplits = parseRateio(e.compras.obs);
+        if (compraSplits.length > 0) {
+          finalSplits = compraSplits;
+        } else {
+          const cc = (e.compras.centro_custo && e.compras.centro_custo !== 0) ? e.compras.centro_custo : 31;
+          finalSplits = [{ ccId: cc, pct: 100 }];
+        }
+      } else {
+        finalSplits = [{ ccId: 31, pct: 100 }];
+      }
+    }
+
+    setForm({ 
+      produto_id: e.produto_id, 
+      quantidade: String(e.quantidade), 
+      valor_unitario: String(e.valor_unitario || ''), 
+      fornecedor: e.fornecedor || '', 
+      observacao: cleanedObservation, 
+      nota_fiscal_url: e.nota_fiscal_url || '', 
+      compra_id: e.compra_id || '',
+      ccSplits: finalSplits
+    });
     setIsNewProduct(false);
     setProductSearch('');
     setDialogOpen(true);
@@ -682,7 +767,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
   const matchesSearch = (e: any) => searchTerms.every(term =>
     (e.produtos?.nome && e.produtos.nome.toLowerCase().includes(term)) ||
     (e.fornecedor && e.fornecedor.toLowerCase().includes(term)) ||
-    (e.observacao && e.observacao.toLowerCase().includes(term))
+    (e.observacao && cleanObs(e.observacao).toLowerCase().includes(term))
   );
 
   const filtered = safeEntradas.filter(matchesSearch);
@@ -815,6 +900,28 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                         <p className="text-xs text-white/50 font-medium mt-0.5">
                           Fornecedor: {e.fornecedor || 'Não informado'}{e.compras?.email_titulo && ` • Compra: ${e.compras.email_titulo}`}
                         </p>
+                        {(() => {
+                          const splits = parseRateio(e.observacao);
+                          if (splits.length > 0) {
+                            return (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {splits.map(s => {
+                                  const label = ccLabel(s.ccId);
+                                  const name = label.replace(/^\d+\.\s*/, '');
+                                  return (
+                                    <Badge key={s.ccId} className="bg-white/5 text-white/80 border-white/5 text-[9px] font-medium">
+                                      🥞 {name}: {s.pct}%
+                                    </Badge>
+                                  );
+                                })}
+                              </div>
+                            );
+                          }
+                          return null;
+                        })()}
+                        {cleanObs(e.observacao) && (
+                          <p className="text-[10px] text-white/40 italic mt-1">Obs: {cleanObs(e.observacao)}</p>
+                        )}
                       </div>
                       <div className="text-right flex flex-col items-end mr-4">
                         <span className="text-lg font-display font-bold text-amber-500">+{Number(e.quantidade)}</span>
@@ -882,6 +989,28 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                       <p className="text-xs text-white/50 font-medium mt-0.5">
                         {new Date(e.data).toLocaleDateString('pt-BR')}{e.fornecedor && ` • ${e.fornecedor}`}{e.compras?.email_titulo && ` • Compra: ${e.compras.email_titulo}`}
                       </p>
+                      {(() => {
+                        const splits = parseRateio(e.observacao);
+                        if (splits.length > 0) {
+                          return (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {splits.map(s => {
+                                const label = ccLabel(s.ccId);
+                                const name = label.replace(/^\d+\.\s*/, '');
+                                return (
+                                  <Badge key={s.ccId} className="bg-white/5 text-white/80 border-white/5 text-[9px] font-medium">
+                                    🥞 {name}: {s.pct}%
+                                  </Badge>
+                                );
+                              })}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                      {cleanObs(e.observacao) && (
+                        <p className="text-[10px] text-white/40 italic mt-1">Obs: {cleanObs(e.observacao)}</p>
+                      )}
                     </div>
                     <div className="text-right flex flex-col items-end">
                       <span className="text-lg font-display font-bold text-primary">+{Number(e.quantidade)}</span>
@@ -1359,6 +1488,122 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     })}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="border border-white/5 bg-white/[0.02] p-4 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-xs text-muted-foreground ml-1">Centro de Custo / Rateio</label>
+                    <p className="text-[10px] text-white/40">Selecione o centro de custo ou faça a divisão proporcional (rateio).</p>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                    {form.ccSplits.map((split, idx) => {
+                      const totalVal = (Number(form.quantidade) || 0) * (Number(form.valor_unitario) || 0);
+                      const splitAmount = totalVal * (split.pct / 100);
+
+                      return (
+                        <div key={idx} className="flex items-center gap-2 bg-[#0e1629] p-2 rounded-xl border border-white/5">
+                          <div className="flex-1 min-w-0">
+                            <Select 
+                              value={split.ccId.toString()} 
+                              onValueChange={val => {
+                                const newSplits = [...form.ccSplits];
+                                newSplits[idx].ccId = parseInt(val);
+                                setForm(f => ({ ...f, ccSplits: newSplits }));
+                              }}
+                            >
+                              <SelectTrigger className="text-xs bg-[#0a1020] border-white/5 text-white h-9">
+                                <SelectValue placeholder="Centro de Custo" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[250px] bg-[#0e1629] border-white/10 text-white">
+                                {CENTROS_CUSTO.map(cc => (
+                                  <SelectItem key={cc.value} value={cc.value.toString()} className="text-white cursor-pointer text-xs">
+                                    {cc.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="w-20 shrink-0 relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="%"
+                              value={split.pct || ''}
+                              onChange={e => {
+                                const pctVal = parseFloat(e.target.value) || 0;
+                                const newSplits = [...form.ccSplits];
+                                newSplits[idx].pct = pctVal;
+                                setForm(f => ({ ...f, ccSplits: newSplits }));
+                              }}
+                              className="text-xs bg-[#0a1020] border-white/5 text-white pr-6 h-9"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40">%</span>
+                          </div>
+                          <div className="w-24 shrink-0 text-right pr-2">
+                            <p className="text-[8px] text-white/40 uppercase font-bold tracking-wider leading-none">Valor</p>
+                            <p className="text-xs text-primary font-mono font-bold">{fmt(splitAmount)}</p>
+                          </div>
+                          {form.ccSplits.length > 1 && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newSplits = form.ccSplits.filter((_, i) => i !== idx);
+                                setForm(f => ({ ...f, ccSplits: newSplits }));
+                              }}
+                              className="h-8 w-8 p-0 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg"
+                            >
+                              ❌
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
+                    
+                    <div className="flex items-center justify-between pt-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+                          const rem = Math.max(100 - sum, 0);
+                          const usedCcIds = form.ccSplits.map(x => x.ccId);
+                          const nextCc = CENTROS_CUSTO.find(cc => !usedCcIds.includes(cc.value))?.value || 1;
+                          setForm(f => ({
+                            ...f,
+                            ccSplits: [...f.ccSplits, { ccId: nextCc, pct: rem }]
+                          }));
+                        }}
+                        className="h-7 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-lg"
+                      >
+                        ➕ Adicionar Centro de Custo
+                      </Button>
+                      
+                      {(() => {
+                        const totalPct = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+                        const isComplete = Math.abs(totalPct - 100) < 0.01;
+                        return (
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold font-mono">
+                            <span className="text-white/45">Total:</span>
+                            <span className={isComplete ? 'text-emerald-400' : 'text-red-400 animate-pulse'}>
+                              {totalPct}%
+                            </span>
+                            {!isComplete && (
+                              <span className="text-[9px] font-sans font-normal text-red-300">
+                                (deve somar 100%)
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  </div>
               </div>
 
               <div className="space-y-1">

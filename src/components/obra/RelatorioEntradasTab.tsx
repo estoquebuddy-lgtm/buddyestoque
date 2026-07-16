@@ -12,6 +12,7 @@ import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { toast } from 'sonner';
 import { getBuddyLogo } from '@/lib/pdf';
+import { CENTROS_CUSTO, ccLabel, parseRateio, cleanObs } from './ComprasTab';
 
 export default function RelatorioEntradasTab({ obraId }: { obraId: string }) {
   const [search, setSearch] = useState('');
@@ -50,7 +51,8 @@ export default function RelatorioEntradasTab({ obraId }: { obraId: string }) {
       const searchLower = search.toLowerCase();
       const prodName = ent.produtos?.nome?.toLowerCase() || '';
       const forn = ent.fornecedor?.toLowerCase() || '';
-      if (!prodName.includes(searchLower) && !forn.includes(searchLower)) {
+      const obs = cleanObs(ent.observacao || '').toLowerCase();
+      if (!prodName.includes(searchLower) && !forn.includes(searchLower) && !obs.includes(searchLower)) {
         return false;
       }
     }
@@ -66,7 +68,7 @@ export default function RelatorioEntradasTab({ obraId }: { obraId: string }) {
 
   const exportPDF = async () => {
     const logo = await getBuddyLogo();
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
     const dataAtual = new Date().toLocaleDateString('pt-BR');
     
     doc.setFontSize(18);
@@ -85,19 +87,28 @@ export default function RelatorioEntradasTab({ obraId }: { obraId: string }) {
     
     const tableData = filteredData.map((e: any) => {
       const valorTotal = e.valor_unitario ? Number(e.quantidade) * Number(e.valor_unitario) : 0;
+      const ccVal = (() => {
+        const splits = parseRateio(e.observacao);
+        if (splits.length > 0) {
+          return splits.map(s => `${ccLabel(s.ccId).replace(/^\d+\.\s*/, '')} (${s.pct}%)`).join(', ');
+        }
+        return '-';
+      })();
       return [
         new Date(e.data).toLocaleDateString('pt-BR'),
         e.produtos?.nome || '-',
         e.fornecedor || '-',
+        ccVal,
         `${e.quantidade} ${e.produtos?.unidade || ''}`,
         e.valor_unitario ? formatCurrency(Number(e.valor_unitario)) : '-',
-        valorTotal > 0 ? formatCurrency(valorTotal) : '-'
+        valorTotal > 0 ? formatCurrency(valorTotal) : '-',
+        cleanObs(e.observacao) || '-'
       ];
     });
 
     autoTable(doc, {
       startY: 44,
-      head: [['Data', 'Produto', 'Fornecedor', 'Quantidade', 'Valor Unitário', 'Valor Total']],
+      head: [['Data', 'Produto', 'Fornecedor', 'CC / Rateio', 'Quantidade', 'Valor Unitário', 'Valor Total', 'Obs']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [14, 22, 41] },
@@ -116,10 +127,18 @@ export default function RelatorioEntradasTab({ obraId }: { obraId: string }) {
         'Produto': e.produtos?.nome || '-',
         'Categoria': e.produtos?.categoria || '-',
         'Fornecedor': e.fornecedor || '-',
+        'Centro de Custo / Rateio': (() => {
+          const splits = parseRateio(e.observacao);
+          if (splits.length > 0) {
+            return splits.map(s => `${ccLabel(s.ccId)} (${s.pct}%)`).join(', ');
+          }
+          return '-';
+        })(),
         'Quantidade': Number(e.quantidade),
         'Unidade': e.produtos?.unidade || '',
         'Valor Unitário': e.valor_unitario ? Number(e.valor_unitario) : 0,
-        'Valor Total': valorTotal
+        'Valor Total': valorTotal,
+        'Observação': cleanObs(e.observacao) || ''
       };
     });
 
@@ -198,6 +217,7 @@ export default function RelatorioEntradasTab({ obraId }: { obraId: string }) {
                     <TableHead className="font-bold text-foreground">Data</TableHead>
                     <TableHead className="font-bold text-foreground">Produto</TableHead>
                     <TableHead className="font-bold text-foreground">Fornecedor</TableHead>
+                    <TableHead className="font-bold text-foreground">Centro de Custo</TableHead>
                     <TableHead className="font-bold text-foreground text-center">Quantidade</TableHead>
                     <TableHead className="font-bold text-foreground text-right">Valor Unitário</TableHead>
                     <TableHead className="font-bold text-foreground text-right">Valor Total</TableHead>
@@ -212,9 +232,36 @@ export default function RelatorioEntradasTab({ obraId }: { obraId: string }) {
                           {new Date(e.data).toLocaleDateString('pt-BR')}
                         </TableCell>
                         <TableCell className="font-semibold text-sm">
-                          {e.produtos?.nome || <span className="text-destructive">Produto Excluído</span>}
+                          <div>{e.produtos?.nome || <span className="text-destructive">Produto Excluído</span>}</div>
+                          {cleanObs(e.observacao) && (
+                            <div className="text-[10px] text-muted-foreground font-normal italic mt-0.5">Obs: {cleanObs(e.observacao)}</div>
+                          )}
                         </TableCell>
                         <TableCell className="text-sm">{e.fornecedor || '-'}</TableCell>
+                        <TableCell className="max-w-[200px]">
+                          {(() => {
+                            const splits = parseRateio(e.observacao);
+                            if (splits.length > 0) {
+                              return (
+                                <div className="flex flex-col gap-0.5 max-h-16 overflow-y-auto pr-1">
+                                  {splits.map(s => {
+                                    const label = ccLabel(s.ccId);
+                                    const match = label.match(/^(\d+)\.\s*(.*)/);
+                                    const code = match ? match[1].padStart(2, '0') : String(s.ccId).padStart(2, '0');
+                                    const name = match ? match[2] : label;
+                                    return (
+                                      <div key={s.ccId} className="flex items-center justify-between gap-1 text-[10px] text-white/80 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+                                        <span className="truncate max-w-[120px] font-bold" title={label}>{code}. {name}</span>
+                                        <span className="font-mono font-bold text-primary shrink-0">{s.pct}%</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              );
+                            }
+                            return <span className="text-muted-foreground">-</span>;
+                          })()}
+                        </TableCell>
                         <TableCell className="text-center font-mono font-medium">
                           {e.quantidade} <span className="text-[10px] text-muted-foreground font-normal">{e.produtos?.unidade || ''}</span>
                         </TableCell>
