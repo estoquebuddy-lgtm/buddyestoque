@@ -1016,56 +1016,9 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                                     </Badge>
                                   )}
                                 </div>
-                                {(() => {
-                                  const missingInfo = missingToolsMap.get(item.nome.trim().toLowerCase());
-                                  if (!missingInfo || missingInfo.missing <= 0) return null;
-                                  return (
-                                    <div className="mt-2 flex items-center justify-between gap-2 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 text-[11px] text-amber-300">
-                                      <span>⚠️ No estoque há {missingInfo.expected} un (faltam {missingInfo.missing} no cadastro)</span>
-                                      <Button
-                                        size="sm"
-                                        type="button"
-                                        variant="outline"
-                                        className="h-6 text-[10px] bg-amber-500 hover:bg-amber-400 text-black font-bold border-none transition-all px-2"
-                                        disabled={syncFerramentasFromTab.isPending}
-                                        onClick={(ev) => {
-                                          ev.stopPropagation();
-                                          syncFerramentasFromTab.mutate({
-                                            nomeTool: item.nome,
-                                            missingCount: missingInfo.missing,
-                                            categoriaTool: item.categoria
-                                          });
-                                        }}
-                                      >
-                                        {syncFerramentasFromTab.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-0.5" />}
-                                        Gerar {missingInfo.missing} Faltantes
-                                      </Button>
-                                    </div>
-                                  );
-                                })()}
                               </div>
-                              <div className="flex items-center gap-2 shrink-0">
-                                <Button
-                                  size="sm"
-                                  type="button"
-                                  variant="outline"
-                                  className="h-7 text-[11px] bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 font-bold transition-all px-2.5 rounded-lg"
-                                  onClick={(ev) => {
-                                    ev.stopPropagation();
-                                    setAddUnitsDialog({
-                                      open: true,
-                                      nome: item.nome,
-                                      quantidade: String(item.stats?.total || 60),
-                                      categoria: item.categoria
-                                    });
-                                  }}
-                                >
-                                  <Pencil className="h-3.5 w-3.5 mr-1" />
-                                  Ajustar Quantidade
-                                </Button>
-                                <div className="text-primary text-[10px] uppercase font-bold flex items-center gap-1">
-                                  Ver itens ➔
-                                </div>
+                              <div className="text-primary text-[10px] uppercase font-bold shrink-0 flex items-center gap-1">
+                                Ver itens ➔
                               </div>
                             </CardContent>
                           </Card>
@@ -1610,58 +1563,6 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             </div>
           </SheetContent>
        </Sheet>
-      {/* Dialog para Ajustar Quantidade Total de Ferramenta */}
-      <Dialog open={!!addUnitsDialog?.open} onOpenChange={(open) => !open && setAddUnitsDialog(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Ajustar Quantidade Total de Ferramenta</DialogTitle>
-          </DialogHeader>
-          <form
-            onSubmit={(ev) => {
-              ev.preventDefault();
-              if (!addUnitsDialog) return;
-              setExactToolCount.mutate({
-                nome: addUnitsDialog.nome,
-                targetTotal: Number(addUnitsDialog.quantidade),
-                categoria: addUnitsDialog.categoria
-              });
-            }}
-            className="space-y-4 pt-2"
-          >
-            <div>
-              <label className="text-xs text-muted-foreground">Nome da Ferramenta</label>
-              <Input value={addUnitsDialog?.nome || ''} disabled className="h-11 font-semibold" />
-            </div>
-
-            <div>
-              <label className="text-xs text-muted-foreground font-medium">Quantidade Total Desejada no Cadastro</label>
-              <Input
-                type="number"
-                min="0"
-                placeholder="Ex: 60"
-                value={addUnitsDialog?.quantidade || ''}
-                onChange={(e) => setAddUnitsDialog(prev => prev ? { ...prev, quantidade: e.target.value } : null)}
-                className="h-11 text-lg font-bold"
-                required
-                autoFocus
-              />
-              <p className="text-[11px] text-muted-foreground mt-1">
-                Ao alterar este valor, o sistema ajustará a quantidade exata de ferramentas e atualizará o estoque em todos os painéis.
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" onClick={() => setAddUnitsDialog(null)}>
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={setExactToolCount.isPending} className="bg-primary">
-                {setExactToolCount.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
-                Confirmar e Ajustar para {addUnitsDialog?.quantidade || 0}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

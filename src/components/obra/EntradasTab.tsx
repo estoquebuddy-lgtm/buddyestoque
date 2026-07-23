@@ -588,18 +588,21 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         const newEntId = newEnt.id;
 
         // 2. Atualizar o vínculo de ferramentas que ainda NÃO foram recebidas
-        const { data: tools } = await supabase
-          .from('ferramentas')
-          .select('id, observacoes')
-          .eq('obra_id', obraId)
-          .eq('estado', 'comprado')
-          .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
+        const isToolPartial = ent.observacao?.includes('[FERRAMENTA]') || ent.produtos?.nome?.startsWith('[FERRAMENTA]');
+        if (isToolPartial) {
+          const toolNameClean = (ent.produtos?.nome || '').replace('[FERRAMENTA] ', '').trim();
+          const toolsToReceiveCount = Math.floor(quantidadeReceber);
 
-        if (tools && tools.length > 0) {
-          const toolsToReceive = tools.slice(0, Math.floor(quantidadeReceber));
-          const toolsToRemain = tools.slice(Math.floor(quantidadeReceber));
+          const { data: tools } = await supabase
+            .from('ferramentas')
+            .select('id, observacoes')
+            .eq('obra_id', obraId)
+            .eq('estado', 'comprado')
+            .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
 
-          // Marcar as recebidas como 'disponivel'
+          const toolsToReceive = (tools || []).slice(0, toolsToReceiveCount);
+          const toolsToRemain = (tools || []).slice(toolsToReceiveCount);
+
           for (const tool of toolsToReceive) {
             const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
             await supabase
@@ -613,7 +616,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
               .eq('id', tool.id);
           }
 
-          // Vincular as restantes à nova entrada pendente
           for (const tool of toolsToRemain) {
             const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
             const newObs = `${cleanObs} [ENTRADA_ID:${newEntId}]`.trim();
@@ -623,6 +625,25 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                 observacoes: newObs
               })
               .eq('id', tool.id);
+          }
+
+          const missingToCreate = Math.max(0, toolsToReceiveCount - toolsToReceive.length);
+          if (missingToCreate > 0 && toolNameClean) {
+            const newToolsToInsert = Array.from({ length: missingToCreate }, () => ({
+              obra_id: obraId,
+              nome: toolNameClean,
+              codigo: null,
+              estado: 'disponivel',
+              status: 'DISPONIVEL',
+              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              observacoes: `[CAT:Ferramentas Manuais] [LOC:${localizacao.trim() || ent.produtos?.localizacao || ''}]`,
+            }));
+
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < newToolsToInsert.length; i += CHUNK_SIZE) {
+              const chunk = newToolsToInsert.slice(i, i + CHUNK_SIZE);
+              await supabase.from('ferramentas').insert(chunk);
+            }
           }
         }
 
@@ -652,26 +673,56 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
           .eq('id', entradaId);
         if (updateErr) throw updateErr;
 
-        // Atualizar ferramentas vinculadas
-        const { data: toolsToUpdate } = await supabase
-          .from('ferramentas')
-          .select('id, observacoes')
-          .eq('obra_id', obraId)
-          .eq('estado', 'comprado')
-          .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
+        // Atualizar ferramentas vinculadas ou criar automaticamente se vieram de Compras sem cadastro unitário
+        const isTool = ent.observacao?.includes('[FERRAMENTA]') || ent.produtos?.nome?.startsWith('[FERRAMENTA]');
 
-        if (toolsToUpdate && toolsToUpdate.length > 0) {
-          for (const tool of toolsToUpdate) {
-            const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
-            await supabase
-              .from('ferramentas')
-              .update({
-                estado: 'disponivel',
-                status: 'DISPONIVEL',
-                observacoes: cleanObs,
-                ultima_movimentacao: new Date().toISOString()
-              })
-              .eq('id', tool.id);
+        if (isTool) {
+          const toolNameClean = (ent.produtos?.nome || '').replace('[FERRAMENTA] ', '').trim();
+          const targetCount = Math.floor(totalQtd);
+
+          const { data: toolsToUpdate } = await supabase
+            .from('ferramentas')
+            .select('id, observacoes')
+            .eq('obra_id', obraId)
+            .eq('estado', 'comprado')
+            .like('observacoes', `%[ENTRADA_ID:${entradaId}]%`);
+
+          const updatedCount = toolsToUpdate?.length || 0;
+
+          if (toolsToUpdate && toolsToUpdate.length > 0) {
+            for (const tool of toolsToUpdate) {
+              const cleanObs = tool.observacoes?.replace(/\[ENTRADA_ID:.*?\]/g, '').trim() || '';
+              await supabase
+                .from('ferramentas')
+                .update({
+                  estado: 'disponivel',
+                  status: 'DISPONIVEL',
+                  observacoes: cleanObs,
+                  ultima_movimentacao: new Date().toISOString()
+                })
+                .eq('id', tool.id);
+            }
+          }
+
+          // Se a entrada veio de Compras sem pre-gerar ferramentas unitárias no estado 'comprado',
+          // gera as ferramentas faltantes automaticamente ao confirmar o recebimento!
+          const missingToolsToCreate = Math.max(0, targetCount - updatedCount);
+          if (missingToolsToCreate > 0 && toolNameClean) {
+            const newToolsToInsert = Array.from({ length: missingToolsToCreate }, () => ({
+              obra_id: obraId,
+              nome: toolNameClean,
+              codigo: null,
+              estado: 'disponivel',
+              status: 'DISPONIVEL',
+              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              observacoes: `[CAT:Ferramentas Manuais] [LOC:${localizacao.trim() || ent.produtos?.localizacao || ''}]`,
+            }));
+
+            const CHUNK_SIZE = 100;
+            for (let i = 0; i < newToolsToInsert.length; i += CHUNK_SIZE) {
+              const chunk = newToolsToInsert.slice(i, i + CHUNK_SIZE);
+              await supabase.from('ferramentas').insert(chunk);
+            }
           }
         }
       }
