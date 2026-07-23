@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, Hand, RotateCcw, History, ArrowUpFromLine, ArrowDownToLine, QrCode, Download, Printer, Camera, Wrench, HelpCircle } from 'lucide-react';
+import { Pencil, Trash2, Hand, RotateCcw, History, ArrowUpFromLine, ArrowDownToLine, QrCode, Download, Printer, Camera, Wrench, HelpCircle, AlertCircle, Plus, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import ImageUpload from '@/components/ImageUpload';
@@ -125,6 +125,101 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       const { data } = await supabase.from('historico_ferramentas' as any).select('*, ferramentas(nome), pessoas(nome)').eq('obra_id', obraId).order('data', { ascending: false });
       return data || [];
     },
+  });
+
+  const { data: entradasFerramentas = [] } = useQuery({
+    queryKey: ['entradas-ferramentas', obraId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('entradas')
+        .select('id, quantidade, observacao, status_entrega, produtos(nome)')
+        .eq('obra_id', obraId);
+      return data || [];
+    },
+    enabled: !!obraId
+  });
+
+  const missingToolsMap = useMemo(() => {
+    const map = new Map<string, { nome: string; expected: number; existing: number; missing: number; categoria?: string }>();
+    
+    entradasFerramentas.forEach((e: any) => {
+      const isTool = e.observacao?.startsWith('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
+      if (!isTool) return;
+      const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '').trim() || '';
+      if (!rawName) return;
+
+      const key = rawName.toLowerCase();
+      const current = map.get(key) || { nome: rawName, expected: 0, existing: 0, missing: 0 };
+      current.expected += Number(e.quantidade || 0);
+      map.set(key, current);
+    });
+
+    ferramentas.forEach((f: any) => {
+      const rawName = (f.nome || '').trim();
+      if (!rawName) return;
+      const key = rawName.toLowerCase();
+      const current = map.get(key) || { nome: rawName, expected: 0, existing: 0, missing: 0, categoria: f.categoria };
+      current.existing += 1;
+      if (f.categoria) current.categoria = f.categoria;
+      map.set(key, current);
+    });
+
+    map.forEach((val) => {
+      val.missing = Math.max(0, val.expected - val.existing);
+    });
+
+    return map;
+  }, [entradasFerramentas, ferramentas]);
+
+  const totalMissingToolsCount = useMemo(() => {
+    let sum = 0;
+    missingToolsMap.forEach((v) => { sum += v.missing; });
+    return sum;
+  }, [missingToolsMap]);
+
+  const syncFerramentasFromTab = useMutation({
+    mutationFn: async ({ nomeTool, missingCount, categoriaTool }: { nomeTool?: string; missingCount?: number; categoriaTool?: string }) => {
+      let itemsToCreate: { nome: string; missing: number; categoria?: string }[] = [];
+      
+      if (nomeTool && missingCount && missingCount > 0) {
+        itemsToCreate.push({ nome: nomeTool.replace('[FERRAMENTA] ', '').trim(), missing: missingCount, categoria: categoriaTool });
+      } else {
+        missingToolsMap.forEach((val) => {
+          if (val.missing > 0) {
+            itemsToCreate.push({ nome: val.nome, missing: val.missing, categoria: val.categoria });
+          }
+        });
+      }
+
+      if (itemsToCreate.length === 0) {
+        toast.info('Todas as ferramentas para esta obra já estão cadastradas.');
+        return;
+      }
+
+      const allToolsToInsert: any[] = [];
+      itemsToCreate.forEach(item => {
+        for (let i = 0; i < item.missing; i++) {
+          allToolsToInsert.push({
+            obra_id: obraId,
+            nome: item.nome,
+            codigo: null,
+            estado: 'disponivel',
+            status: 'DISPONIVEL',
+            qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+            observacoes: `[CAT:${item.categoria || 'Ferramentas Manuais'}] [LOC:]`,
+          });
+        }
+      });
+
+      const { error } = await supabase.from('ferramentas').insert(allToolsToInsert);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['entradas-ferramentas', obraId] });
+      toast.success('Ferramentas geradas com sucesso!');
+    },
+    onError: (e: any) => toast.error(e.message)
   });
 
   useEffect(() => {
@@ -701,6 +796,30 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               <span className="text-[10px] font-bold uppercase tracking-wider text-center">Histórico</span>
            </Button>
         </div>
+
+        {totalMissingToolsCount > 0 && (
+          <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-amber-200 shadow-lg">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
+              <div className="text-xs">
+                <p className="font-bold text-amber-300">Encontramos {totalMissingToolsCount} ferramentas no estoque pendentes de cadastro individual.</p>
+                <p className="text-[11px] text-amber-200/70">
+                  {Array.from(missingToolsMap.values()).filter(v => v.missing > 0).map(v => `${v.nome}: +${v.missing}`).join(', ')}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-400 text-black font-bold border-none transition-all shadow-md"
+              disabled={syncFerramentasFromTab.isPending}
+              onClick={() => syncFerramentasFromTab.mutate({})}
+            >
+              {syncFerramentasFromTab.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+              ⚡ Gerar Todas ({totalMissingToolsCount}) Faltantes
+            </Button>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2 mt-3 select-none">
           {totalBaixadas > 0 && (
             <button
@@ -840,6 +959,33 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                                     </Badge>
                                   )}
                                 </div>
+                                {(() => {
+                                  const missingInfo = missingToolsMap.get(item.nome.trim().toLowerCase());
+                                  if (!missingInfo || missingInfo.missing <= 0) return null;
+                                  return (
+                                    <div className="mt-2 flex items-center justify-between gap-2 bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 text-[11px] text-amber-300">
+                                      <span>⚠️ No estoque há {missingInfo.expected} un (faltam {missingInfo.missing} no cadastro)</span>
+                                      <Button
+                                        size="sm"
+                                        type="button"
+                                        variant="outline"
+                                        className="h-6 text-[10px] bg-amber-500 hover:bg-amber-400 text-black font-bold border-none transition-all px-2"
+                                        disabled={syncFerramentasFromTab.isPending}
+                                        onClick={(ev) => {
+                                          ev.stopPropagation();
+                                          syncFerramentasFromTab.mutate({
+                                            nomeTool: item.nome,
+                                            missingCount: missingInfo.missing,
+                                            categoriaTool: item.categoria
+                                          });
+                                        }}
+                                      >
+                                        {syncFerramentasFromTab.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3 mr-0.5" />}
+                                        Gerar {missingInfo.missing} Faltantes
+                                      </Button>
+                                    </div>
+                                  );
+                                })()}
                               </div>
                               <div className="text-primary text-[10px] uppercase font-bold shrink-0 flex items-center gap-1">
                                 Ver itens ➔
