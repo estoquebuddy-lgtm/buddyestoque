@@ -211,8 +211,12 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         }
       });
 
-      const { error } = await supabase.from('ferramentas').insert(allToolsToInsert);
-      if (error) throw error;
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < allToolsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = allToolsToInsert.slice(i, i + CHUNK_SIZE);
+        const { error } = await supabase.from('ferramentas').insert(chunk);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });

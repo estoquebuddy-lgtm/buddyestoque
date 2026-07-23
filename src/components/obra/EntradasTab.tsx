@@ -158,8 +158,12 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
         observacoes: `[CAT:Ferramentas Manuais] [LOC:]${entradaId ? ` [ENTRADA_ID:${entradaId}]` : ''}`,
       }));
 
-      const { error } = await supabase.from('ferramentas').insert(toolsToInsert);
-      if (error) throw error;
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < toolsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = toolsToInsert.slice(i, i + CHUNK_SIZE);
+        const { error } = await supabase.from('ferramentas').insert(chunk);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
