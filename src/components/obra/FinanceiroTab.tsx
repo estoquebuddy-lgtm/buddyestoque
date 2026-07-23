@@ -338,16 +338,14 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     if (isLoadingGlobal || productsWithCosts.length === 0) return;
 
     const syncStockToDatabase = async () => {
-      const mismatchedNormalProducts = productsWithCosts.filter((p: any) => {
-        const isTool = p.nome?.startsWith('[FERRAMENTA]');
-        if (isTool) return false;
+      const mismatchedProducts = productsWithCosts.filter((p: any) => {
         return p.estoque_atual !== p.estoque_atual_db;
       });
 
-      if (mismatchedNormalProducts.length > 0) {
-        console.log(`[FinanceiroTab] Syncing ${mismatchedNormalProducts.length} stock discrepancies back to database...`);
+      if (mismatchedProducts.length > 0) {
+        console.log(`[FinanceiroTab] Syncing ${mismatchedProducts.length} stock discrepancies back to database...`);
         try {
-          const syncPromises = mismatchedNormalProducts.map(async (p: any) => {
+          const syncPromises = mismatchedProducts.map(async (p: any) => {
             const { error } = await supabase
               .from('produtos')
               .update({ estoque_atual: p.estoque_atual })
@@ -358,7 +356,7 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
           });
           await Promise.all(syncPromises);
           queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
-          toast.success(`${mismatchedNormalProducts.length} divergências de estoque corrigidas automaticamente.`);
+          toast.success(`${mismatchedProducts.length} divergências de estoque corrigidas automaticamente.`);
         } catch (err) {
           console.error("Error running client-side self-healing stock sync:", err);
         }
