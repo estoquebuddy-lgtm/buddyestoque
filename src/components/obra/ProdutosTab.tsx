@@ -125,6 +125,69 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [obraId, queryClient]);
 
+  // Auto-healing effect for tool products stock discrepancies in ProdutosTab
+  useEffect(() => {
+    if (!obraId) return;
+
+    const healToolStock = async () => {
+      try {
+        const { data: allProds } = await supabase
+          .from('produtos')
+          .select('id, nome, estoque_atual')
+          .eq('obra_id', obraId);
+
+        if (!allProds) return;
+
+        for (const p of allProds) {
+          if (!p.nome?.startsWith('[FERRAMENTA]')) continue;
+          const cleanName = p.nome.replace('[FERRAMENTA] ', '').trim();
+          
+          // Fetch valid entradas for this product
+          const { data: entList } = await supabase
+            .from('entradas')
+            .select('quantidade')
+            .eq('obra_id', obraId)
+            .eq('produto_id', p.id)
+            .neq('status_entrega', 'PENDENTE');
+
+          const expectedStock = (entList || []).reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
+
+          if (expectedStock > 0) {
+            // Fetch tools
+            const { data: toolList } = await supabase
+              .from('ferramentas')
+              .select('id, estado')
+              .eq('obra_id', obraId)
+              .ilike('nome', cleanName);
+
+            if (toolList && toolList.length > expectedStock) {
+              const excess = toolList.length - expectedStock;
+              const avail = toolList.filter(t => t.estado === 'disponivel' || t.estado === 'comprado');
+              if (avail.length > 0) {
+                const toDel = avail.slice(0, excess).map(t => t.id);
+                for (let i = 0; i < toDel.length; i += 50) {
+                  await supabase.from('ferramentas').delete().in('id', toDel.slice(i, i + 50));
+                }
+              }
+            }
+
+            if (p.estoque_atual !== expectedStock) {
+              await supabase.from('produtos').update({ estoque_atual: expectedStock }).eq('id', p.id);
+              queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+              queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
+              queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+              queryClient.invalidateQueries({ queryKey: ['ferramentas-short', obraId] });
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Auto-heal error in ProdutosTab:", err);
+      }
+    };
+
+    healToolStock();
+  }, [obraId, queryClient]);
+
   const save = useMutation({
     mutationFn: async () => {
       const { data: { user } } = await supabase.auth.getUser();
