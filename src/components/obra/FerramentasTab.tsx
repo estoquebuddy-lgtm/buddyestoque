@@ -228,31 +228,75 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     },
   });
 
-  const addToolUnits = useMutation({
-    mutationFn: async ({ nome, qtd, categoria }: { nome: string; qtd: number; categoria?: string }) => {
-      if (qtd <= 0) throw new Error('Informe uma quantidade maior que zero');
+  const setExactToolCount = useMutation({
+    mutationFn: async ({ nome, targetTotal, categoria }: { nome: string; targetTotal: number; categoria?: string }) => {
       const cleanName = nome.replace('[FERRAMENTA] ', '').trim();
-      const toolsToInsert = Array.from({ length: qtd }, () => ({
-        obra_id: obraId,
-        nome: cleanName,
-        codigo: null,
-        estado: 'disponivel',
-        status: 'DISPONIVEL',
-        qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        observacoes: `[CAT:${categoria || 'Ferramentas Manuais'}] [LOC:]`,
-      }));
+      
+      const { data: existingTools, error: fetchErr } = await supabase
+        .from('ferramentas')
+        .select('*')
+        .eq('obra_id', obraId)
+        .ilike('nome', cleanName);
 
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < toolsToInsert.length; i += CHUNK_SIZE) {
-        const chunk = toolsToInsert.slice(i, i + CHUNK_SIZE);
-        const { error } = await supabase.from('ferramentas').insert(chunk);
-        if (error) throw error;
+      if (fetchErr) throw fetchErr;
+
+      const currentCount = existingTools?.length || 0;
+
+      if (targetTotal > currentCount) {
+        const missing = targetTotal - currentCount;
+        const toolsToInsert = Array.from({ length: missing }, () => ({
+          obra_id: obraId,
+          nome: cleanName,
+          codigo: null,
+          estado: 'disponivel',
+          status: 'DISPONIVEL',
+          qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+          observacoes: `[CAT:${categoria || 'Ferramentas Manuais'}] [LOC:]`,
+        }));
+
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < toolsToInsert.length; i += CHUNK_SIZE) {
+          const chunk = toolsToInsert.slice(i, i + CHUNK_SIZE);
+          const { error } = await supabase.from('ferramentas').insert(chunk);
+          if (error) throw error;
+        }
+      } else if (targetTotal < currentCount) {
+        const excessCount = currentCount - targetTotal;
+        const availableTools = (existingTools || []).filter((t: any) => t.estado === 'disponivel' || t.estado === 'comprado');
+        
+        if (availableTools.length < excessCount) {
+          throw new Error(`Não é possível reduzir para ${targetTotal} unidades pois existem ferramentas em uso ou manutenção.`);
+        }
+
+        const toDeleteIds = availableTools.slice(0, excessCount).map((t: any) => t.id);
+
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
+          const chunk = toDeleteIds.slice(i, i + CHUNK_SIZE);
+          const { error } = await supabase.from('ferramentas').delete().in('id', chunk);
+          if (error) throw error;
+        }
+      }
+
+      // Update virtual product estoque_atual in produtos table
+      const { data: prods } = await supabase
+        .from('produtos')
+        .select('id')
+        .eq('obra_id', obraId)
+        .ilike('nome', `%${cleanName}%`);
+
+      if (prods && prods.length > 0) {
+        for (const p of prods) {
+          await supabase.from('produtos').update({ estoque_atual: targetTotal }).eq('id', p.id);
+        }
       }
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
       queryClient.invalidateQueries({ queryKey: ['entradas-ferramentas', obraId] });
-      toast.success(`${vars.qtd} unidade(s) de "${vars.nome}" adicionadas com sucesso!`);
+      toast.success(`Quantidade de "${vars.nome}" ajustada para ${vars.targetTotal} unidades!`);
       setAddUnitsDialog(null);
     },
     onError: (e: any) => toast.error(e.message)
@@ -1011,13 +1055,13 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                                     setAddUnitsDialog({
                                       open: true,
                                       nome: item.nome,
-                                      quantidade: '50',
+                                      quantidade: String(item.stats?.total || 60),
                                       categoria: item.categoria
                                     });
                                   }}
                                 >
-                                  <Plus className="h-3.5 w-3.5 mr-1" />
-                                  Adicionar Unidades
+                                  <Pencil className="h-3.5 w-3.5 mr-1" />
+                                  Ajustar Quantidade
                                 </Button>
                                 <div className="text-primary text-[10px] uppercase font-bold flex items-center gap-1">
                                   Ver itens ➔
@@ -1566,19 +1610,19 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             </div>
           </SheetContent>
        </Sheet>
-      {/* Dialog para Adicionar Unidades de Ferramenta */}
+      {/* Dialog para Ajustar Quantidade Total de Ferramenta */}
       <Dialog open={!!addUnitsDialog?.open} onOpenChange={(open) => !open && setAddUnitsDialog(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Adicionar Unidades de Ferramenta</DialogTitle>
+            <DialogTitle>Ajustar Quantidade Total de Ferramenta</DialogTitle>
           </DialogHeader>
           <form
             onSubmit={(ev) => {
               ev.preventDefault();
               if (!addUnitsDialog) return;
-              addToolUnits.mutate({
+              setExactToolCount.mutate({
                 nome: addUnitsDialog.nome,
-                qtd: Number(addUnitsDialog.quantidade),
+                targetTotal: Number(addUnitsDialog.quantidade),
                 categoria: addUnitsDialog.categoria
               });
             }}
@@ -1590,11 +1634,11 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             </div>
 
             <div>
-              <label className="text-xs text-muted-foreground font-medium">Quantas unidades deseja adicionar ao cadastro?</label>
+              <label className="text-xs text-muted-foreground font-medium">Quantidade Total Desejada no Cadastro</label>
               <Input
                 type="number"
-                min="1"
-                placeholder="Ex: 50"
+                min="0"
+                placeholder="Ex: 60"
                 value={addUnitsDialog?.quantidade || ''}
                 onChange={(e) => setAddUnitsDialog(prev => prev ? { ...prev, quantidade: e.target.value } : null)}
                 className="h-11 text-lg font-bold"
@@ -1602,7 +1646,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                 autoFocus
               />
               <p className="text-[11px] text-muted-foreground mt-1">
-                Cada unidade terá um QR Code gerado automaticamente no cadastro.
+                Ao alterar este valor, o sistema ajustará a quantidade exata de ferramentas e atualizará o estoque em todos os painéis.
               </p>
             </div>
 
@@ -1610,9 +1654,9 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               <Button type="button" variant="outline" onClick={() => setAddUnitsDialog(null)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={addToolUnits.isPending} className="bg-primary">
-                {addToolUnits.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
-                Adicionar {addUnitsDialog?.quantidade || 0} Unidade(s)
+              <Button type="submit" disabled={setExactToolCount.isPending} className="bg-primary">
+                {setExactToolCount.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                Confirmar e Ajustar para {addUnitsDialog?.quantidade || 0}
               </Button>
             </div>
           </form>
