@@ -68,6 +68,9 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [scanRetirarTipo, setScanRetirarTipo] = useState<'uso' | 'manutencao'>('uso');
   const [manualCode, setManualCode] = useState('');
 
+  // Add Tool Units Dialog State
+  const [addUnitsDialog, setAddUnitsDialog] = useState<{ open: boolean; nome: string; quantidade: string; categoria?: string } | null>(null);
+
   const { data: pessoas = [] } = useQuery({
     queryKey: ['pessoas', obraId],
     queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome, status').eq('obra_id', obraId).order('nome'); return data || []; },
@@ -222,6 +225,35 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['entradas-ferramentas', obraId] });
       toast.success('Ferramentas geradas com sucesso!');
+    },
+  });
+
+  const addToolUnits = useMutation({
+    mutationFn: async ({ nome, qtd, categoria }: { nome: string; qtd: number; categoria?: string }) => {
+      if (qtd <= 0) throw new Error('Informe uma quantidade maior que zero');
+      const cleanName = nome.replace('[FERRAMENTA] ', '').trim();
+      const toolsToInsert = Array.from({ length: qtd }, () => ({
+        obra_id: obraId,
+        nome: cleanName,
+        codigo: null,
+        estado: 'disponivel',
+        status: 'DISPONIVEL',
+        qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+        observacoes: `[CAT:${categoria || 'Ferramentas Manuais'}] [LOC:]`,
+      }));
+
+      const CHUNK_SIZE = 100;
+      for (let i = 0; i < toolsToInsert.length; i += CHUNK_SIZE) {
+        const chunk = toolsToInsert.slice(i, i + CHUNK_SIZE);
+        const { error } = await supabase.from('ferramentas').insert(chunk);
+        if (error) throw error;
+      }
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['entradas-ferramentas', obraId] });
+      toast.success(`${vars.qtd} unidade(s) de "${vars.nome}" adicionadas com sucesso!`);
+      setAddUnitsDialog(null);
     },
     onError: (e: any) => toast.error(e.message)
   });
@@ -801,29 +833,6 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
            </Button>
         </div>
 
-        {totalMissingToolsCount > 0 && (
-          <div className="mt-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-amber-200 shadow-lg">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-amber-400 shrink-0" />
-              <div className="text-xs">
-                <p className="font-bold text-amber-300">Encontramos {totalMissingToolsCount} ferramentas no estoque pendentes de cadastro individual.</p>
-                <p className="text-[11px] text-amber-200/70">
-                  {Array.from(missingToolsMap.values()).filter(v => v.missing > 0).map(v => `${v.nome}: +${v.missing}`).join(', ')}
-                </p>
-              </div>
-            </div>
-            <Button
-              size="sm"
-              className="bg-amber-500 hover:bg-amber-400 text-black font-bold border-none transition-all shadow-md"
-              disabled={syncFerramentasFromTab.isPending}
-              onClick={() => syncFerramentasFromTab.mutate({})}
-            >
-              {syncFerramentasFromTab.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
-              ⚡ Gerar Todas ({totalMissingToolsCount}) Faltantes
-            </Button>
-          </div>
-        )}
-
         <div className="flex flex-wrap items-center gap-2 mt-3 select-none">
           {totalBaixadas > 0 && (
             <button
@@ -991,8 +1000,28 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                                   );
                                 })()}
                               </div>
-                              <div className="text-primary text-[10px] uppercase font-bold shrink-0 flex items-center gap-1">
-                                Ver itens ➔
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                  size="sm"
+                                  type="button"
+                                  variant="outline"
+                                  className="h-7 text-[11px] bg-primary/10 border-primary/20 text-primary hover:bg-primary/20 font-bold transition-all px-2.5 rounded-lg"
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    setAddUnitsDialog({
+                                      open: true,
+                                      nome: item.nome,
+                                      quantidade: '50',
+                                      categoria: item.categoria
+                                    });
+                                  }}
+                                >
+                                  <Plus className="h-3.5 w-3.5 mr-1" />
+                                  Adicionar Unidades
+                                </Button>
+                                <div className="text-primary text-[10px] uppercase font-bold flex items-center gap-1">
+                                  Ver itens ➔
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -1535,8 +1564,60 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                  </div>
                )}
             </div>
-         </SheetContent>
-      </Sheet>
+          </SheetContent>
+       </Sheet>
+      {/* Dialog para Adicionar Unidades de Ferramenta */}
+      <Dialog open={!!addUnitsDialog?.open} onOpenChange={(open) => !open && setAddUnitsDialog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adicionar Unidades de Ferramenta</DialogTitle>
+          </DialogHeader>
+          <form
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              if (!addUnitsDialog) return;
+              addToolUnits.mutate({
+                nome: addUnitsDialog.nome,
+                qtd: Number(addUnitsDialog.quantidade),
+                categoria: addUnitsDialog.categoria
+              });
+            }}
+            className="space-y-4 pt-2"
+          >
+            <div>
+              <label className="text-xs text-muted-foreground">Nome da Ferramenta</label>
+              <Input value={addUnitsDialog?.nome || ''} disabled className="h-11 font-semibold" />
+            </div>
+
+            <div>
+              <label className="text-xs text-muted-foreground font-medium">Quantas unidades deseja adicionar ao cadastro?</label>
+              <Input
+                type="number"
+                min="1"
+                placeholder="Ex: 50"
+                value={addUnitsDialog?.quantidade || ''}
+                onChange={(e) => setAddUnitsDialog(prev => prev ? { ...prev, quantidade: e.target.value } : null)}
+                className="h-11 text-lg font-bold"
+                required
+                autoFocus
+              />
+              <p className="text-[11px] text-muted-foreground mt-1">
+                Cada unidade terá um QR Code gerado automaticamente no cadastro.
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button type="button" variant="outline" onClick={() => setAddUnitsDialog(null)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={addToolUnits.isPending} className="bg-primary">
+                {addToolUnits.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                Adicionar {addUnitsDialog?.quantidade || 0} Unidade(s)
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
