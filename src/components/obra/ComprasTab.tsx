@@ -456,6 +456,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     qtd_parcelas: 1,
     parcelas: [{ parcela: '1/1', data_envio: '', valor_solicitado: '', valor_pago: '', valor_estornado: '', data_pagamento: '', estornado: false }],
     ccSplits: [] as CostCenterSplit[],
+    ccRateioMode: 'pct' as 'pct' | 'valor',
   });
   const [form, setForm] = useState(emptyForm());
 
@@ -2937,34 +2938,64 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
                   <Label className="text-[10px] uppercase tracking-wider text-white/50 font-bold">Distribuição de Centro de Custo</Label>
-                  <p className="text-[10px] text-white/40">Defina um único centro de custo ou faça o rateio percentual.</p>
+                  <p className="text-[10px] text-white/40">Defina um único centro de custo ou faça o rateio por valor ou porcentagem.</p>
                 </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    if (form.ccSplits && form.ccSplits.length > 0) {
-                      const ccVal = form.ccSplits[0]?.ccId.toString() || '';
-                      const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(ccVal));
-                      setForm(f => ({
-                        ...f,
-                        centro_custo: ccVal,
-                        cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento',
-                        ccSplits: []
-                      }));
-                    } else {
-                      const initialCc = form.centro_custo ? parseInt(form.centro_custo) : 1;
-                      setForm(f => ({
-                        ...f,
-                        ccSplits: [{ ccId: initialCc, pct: 100 }]
-                      }));
-                    }
-                  }}
-                  className="h-7 text-[10px] font-bold bg-white/5 border-white/10 hover:bg-white/10 rounded-lg text-white"
-                >
-                  {form.ccSplits && form.ccSplits.length > 0 ? '❌ Cancelar Rateio' : '🥞 Dividir (Rateio)'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  {form.ccSplits && form.ccSplits.length > 0 && (
+                    <div className="flex items-center bg-white/5 border border-white/10 rounded-lg p-0.5 gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, ccRateioMode: 'pct' }))}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                          (form.ccRateioMode || 'pct') === 'pct'
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-white/40 hover:text-white/70'
+                        }`}
+                      >
+                        %
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, ccRateioMode: 'valor' }))}
+                        className={`px-2.5 py-1 rounded-md text-[10px] font-bold transition-all ${
+                          form.ccRateioMode === 'valor'
+                            ? 'bg-primary text-white shadow-sm'
+                            : 'text-white/40 hover:text-white/70'
+                        }`}
+                      >
+                        R$
+                      </button>
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (form.ccSplits && form.ccSplits.length > 0) {
+                        const ccVal = form.ccSplits[0]?.ccId.toString() || '';
+                        const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(ccVal));
+                        setForm(f => ({
+                          ...f,
+                          centro_custo: ccVal,
+                          cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento',
+                          ccSplits: [],
+                          ccRateioMode: 'pct'
+                        }));
+                      } else {
+                        const initialCc = form.centro_custo ? parseInt(form.centro_custo) : 1;
+                        setForm(f => ({
+                          ...f,
+                          ccSplits: [{ ccId: initialCc, pct: 100 }],
+                          ccRateioMode: 'pct'
+                        }));
+                      }
+                    }}
+                    className="h-7 text-[10px] font-bold bg-white/5 border-white/10 hover:bg-white/10 rounded-lg text-white"
+                  >
+                    {form.ccSplits && form.ccSplits.length > 0 ? '❌ Cancelar Rateio' : '🥞 Dividir (Rateio)'}
+                  </Button>
+                </div>
               </div>
 
               {!(form.ccSplits && form.ccSplits.length > 0) ? (
@@ -2992,6 +3023,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                   {form.ccSplits.map((split, idx) => {
                     const totalVal = form.parcelas.reduce((s, p) => s + (parseFloat(p.valor_pago || p.valor_solicitado) || 0), 0) || 0;
                     const splitAmount = totalVal * (split.pct / 100);
+                    const isValorMode = form.ccRateioMode === 'valor';
 
                     return (
                       <div key={idx} className="flex items-center gap-2 bg-[#0e1629] p-2 rounded-xl border border-white/5">
@@ -3016,26 +3048,58 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                             </SelectContent>
                           </Select>
                         </div>
-                        <div className="w-20 shrink-0 relative">
-                          <Input
-                            type="number"
-                            min="0"
-                            max="100"
-                            placeholder="%"
-                            value={split.pct || ''}
-                            onChange={e => {
-                              const pctVal = parseFloat(e.target.value) || 0;
-                              const newSplits = [...form.ccSplits];
-                              newSplits[idx].pct = pctVal;
-                              setForm(f => ({ ...f, ccSplits: newSplits }));
-                            }}
-                            className="text-xs bg-[#0a1020] border-white/5 text-white pr-6 h-9"
-                          />
-                          <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40">%</span>
-                        </div>
+                        {isValorMode ? (
+                          // Modo Valor: digita R$ e calcula % automaticamente
+                          <div className="w-28 shrink-0 relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40">R$</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0,00"
+                              value={splitAmount > 0 ? splitAmount.toFixed(2) : ''}
+                              onChange={e => {
+                                const valInput = parseFloat(e.target.value) || 0;
+                                const newPct = totalVal > 0 ? (valInput / totalVal) * 100 : 0;
+                                const newSplits = [...form.ccSplits];
+                                newSplits[idx].pct = newPct;
+                                setForm(f => ({ ...f, ccSplits: newSplits }));
+                              }}
+                              className="text-xs bg-[#0a1020] border-white/5 text-white pl-7 h-9"
+                            />
+                          </div>
+                        ) : (
+                          // Modo Porcentagem
+                          <div className="w-20 shrink-0 relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="%"
+                              value={split.pct || ''}
+                              onChange={e => {
+                                const pctVal = parseFloat(e.target.value) || 0;
+                                const newSplits = [...form.ccSplits];
+                                newSplits[idx].pct = pctVal;
+                                setForm(f => ({ ...f, ccSplits: newSplits }));
+                              }}
+                              className="text-xs bg-[#0a1020] border-white/5 text-white pr-6 h-9"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40">%</span>
+                          </div>
+                        )}
                         <div className="w-24 shrink-0 text-right pr-2">
-                          <p className="text-[8px] text-white/40 uppercase font-bold tracking-wider leading-none">Valor Rateado</p>
-                          <p className="text-xs text-primary font-mono font-bold">{fmt(splitAmount)}</p>
+                          {isValorMode ? (
+                            <>
+                              <p className="text-[8px] text-white/40 uppercase font-bold tracking-wider leading-none">Porcentagem</p>
+                              <p className="text-xs text-primary font-mono font-bold">{split.pct.toFixed(2)}%</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[8px] text-white/40 uppercase font-bold tracking-wider leading-none">Valor Rateado</p>
+                              <p className="text-xs text-primary font-mono font-bold">{fmt(splitAmount)}</p>
+                            </>
+                          )}
                         </div>
                         <Button
                           type="button"
