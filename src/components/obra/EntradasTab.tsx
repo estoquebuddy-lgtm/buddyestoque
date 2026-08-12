@@ -128,6 +128,15 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     enabled: !!obraId
   });
 
+  const { data: ferramentasCounts = [] } = useQuery({
+    queryKey: ['ferramentas-counts', obraId],
+    queryFn: async () => {
+      const { data } = await supabase.from('ferramentas').select('id, nome, observacoes, estado').eq('obra_id', obraId);
+      return data || [];
+    },
+    enabled: !!obraId
+  });
+
   // Auto-sync missing ferramentas in the background so total ferramentas ALWAYS matches total entradas automatically
   useEffect(() => {
     if (!obraId || !entradas || !Array.isArray(entradas) || entradas.length === 0 || !ferramentasCounts) return;
