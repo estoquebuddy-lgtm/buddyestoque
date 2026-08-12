@@ -125,7 +125,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     return () => { supabase.removeChannel(channel); };
   }, [obraId, queryClient]);
 
-  // Auto-healing effect for tool products stock discrepancies in ProdutosTab
+  // Auto-healing effect: sync estoque_atual for [FERRAMENTA] products only — never deletes ferramentas
   useEffect(() => {
     if (!obraId) return;
 
@@ -141,43 +141,24 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         for (const p of allProds) {
           if (!p.nome?.startsWith('[FERRAMENTA]')) continue;
           const cleanName = p.nome.replace('[FERRAMENTA] ', '').trim();
-          
-          // Fetch valid entradas for this product
+
+          // ⚠️ IMPORTANTE: usamos .or() para incluir entradas com status_entrega NULL
+          // (lançamentos diretos pela aba Entradas) E as com status REALIZADO.
+          // .neq('status_entrega', 'PENDENTE') não funciona para NULL no PostgreSQL.
           const { data: entList } = await supabase
             .from('entradas')
             .select('quantidade')
             .eq('obra_id', obraId)
             .eq('produto_id', p.id)
-            .neq('status_entrega', 'PENDENTE');
+            .or('status_entrega.is.null,status_entrega.eq.REALIZADO');
 
           const expectedStock = (entList || []).reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
 
-          if (expectedStock > 0) {
-            // Fetch tools
-            const { data: toolList } = await supabase
-              .from('ferramentas')
-              .select('id, estado')
-              .eq('obra_id', obraId)
-              .ilike('nome', cleanName);
-
-            if (toolList && toolList.length > expectedStock) {
-              const excess = toolList.length - expectedStock;
-              const avail = toolList.filter(t => t.estado === 'disponivel' || t.estado === 'comprado');
-              if (avail.length > 0) {
-                const toDel = avail.slice(0, excess).map(t => t.id);
-                for (let i = 0; i < toDel.length; i += 50) {
-                  await supabase.from('ferramentas').delete().in('id', toDel.slice(i, i + 50));
-                }
-              }
-            }
-
-            if (p.estoque_atual !== expectedStock) {
-              await supabase.from('produtos').update({ estoque_atual: expectedStock }).eq('id', p.id);
-              queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
-              queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
-              queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-              queryClient.invalidateQueries({ queryKey: ['ferramentas-short', obraId] });
-            }
+          // Sync estoque_atual ONLY — never delete ferramentas automatically
+          if (expectedStock >= 0 && p.estoque_atual !== expectedStock) {
+            await supabase.from('produtos').update({ estoque_atual: expectedStock }).eq('id', p.id);
+            queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+            queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
           }
         }
       } catch (err) {

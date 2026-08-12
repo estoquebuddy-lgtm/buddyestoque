@@ -338,43 +338,8 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
     if (isLoadingGlobal || productsWithCosts.length === 0) return;
 
     const syncStockToDatabase = async () => {
-      let cleanedToolsCount = 0;
-
-      // 1. Clean up excess duplicate tool rows in ferramentas table if tools > total physical entries
-      for (const p of productsWithCosts) {
-        if (!p.nome?.startsWith('[FERRAMENTA]')) continue;
-        const toolName = p.nome.replace('[FERRAMENTA] ', '').trim().toLowerCase();
-        
-        const prodEntradas = entradasShort.filter((e: any) => e.produto_id === p.id && e.status_entrega !== 'PENDENTE');
-        const totalPhysicalEntriesQtd = prodEntradas.reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
-
-        const prodTools = ferramentasShort.filter((f: any) => f.nome?.toLowerCase().trim() === toolName);
-
-        // If tools count exceeds total entry purchases, delete the excess available tools
-        if (totalPhysicalEntriesQtd > 0 && prodTools.length > totalPhysicalEntriesQtd) {
-          const excessCount = prodTools.length - totalPhysicalEntriesQtd;
-          const availableTools = prodTools.filter((t: any) => t.estado === 'disponivel' || t.estado === 'comprado');
-          
-          if (availableTools.length > 0) {
-            const toDelete = availableTools.slice(0, excessCount);
-            const deleteIds = toDelete.map((t: any) => t.id);
-
-            const CHUNK_SIZE = 50;
-            for (let i = 0; i < deleteIds.length; i += CHUNK_SIZE) {
-              const chunk = deleteIds.slice(i, i + CHUNK_SIZE);
-              await supabase.from('ferramentas').delete().in('id', chunk);
-            }
-            cleanedToolsCount += toDelete.length;
-          }
-        }
-      }
-
-      if (cleanedToolsCount > 0) {
-        queryClient.invalidateQueries({ queryKey: ['ferramentas-short', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-      }
-
-      // 2. Sync estoque_atual in produtos table
+      // Sync estoque_atual in produtos table ONLY — never delete ferramentas automatically
+      // (Ferramentas são deletadas apenas explicitamente pelo usuário)
       const mismatchedProducts = productsWithCosts.filter((p: any) => {
         return p.estoque_atual !== p.estoque_atual_db;
       });
