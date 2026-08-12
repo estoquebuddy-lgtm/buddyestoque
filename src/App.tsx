@@ -13,6 +13,7 @@ import AdminUsers from "./pages/AdminUsers";
 import PendingApproval from "./pages/PendingApproval";
 import NotFound from "./pages/NotFound";
 import UpdatePassword from "./pages/UpdatePassword";
+import RelatorioCliente from "./pages/RelatorioCliente";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -91,6 +92,11 @@ function AppRoutes() {
       <Route path="/obras" element={<ProtectedRoute><Obras /></ProtectedRoute>} />
       <Route path="/obra/:id" element={<ProtectedRoute><ObraDetail /></ProtectedRoute>} />
       <Route path="/admin/usuarios" element={<ProtectedRoute requireAdmin><AdminUsers /></ProtectedRoute>} />
+      
+      {/* Public Client Report Routes (View-Only Portal for project owners) */}
+      <Route path="/relatorio-cliente" element={<RelatorioCliente />} />
+      <Route path="/relatorio-cliente/:obraId" element={<RelatorioCliente />} />
+
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, LayoutDashboard, Bell, Clock, ShieldAlert, ChevronDown, ChevronUp, MessageSquarePlus, FileText } from 'lucide-react';
+import { AlertTriangle, ArrowUpFromLine, ArrowDownToLine, Wrench, Package, LayoutDashboard, Bell, Clock, ShieldAlert, ChevronDown, ChevronUp, MessageSquarePlus, FileText, Share2, Copy, Check, ExternalLink, Eye, Input as LucideInput } from 'lucide-react';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { motion, AnimatePresence } from 'framer-motion';
 import { SkeletonCards } from '@/components/SkeletonList';
@@ -14,12 +14,17 @@ import ImageThumbnail from '@/components/ImageThumbnail';
 import { startOfDay, endOfDay } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 
 export default function DashboardTab({ obraId, onTabChange }: { obraId: string; onTabChange?: (tab: string) => void }) {
   const { user } = useAuth();
   const { isAdmin } = useProfile();
   const navigate = useNavigate();
   const [notifOpen, setNotifOpen] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   // ─── Produtos ────────────────────────────────────────────
   const { data: produtos = [], isLoading: loadingProdutos } = useQuery({
@@ -176,7 +181,17 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
             <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest mt-1">Buddy Construtora</p>
           </div>
         </div>
+
         <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            onClick={() => setShareModalOpen(true)}
+            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-xs h-9 px-3.5 rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition-all shrink-0"
+          >
+            <Share2 className="h-4 w-4" />
+            <span>Link do Cliente</span>
+          </Button>
+
           <SidebarTrigger className="lg:hidden h-10 w-10 border shadow-sm" />
           <div className="px-3.5 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-[10px] font-black text-emerald-600 flex items-center gap-2 tracking-wider">
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -432,6 +447,73 @@ export default function DashboardTab({ obraId, onTabChange }: { obraId: string; 
         </Card>
       </div>
 
+      {/* ═══════ MODAL DO GERADOR DE LINK DO CLIENTE ═══════ */}
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="bg-[#0f172a] border border-slate-800 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-display font-bold text-white flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-amber-400" />
+              Link de Visualização do Cliente
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-400">
+              Gere um link de leitura para o dono da obra ou clientes acompanharem os custos e lançamentos sem permissão de edição.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">Link Público de Acesso:</label>
+              <div className="flex items-center gap-2">
+                <Input
+                  readOnly
+                  value={`${window.location.origin}/relatorio-cliente?obraId=${obraId}`}
+                  className="bg-slate-900 border-slate-700 text-amber-400 text-xs h-10 font-mono"
+                />
+                <Button
+                  onClick={() => {
+                    const link = `${window.location.origin}/relatorio-cliente?obraId=${obraId}`;
+                    navigator.clipboard.writeText(link);
+                    setCopied(true);
+                    toast.success('Link copiado!');
+                    setTimeout(() => setCopied(false), 3000);
+                  }}
+                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold h-10 px-3 shrink-0"
+                >
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-900/80 rounded-xl border border-slate-800 text-xs text-slate-400 space-y-1">
+              <p className="font-semibold text-white flex items-center gap-1.5">
+                <Eye className="h-3.5 w-3.5 text-amber-400" /> Somente Leitura
+              </p>
+              <p>
+                O cliente terá acesso ao Orçamento Total, Realizado, Saldo, Não Previstos, Gráfico de Evolução Físico-Financeira e Lista Filtrável de Lançamentos.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShareModalOpen(false)}
+              className="text-slate-400 hover:text-white"
+            >
+              Fechar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => window.open(`/relatorio-cliente?obraId=${obraId}`, '_blank')}
+              className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs gap-1.5"
+            >
+              <ExternalLink className="h-4 w-4 text-amber-400" />
+              Abrir Visualização
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
