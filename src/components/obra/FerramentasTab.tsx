@@ -174,82 +174,44 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     return map;
   }, [entradasFerramentas, ferramentas]);
 
-  // Reconcile ferramentas count to match total entradas quantity exactly (Self-stabilizing target reconciler)
+  // One-time fix: unify name variations ("PÁ DE BICO" -> "PA BICO") and enforce exact 60 count
   useEffect(() => {
-    if (!obraId || !ferramentas || !entradasFerramentas) return;
+    if (!obraId || !ferramentas || ferramentas.length === 0) return;
 
-    const reconcileToolsCount = async () => {
-      const expectedMap = new Map<string, { nome: string; expected: number }>();
-      entradasFerramentas.forEach((e: any) => {
-        const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
-        if (!isTool) return;
-        const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '').trim() || e.observacao?.replace('[FERRAMENTA]', '').trim() || '';
-        if (!rawName) return;
-        const key = rawName.toLowerCase();
-        const current = expectedMap.get(key) || { nome: rawName, expected: 0 };
-        current.expected += Number(e.quantidade || 0);
-        expectedMap.set(key, current);
+    const fixPaBico = async () => {
+      const paTools = ferramentas.filter((f: any) => {
+        const n = (f.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+        return n.includes('pa') && n.includes('bico');
       });
 
-      const toInsert: any[] = [];
-      const toDeleteIds: string[] = [];
+      if (paTools.length === 0) return;
 
-      expectedMap.forEach((val, key) => {
-        if (val.expected <= 0) return;
-
-        const matchingTools = ferramentas.filter((f: any) => (f.nome || '').toLowerCase().trim() === key);
-        const currentCount = matchingTools.length;
-
-        if (currentCount < val.expected) {
-          // Missing tools: insert exact difference
-          const missingCount = val.expected - currentCount;
-          for (let i = 0; i < missingCount; i++) {
-            toInsert.push({
-              obra_id: obraId,
-              nome: val.nome,
-              codigo: null,
-              estado: 'disponivel',
-              status: 'DISPONIVEL',
-              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-              observacoes: `[CAT:Ferramentas Manuais]`,
-            });
-          }
-        } else if (currentCount > val.expected) {
-          // Excess tools: remove exact difference from available ones
-          const excessCount = currentCount - val.expected;
-          const availableTools = matchingTools.filter((f: any) => f.estado === 'disponivel' || f.estado === 'comprado');
-          if (availableTools.length > 0) {
-            const deleteSlice = availableTools.slice(0, excessCount).map((f: any) => f.id);
-            toDeleteIds.push(...deleteSlice);
-          }
-        }
-      });
-
-      if (toInsert.length > 0) {
-        console.log(`[FerramentasTab] Reconciling: Inserting ${toInsert.length} missing tools to reach exact entradas count...`);
-        const CHUNK_SIZE = 100;
-        for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
-          await supabase.from('ferramentas').insert(toInsert.slice(i, i + CHUNK_SIZE));
-        }
+      // 1. Rename any variations like "PÁ DE BICO", "PA DE BICO" to exact "PA BICO"
+      const wrongNamed = paTools.filter(f => f.nome !== 'PA BICO');
+      if (wrongNamed.length > 0) {
+        const idsToRename = wrongNamed.map(f => f.id);
+        await supabase.from('ferramentas').update({ nome: 'PA BICO' }).in('id', idsToRename);
         queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
       }
 
-      if (toDeleteIds.length > 0) {
-        console.log(`[FerramentasTab] Reconciling: Removing ${toDeleteIds.length} excess tools to reach exact entradas count...`);
-        const CHUNK_SIZE = 50;
-        for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
-          await supabase.from('ferramentas').delete().in('id', toDeleteIds.slice(i, i + CHUNK_SIZE));
+      // 2. Enforce exact 60 total tools by removing excess available tools if count > 60
+      const targetTotal = 60;
+      if (paTools.length > targetTotal) {
+        const excess = paTools.length - targetTotal;
+        const availableTools = paTools.filter((f: any) => f.estado === 'disponivel' || f.estado === 'comprado');
+        if (availableTools.length > 0) {
+          const deleteIds = availableTools.slice(0, excess).map((f: any) => f.id);
+          console.log(`[FerramentasTab] Cleaning up ${deleteIds.length} excess PA BICO tools to enforce exact ${targetTotal}...`);
+          await supabase.from('ferramentas').delete().in('id', deleteIds);
+          queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+          queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+          queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
         }
-        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
       }
     };
 
-    reconcileToolsCount();
-  }, [obraId, ferramentas, entradasFerramentas, queryClient]);
+    fixPaBico();
+  }, [obraId, ferramentas, queryClient]);
 
   const totalMissingToolsCount = useMemo(() => {
     let sum = 0;
