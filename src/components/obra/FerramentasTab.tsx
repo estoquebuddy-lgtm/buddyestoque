@@ -146,9 +146,9 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     const map = new Map<string, { nome: string; expected: number; existing: number; missing: number; categoria?: string }>();
     
     entradasFerramentas.forEach((e: any) => {
-      const isTool = e.observacao?.startsWith('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
+      const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
       if (!isTool) return;
-      const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '').trim() || '';
+      const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '').trim() || e.observacao?.replace('[FERRAMENTA]', '').trim() || '';
       if (!rawName) return;
 
       const key = rawName.toLowerCase();
@@ -173,6 +173,52 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
     return map;
   }, [entradasFerramentas, ferramentas]);
+
+  // Auto-cleanup excess duplicate tools created by loop sync (e.g. reducing 126 PA BICO back to exact 60 entradas)
+  useEffect(() => {
+    if (!obraId || !ferramentas || ferramentas.length === 0 || !entradasFerramentas || entradasFerramentas.length === 0) return;
+
+    const cleanupExcessDuplicateTools = async () => {
+      const expectedMap = new Map<string, number>();
+      entradasFerramentas.forEach((e: any) => {
+        const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
+        if (!isTool) return;
+        const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '').trim() || e.observacao?.replace('[FERRAMENTA]', '').trim() || '';
+        if (!rawName) return;
+        const key = rawName.toLowerCase();
+        expectedMap.set(key, (expectedMap.get(key) || 0) + Number(e.quantidade || 0));
+      });
+
+      const toDeleteIds: string[] = [];
+
+      expectedMap.forEach((expectedTotal, key) => {
+        if (expectedTotal <= 0) return;
+        const matchingTools = ferramentas.filter((f: any) => (f.nome || '').toLowerCase().trim() === key);
+        if (matchingTools.length > expectedTotal) {
+          const excessCount = matchingTools.length - expectedTotal;
+          const availableTools = matchingTools.filter((f: any) => f.estado === 'disponivel' || f.estado === 'comprado');
+          if (availableTools.length > 0) {
+            const deleteSlice = availableTools.slice(0, excessCount).map((f: any) => f.id);
+            toDeleteIds.push(...deleteSlice);
+          }
+        }
+      });
+
+      if (toDeleteIds.length > 0) {
+        console.log(`[FerramentasTab] Deduplicating: Removing ${toDeleteIds.length} excess tools to match exact entradas count...`);
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
+          const chunk = toDeleteIds.slice(i, i + CHUNK_SIZE);
+          await supabase.from('ferramentas').delete().in('id', chunk);
+        }
+        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+        queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+        queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
+      }
+    };
+
+    cleanupExcessDuplicateTools();
+  }, [obraId, ferramentas, entradasFerramentas, queryClient]);
 
   const totalMissingToolsCount = useMemo(() => {
     let sum = 0;

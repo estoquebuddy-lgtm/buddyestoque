@@ -137,65 +137,6 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     enabled: !!obraId
   });
 
-  // Auto-sync missing ferramentas in the background so total ferramentas ALWAYS matches total entradas automatically
-  useEffect(() => {
-    if (!obraId || !entradas || !Array.isArray(entradas) || entradas.length === 0 || !ferramentasCounts) return;
-
-    const autoSyncMissingTools = async () => {
-      const toolMap: { [key: string]: { name: string; target: number } } = {};
-
-      for (const e of entradas) {
-        const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
-        if (!isTool) continue;
-
-        const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '') || e.observacao?.replace('[FERRAMENTA]', '').trim() || '';
-        const cleanName = rawName.trim();
-        if (!cleanName) continue;
-
-        const key = cleanName.toLowerCase();
-        if (!toolMap[key]) {
-          toolMap[key] = { name: cleanName, target: 0 };
-        }
-        toolMap[key].target += Number(e.quantidade) || 0;
-      }
-
-      const toolsToInsert: any[] = [];
-
-      for (const [key, item] of Object.entries(toolMap)) {
-        const existingTools = ferramentasCounts.filter((f: any) => f.nome?.toLowerCase().trim() === key);
-        const missingCount = item.target - existingTools.length;
-
-        if (missingCount > 0) {
-          for (let i = 0; i < missingCount; i++) {
-            toolsToInsert.push({
-              obra_id: obraId,
-              nome: item.name,
-              codigo: null,
-              estado: 'disponivel',
-              status: 'DISPONIVEL',
-              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-              observacoes: `[CAT:Ferramentas Manuais]`,
-            });
-          }
-        }
-      }
-
-      if (toolsToInsert.length > 0) {
-        console.log(`[EntradasTab] Automatically generating ${toolsToInsert.length} missing ferramentas in background...`);
-        const CHUNK_SIZE = 100;
-        for (let i = 0; i < toolsToInsert.length; i += CHUNK_SIZE) {
-          const chunk = toolsToInsert.slice(i, i + CHUNK_SIZE);
-          await supabase.from('ferramentas').insert(chunk);
-        }
-        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['ferramentas-counts', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['ferramentas-short', obraId] });
-      }
-    };
-
-    autoSyncMissingTools();
-  }, [obraId, entradas, ferramentasCounts, queryClient]);
-
   // 2. Safe array wrappers derived from queries
   const safeEntradas = Array.isArray(entradas) ? entradas : [];
   const safeProdutos = Array.isArray(produtos) ? produtos : [];
