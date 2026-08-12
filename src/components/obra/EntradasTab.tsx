@@ -128,50 +128,64 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     enabled: !!obraId
   });
 
-  const { data: ferramentasCounts = [] } = useQuery({
-    queryKey: ['ferramentas-counts', obraId],
-    queryFn: async () => {
-      const { data } = await supabase.from('ferramentas').select('id, nome, observacoes, estado').eq('obra_id', obraId);
-      return data || [];
-    },
-    enabled: !!obraId
-  });
+  // Auto-sync missing ferramentas in the background so total ferramentas ALWAYS matches total entradas automatically
+  useEffect(() => {
+    if (!obraId || !entradas || !Array.isArray(entradas) || entradas.length === 0 || !ferramentasCounts) return;
 
-  const syncFerramentas = useMutation({
-    mutationFn: async ({ nomeFerramenta, quantidadeDesejada, entradaId, isPendente }: { nomeFerramenta: string; quantidadeDesejada: number; entradaId?: string; isPendente?: boolean }) => {
-      const cleanName = nomeFerramenta.replace('[FERRAMENTA] ', '').trim();
-      const existing = ferramentasCounts.filter((f: any) => f.nome?.toLowerCase().trim() === cleanName.toLowerCase());
-      const missing = quantidadeDesejada - existing.length;
+    const autoSyncMissingTools = async () => {
+      const toolMap: { [key: string]: { name: string; target: number } } = {};
 
-      if (missing <= 0) {
-        toast.info('Todas as ferramentas para este item já estão cadastradas.');
-        return;
+      for (const e of entradas) {
+        const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
+        if (!isTool) continue;
+
+        const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '') || e.observacao?.replace('[FERRAMENTA]', '').trim() || '';
+        const cleanName = rawName.trim();
+        if (!cleanName) continue;
+
+        const key = cleanName.toLowerCase();
+        if (!toolMap[key]) {
+          toolMap[key] = { name: cleanName, target: 0 };
+        }
+        toolMap[key].target += Number(e.quantidade) || 0;
       }
 
-      const toolsToInsert = Array.from({ length: missing }, (_, i) => ({
-        obra_id: obraId,
-        nome: cleanName,
-        codigo: null,
-        estado: isPendente ? 'comprado' : 'disponivel',
-        status: isPendente ? 'COMPRADO' : 'DISPONIVEL',
-        qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-        observacoes: `[CAT:Ferramentas Manuais] [LOC:]${entradaId ? ` [ENTRADA_ID:${entradaId}]` : ''}`,
-      }));
+      const toolsToInsert: any[] = [];
 
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < toolsToInsert.length; i += CHUNK_SIZE) {
-        const chunk = toolsToInsert.slice(i, i + CHUNK_SIZE);
-        const { error } = await supabase.from('ferramentas').insert(chunk);
-        if (error) throw error;
+      for (const [key, item] of Object.entries(toolMap)) {
+        const existingTools = ferramentasCounts.filter((f: any) => f.nome?.toLowerCase().trim() === key);
+        const missingCount = item.target - existingTools.length;
+
+        if (missingCount > 0) {
+          for (let i = 0; i < missingCount; i++) {
+            toolsToInsert.push({
+              obra_id: obraId,
+              nome: item.name,
+              codigo: null,
+              estado: 'disponivel',
+              status: 'DISPONIVEL',
+              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              observacoes: `[CAT:Ferramentas Manuais]`,
+            });
+          }
+        }
       }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-      queryClient.invalidateQueries({ queryKey: ['ferramentas-counts', obraId] });
-      toast.success('Ferramentas faltantes geradas com sucesso no cadastro!');
-    },
-    onError: (e: any) => toast.error(e.message)
-  });
+
+      if (toolsToInsert.length > 0) {
+        console.log(`[EntradasTab] Automatically generating ${toolsToInsert.length} missing ferramentas in background...`);
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < toolsToInsert.length; i += CHUNK_SIZE) {
+          const chunk = toolsToInsert.slice(i, i + CHUNK_SIZE);
+          await supabase.from('ferramentas').insert(chunk);
+        }
+        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+        queryClient.invalidateQueries({ queryKey: ['ferramentas-counts', obraId] });
+        queryClient.invalidateQueries({ queryKey: ['ferramentas-short', obraId] });
+      }
+    };
+
+    autoSyncMissingTools();
+  }, [obraId, entradas, ferramentasCounts, queryClient]);
 
   // 2. Safe array wrappers derived from queries
   const safeEntradas = Array.isArray(entradas) ? entradas : [];
@@ -1066,41 +1080,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                       </div>
                     )}
 
-                    {/* Missing Ferramentas alert/sync banner */}
-                    {(() => {
-                      if (!isTool) return null;
-                      const cleanName = displayName.trim();
-                      const existingCount = ferramentasCounts.filter((f: any) => f.nome?.toLowerCase().trim() === cleanName.toLowerCase()).length;
-                      const targetCount = Number(e.quantidade);
-                      const missingCount = targetCount - existingCount;
 
-                      if (missingCount <= 0) return null;
-
-                      return (
-                        <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2 bg-amber-500/10 p-2.5 rounded-xl">
-                          <div className="flex items-center gap-1.5 text-xs text-amber-300">
-                            <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
-                            <span>No cadastro de Ferramentas há <strong>{existingCount}</strong> de <strong>{targetCount}</strong> unidades ({missingCount} faltando)</span>
-                          </div>
-                          <Button
-                            size="sm"
-                            type="button"
-                            variant="outline"
-                            className="ml-auto h-7 text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold border-none transition-all shadow"
-                            disabled={syncFerramentas.isPending}
-                            onClick={() => syncFerramentas.mutate({
-                              nomeFerramenta: displayName,
-                              quantidadeDesejada: targetCount,
-                              entradaId: e.id,
-                              isPendente: true
-                            })}
-                          >
-                            {syncFerramentas.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
-                            Gerar {missingCount} Faltantes
-                          </Button>
-                        </div>
-                      );
-                    })()}
                   </CardContent>
                 </Card>
               );
@@ -1190,41 +1170,7 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
                     </div>
                   )}
 
-                  {/* Missing Ferramentas alert/sync banner */}
-                  {(() => {
-                    if (!isTool) return null;
-                    const cleanName = displayName.trim();
-                    const existingCount = ferramentasCounts.filter((f: any) => f.nome?.toLowerCase().trim() === cleanName.toLowerCase()).length;
-                    const targetCount = Number(e.quantidade);
-                    const missingCount = targetCount - existingCount;
 
-                    if (missingCount <= 0) return null;
-
-                    return (
-                      <div className="mt-3 pt-2.5 border-t border-amber-500/20 flex flex-wrap items-center justify-between gap-2 bg-amber-500/10 p-2.5 rounded-xl">
-                        <div className="flex items-center gap-1.5 text-xs text-amber-300">
-                          <AlertCircle className="h-4 w-4 text-amber-400 shrink-0" />
-                          <span>No cadastro de Ferramentas há <strong>{existingCount}</strong> de <strong>{targetCount}</strong> unidades (faltam {missingCount} no cadastro)</span>
-                        </div>
-                        <Button
-                          size="sm"
-                          type="button"
-                          variant="outline"
-                          className="ml-auto h-7 text-xs bg-amber-500 hover:bg-amber-400 text-black font-bold border-none transition-all shadow"
-                          disabled={syncFerramentas.isPending}
-                          onClick={() => syncFerramentas.mutate({
-                            nomeFerramenta: displayName,
-                            quantidadeDesejada: targetCount,
-                            entradaId: e.id,
-                            isPendente: subTab === 'comprados'
-                          })}
-                        >
-                          {syncFerramentas.isPending ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Plus className="h-3.5 w-3.5 mr-1" />}
-                          Gerar {missingCount} Faltantes
-                        </Button>
-                      </div>
-                    );
-                  })()}
                 </CardContent>
               </Card>
             );
