@@ -469,21 +469,67 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
       const ent = safeEntradas.find((e: any) => e.id === id);
       const isTool = isFerramenta(ent);
 
-      const { error } = await supabase.from('entradas').delete().eq('id', id);
-      if (error) throw error;
+      // If it's a tool entry, find and delete associated ferramentas
+      if (isTool) {
+        const cleanName = (ent?.produtos?.nome?.replace('[FERRAMENTA] ', '') || ent?.observacao?.replace('[FERRAMENTA]', '') || '').trim();
+        const deleteQtd = Number(ent?.quantidade || 0);
 
-      // If it was a ferramenta entry, check if the virtual [FERRAMENTA] product
-      // has any remaining entries; if not, remove the virtual product too
-      if (isTool && ent?.produto_id) {
-        const { data: remaining } = await supabase
-          .from('entradas')
+        // 1. First try deleting tools linked by ENTRADA_ID in observacoes
+        const { data: linkedTools } = await supabase
+          .from('ferramentas')
           .select('id')
-          .eq('produto_id', ent.produto_id)
-          .limit(1);
-        if (!remaining || remaining.length === 0) {
-          await supabase.from('produtos').delete().eq('id', ent.produto_id);
+          .eq('obra_id', obraId)
+          .like('observacoes', `%[ENTRADA_ID:${id}]%`);
+
+        if (linkedTools && linkedTools.length > 0) {
+          const linkedIds = linkedTools.map(t => t.id);
+          await supabase.from('ferramentas').delete().in('id', linkedIds);
+        } else if (cleanName && deleteQtd > 0) {
+          // 2. Otherwise find available tools matching tool name and delete up to deleteQtd
+          const { data: matchingTools } = await supabase
+            .from('ferramentas')
+            .select('id, estado')
+            .eq('obra_id', obraId)
+            .ilike('nome', cleanName);
+
+          if (matchingTools && matchingTools.length > 0) {
+            const avail = matchingTools.filter(t => t.estado === 'disponivel' || t.estado === 'comprado');
+            const toDel = avail.slice(0, deleteQtd).map(t => t.id);
+            if (toDel.length > 0) {
+              await supabase.from('ferramentas').delete().in('id', toDel);
+            }
+          }
+        }
+
+        // 3. Check if there are any remaining entries for this virtual tool product
+        if (ent?.produto_id) {
+          const { data: remaining } = await supabase
+            .from('entradas')
+            .select('id')
+            .eq('produto_id', ent.produto_id)
+            .neq('id', id)
+            .limit(1);
+
+          if (!remaining || remaining.length === 0) {
+            // No remaining entries: delete virtual product and ALL remaining available tools of this name
+            await supabase.from('produtos').delete().eq('id', ent.produto_id);
+            if (cleanName) {
+              const { data: remainingTools } = await supabase
+                .from('ferramentas')
+                .select('id, estado')
+                .eq('obra_id', obraId)
+                .ilike('nome', cleanName);
+              const availRem = (remainingTools || []).filter(t => t.estado === 'disponivel' || t.estado === 'comprado').map(t => t.id);
+              if (availRem.length > 0) {
+                await supabase.from('ferramentas').delete().in('id', availRem);
+              }
+            }
+          }
         }
       }
+
+      const { error } = await supabase.from('entradas').delete().eq('id', id);
+      if (error) throw error;
 
       await supabase.from('logs_atividades' as any).insert({
         obra_id: obraId, user_id: user?.id, user_email: user?.email,
@@ -494,9 +540,13 @@ export default function EntradasTab({ obraId, fabOpen, onFabClose }: Props) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
       queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['ferramentas-counts', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['ferramentas-short', obraId] });
       queryClient.invalidateQueries({ queryKey: ['logs-atividades', obraId] });
       setDeleteId(null);
-      toast.success('Entrada excluída! Estoque e financeiro ajustados.');
+      toast.success('Entrada e ferramentas excluídas com sucesso!');
     },
     onError: (e: any) => toast.error(e.message),
   });

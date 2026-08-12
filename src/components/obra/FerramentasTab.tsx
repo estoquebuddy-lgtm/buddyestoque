@@ -173,9 +173,56 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
     return map;
   }, [entradasFerramentas, ferramentas]);
+  // Clean up available tools whose entries were deleted from Entradas tab
+  useEffect(() => {
+    if (!obraId || !ferramentas || ferramentas.length === 0 || !entradasFerramentas) return;
 
+    const cleanupOrphanedTools = async () => {
+      // Find all tool names present in entradas
+      const validToolNames = new Set<string>();
+      entradasFerramentas.forEach((e: any) => {
+        const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
+        if (!isTool) return;
+        const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '').trim() || e.observacao?.replace('[FERRAMENTA]', '').trim() || '';
+        if (rawName) validToolNames.add(rawName.toLowerCase());
+      });
 
+      // Find all tool names in ferramentas table
+      const toolGroupsInDb = new Map<string, any[]>();
+      ferramentas.forEach((f: any) => {
+        const key = (f.nome || '').toLowerCase().trim();
+        if (!key) return;
+        const arr = toolGroupsInDb.get(key) || [];
+        arr.push(f);
+        toolGroupsInDb.set(key, arr);
+      });
 
+      const idsToDelete: string[] = [];
+
+      toolGroupsInDb.forEach((toolsList, key) => {
+        // If a tool name in ferramentas table has 0 entries in Entradas, remove all available tools
+        if (!validToolNames.has(key)) {
+          const availableTools = toolsList.filter(t => t.estado === 'disponivel' || t.estado === 'comprado');
+          if (availableTools.length > 0) {
+            idsToDelete.push(...availableTools.map(t => t.id));
+          }
+        }
+      });
+
+      if (idsToDelete.length > 0) {
+        console.log(`[FerramentasTab] Cleaning up ${idsToDelete.length} orphaned tools (deleted from Entradas)...`);
+        const CHUNK_SIZE = 50;
+        for (let i = 0; i < idsToDelete.length; i += CHUNK_SIZE) {
+          await supabase.from('ferramentas').delete().in('id', idsToDelete.slice(i, i + CHUNK_SIZE));
+        }
+        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+        queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+        queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
+      }
+    };
+
+    cleanupOrphanedTools();
+  }, [obraId, ferramentas, entradasFerramentas, queryClient]);
   const totalMissingToolsCount = useMemo(() => {
     let sum = 0;
     missingToolsMap.forEach((v) => { sum += v.missing; });
