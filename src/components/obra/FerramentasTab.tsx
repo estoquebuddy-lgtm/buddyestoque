@@ -174,44 +174,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     return map;
   }, [entradasFerramentas, ferramentas]);
 
-  // One-time fix: unify name variations ("PÁ DE BICO" -> "PA BICO") and enforce exact 60 count
-  useEffect(() => {
-    if (!obraId || !ferramentas || ferramentas.length === 0) return;
 
-    const fixPaBico = async () => {
-      const paTools = ferramentas.filter((f: any) => {
-        const n = (f.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-        return n.includes('pa') && n.includes('bico');
-      });
-
-      if (paTools.length === 0) return;
-
-      // 1. Rename any variations like "PÁ DE BICO", "PA DE BICO" to exact "PA BICO"
-      const wrongNamed = paTools.filter(f => f.nome !== 'PA BICO');
-      if (wrongNamed.length > 0) {
-        const idsToRename = wrongNamed.map(f => f.id);
-        await supabase.from('ferramentas').update({ nome: 'PA BICO' }).in('id', idsToRename);
-        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-      }
-
-      // 2. Enforce exact 60 total tools by removing excess available tools if count > 60
-      const targetTotal = 60;
-      if (paTools.length > targetTotal) {
-        const excess = paTools.length - targetTotal;
-        const availableTools = paTools.filter((f: any) => f.estado === 'disponivel' || f.estado === 'comprado');
-        if (availableTools.length > 0) {
-          const deleteIds = availableTools.slice(0, excess).map((f: any) => f.id);
-          console.log(`[FerramentasTab] Cleaning up ${deleteIds.length} excess PA BICO tools to enforce exact ${targetTotal}...`);
-          await supabase.from('ferramentas').delete().in('id', deleteIds);
-          queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-          queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
-          queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
-        }
-      }
-    };
-
-    fixPaBico();
-  }, [obraId, ferramentas, queryClient]);
 
   const totalMissingToolsCount = useMemo(() => {
     let sum = 0;
@@ -1304,7 +1267,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             {groupTools[0] && (
               <ImageThumbnail src={groupTools[0].foto_url} alt={groupDetails?.name} type="ferramenta" size="sm" />
             )}
-            <div>
+            <div className="flex-1 min-w-0">
               <DialogTitle className="font-display font-bold text-lg">
                 {groupDetails?.name}
               </DialogTitle>
@@ -1312,6 +1275,22 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                 {groupTools.length} {groupTools.length === 1 ? 'unidade' : 'unidades'} neste grupo
               </p>
             </div>
+            {isAdmin && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1 border-white/10 hover:bg-white/5"
+                onClick={() => setAddUnitsDialog({
+                  open: true,
+                  nome: groupDetails?.name || '',
+                  quantidade: String(groupTools.length),
+                  categoria: groupDetails?.categoria || ''
+                })}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+                Ajustar Total
+              </Button>
+            )}
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1 mt-4">
             {groupTools.map((tool: any) => (
@@ -1602,6 +1581,54 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             </div>
           </SheetContent>
        </Sheet>
+
+      {/* Dialog for adjusting total units of a tool group */}
+      <Dialog open={!!addUnitsDialog?.open} onOpenChange={(open) => !open && setAddUnitsDialog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Ajustar Quantidade Total de Ferramentas</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-xs text-muted-foreground">
+              Ajuste a quantidade total desejada para a ferramenta <strong>{addUnitsDialog?.nome}</strong>.
+            </p>
+            <div className="space-y-2">
+              <label className="text-xs font-semibold">Quantidade Total Desejada:</label>
+              <Input
+                type="number"
+                min="0"
+                value={addUnitsDialog?.quantidade || ''}
+                onChange={(e) => setAddUnitsDialog(prev => prev ? { ...prev, quantidade: e.target.value } : null)}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="ghost" size="sm" onClick={() => setAddUnitsDialog(null)}>
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              disabled={setExactToolCount.isPending}
+              onClick={() => {
+                if (!addUnitsDialog) return;
+                const target = parseInt(addUnitsDialog.quantidade, 10);
+                if (isNaN(target) || target < 0) {
+                  toast.error('Informe uma quantidade válida');
+                  return;
+                }
+                setExactToolCount.mutate({
+                  nome: addUnitsDialog.nome,
+                  targetTotal: target,
+                  categoria: addUnitsDialog.categoria
+                });
+              }}
+            >
+              {setExactToolCount.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Salvar Ajuste
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
