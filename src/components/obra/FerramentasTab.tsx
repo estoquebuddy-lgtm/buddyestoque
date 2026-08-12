@@ -174,28 +174,49 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     return map;
   }, [entradasFerramentas, ferramentas]);
 
-  // Auto-cleanup excess duplicate tools created by loop sync (e.g. reducing 126 PA BICO back to exact 60 entradas)
+  // Reconcile ferramentas count to match total entradas quantity exactly (Self-stabilizing target reconciler)
   useEffect(() => {
-    if (!obraId || !ferramentas || ferramentas.length === 0 || !entradasFerramentas || entradasFerramentas.length === 0) return;
+    if (!obraId || !ferramentas || !entradasFerramentas) return;
 
-    const cleanupExcessDuplicateTools = async () => {
-      const expectedMap = new Map<string, number>();
+    const reconcileToolsCount = async () => {
+      const expectedMap = new Map<string, { nome: string; expected: number }>();
       entradasFerramentas.forEach((e: any) => {
         const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
         if (!isTool) return;
         const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '').trim() || e.observacao?.replace('[FERRAMENTA]', '').trim() || '';
         if (!rawName) return;
         const key = rawName.toLowerCase();
-        expectedMap.set(key, (expectedMap.get(key) || 0) + Number(e.quantidade || 0));
+        const current = expectedMap.get(key) || { nome: rawName, expected: 0 };
+        current.expected += Number(e.quantidade || 0);
+        expectedMap.set(key, current);
       });
 
+      const toInsert: any[] = [];
       const toDeleteIds: string[] = [];
 
-      expectedMap.forEach((expectedTotal, key) => {
-        if (expectedTotal <= 0) return;
+      expectedMap.forEach((val, key) => {
+        if (val.expected <= 0) return;
+
         const matchingTools = ferramentas.filter((f: any) => (f.nome || '').toLowerCase().trim() === key);
-        if (matchingTools.length > expectedTotal) {
-          const excessCount = matchingTools.length - expectedTotal;
+        const currentCount = matchingTools.length;
+
+        if (currentCount < val.expected) {
+          // Missing tools: insert exact difference
+          const missingCount = val.expected - currentCount;
+          for (let i = 0; i < missingCount; i++) {
+            toInsert.push({
+              obra_id: obraId,
+              nome: val.nome,
+              codigo: null,
+              estado: 'disponivel',
+              status: 'DISPONIVEL',
+              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              observacoes: `[CAT:Ferramentas Manuais]`,
+            });
+          }
+        } else if (currentCount > val.expected) {
+          // Excess tools: remove exact difference from available ones
+          const excessCount = currentCount - val.expected;
           const availableTools = matchingTools.filter((f: any) => f.estado === 'disponivel' || f.estado === 'comprado');
           if (availableTools.length > 0) {
             const deleteSlice = availableTools.slice(0, excessCount).map((f: any) => f.id);
@@ -204,12 +225,22 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         }
       });
 
+      if (toInsert.length > 0) {
+        console.log(`[FerramentasTab] Reconciling: Inserting ${toInsert.length} missing tools to reach exact entradas count...`);
+        const CHUNK_SIZE = 100;
+        for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
+          await supabase.from('ferramentas').insert(toInsert.slice(i, i + CHUNK_SIZE));
+        }
+        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+        queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+        queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
+      }
+
       if (toDeleteIds.length > 0) {
-        console.log(`[FerramentasTab] Deduplicating: Removing ${toDeleteIds.length} excess tools to match exact entradas count...`);
+        console.log(`[FerramentasTab] Reconciling: Removing ${toDeleteIds.length} excess tools to reach exact entradas count...`);
         const CHUNK_SIZE = 50;
         for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
-          const chunk = toDeleteIds.slice(i, i + CHUNK_SIZE);
-          await supabase.from('ferramentas').delete().in('id', chunk);
+          await supabase.from('ferramentas').delete().in('id', toDeleteIds.slice(i, i + CHUNK_SIZE));
         }
         queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
         queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
@@ -217,7 +248,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       }
     };
 
-    cleanupExcessDuplicateTools();
+    reconcileToolsCount();
   }, [obraId, ferramentas, entradasFerramentas, queryClient]);
 
   const totalMissingToolsCount = useMemo(() => {
