@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Pencil, Trash2, Hand, RotateCcw, History, ArrowUpFromLine, ArrowDownToLine, QrCode, Download, Printer, Camera, Wrench, HelpCircle, AlertCircle, Plus, Loader2 } from 'lucide-react';
+import { Pencil, Trash2, Hand, RotateCcw, History, ArrowUpFromLine, ArrowDownToLine, QrCode, Download, Printer, Camera, Wrench, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import ImageUpload from '@/components/ImageUpload';
@@ -27,7 +27,6 @@ const emptyForm = { nome: '', codigo: '', estado: 'disponivel', foto_url: '', ob
 export default function FerramentasTab({ obraId }: { obraId: string }) {
   const queryClient = useQueryClient();
   const { isAdmin } = useProfile();
-  const hasRestoredRef = useRef(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -68,9 +67,6 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [scanPessoaId, setScanPessoaId] = useState('');
   const [scanRetirarTipo, setScanRetirarTipo] = useState<'uso' | 'manutencao'>('uso');
   const [manualCode, setManualCode] = useState('');
-
-  // Add Tool Units Dialog State
-  const [addUnitsDialog, setAddUnitsDialog] = useState<{ open: boolean; nome: string; quantidade: string; categoria?: string } | null>(null);
 
   const { data: pessoas = [] } = useQuery({
     queryKey: ['pessoas', obraId],
@@ -129,257 +125,6 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       const { data } = await supabase.from('historico_ferramentas' as any).select('*, ferramentas(nome), pessoas(nome)').eq('obra_id', obraId).order('data', { ascending: false });
       return data || [];
     },
-  });
-
-  const { data: entradasFerramentas = [] } = useQuery({
-    queryKey: ['entradas-ferramentas', obraId],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('entradas')
-        .select('id, quantidade, observacao, status_entrega, produtos(nome, categoria)')
-        .eq('obra_id', obraId);
-      return data || [];
-    },
-    enabled: !!obraId
-  });
-
-  const missingToolsMap = useMemo(() => {
-    const map = new Map<string, { nome: string; expected: number; existing: number; missing: number; categoria?: string }>();
-    
-    entradasFerramentas.forEach((e: any) => {
-      const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
-      if (!isTool) return;
-      const rawName = e.produtos?.nome?.replace('[FERRAMENTA] ', '').trim() || e.observacao?.replace('[FERRAMENTA]', '').trim() || '';
-      if (!rawName) return;
-
-      const key = rawName.toLowerCase();
-      const current = map.get(key) || { nome: rawName, expected: 0, existing: 0, missing: 0 };
-      current.expected += Number(e.quantidade || 0);
-      if (e.produtos?.categoria && e.produtos.categoria !== 'Ferramentas') {
-        current.categoria = e.produtos.categoria;
-      }
-      map.set(key, current);
-    });
-
-    ferramentas.forEach((f: any) => {
-      const rawName = (f.nome || '').trim();
-      if (!rawName) return;
-      const key = rawName.toLowerCase();
-      const current = map.get(key) || { nome: rawName, expected: 0, existing: 0, missing: 0, categoria: f.categoria };
-      current.existing += 1;
-      if (f.categoria) current.categoria = f.categoria;
-      map.set(key, current);
-    });
-
-    map.forEach((val) => {
-      val.missing = Math.max(0, val.expected - val.existing);
-    });
-
-    return map;
-  }, [entradasFerramentas, ferramentas]);
-
-  // Auto-restore missing available tools for all tool entries registered in entradas
-  useEffect(() => {
-    if (!obraId || !ferramentas || !entradasFerramentas || entradasFerramentas.length === 0 || hasRestoredRef.current) return;
-
-    const restoreMissingAvailableTools = async () => {
-      hasRestoredRef.current = true;
-      const expectedMap = new Map<string, { name: string; total: number; categoria?: string }>();
-
-      entradasFerramentas.forEach((e: any) => {
-        const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
-        if (!isTool) return;
-
-        const rawName = (e.produtos?.nome?.replace('[FERRAMENTA] ', '') || e.observacao?.replace('[FERRAMENTA]', '') || '').trim();
-        if (!rawName) return;
-
-        const key = rawName.toLowerCase();
-        const cur = expectedMap.get(key) || { name: rawName, total: 0, categoria: e.produtos?.categoria };
-        cur.total += Number(e.quantidade || 0);
-        if (e.produtos?.categoria && e.produtos.categoria !== 'Ferramentas') {
-          cur.categoria = e.produtos.categoria;
-        }
-        expectedMap.set(key, cur);
-      });
-
-      if (expectedMap.size === 0) return;
-
-      const existingMap = new Map<string, any[]>();
-      ferramentas.forEach((f: any) => {
-        const key = (f.nome || '').toLowerCase().trim();
-        if (!key) return;
-        const arr = existingMap.get(key) || [];
-        arr.push(f);
-        existingMap.set(key, arr);
-      });
-
-      const toInsert: any[] = [];
-
-      expectedMap.forEach((val, key) => {
-        const existingTools = existingMap.get(key) || [];
-        const currentTotal = existingTools.length;
-
-        // Detect category from existing tools or product category fallback
-        const knownCategory = existingTools.find(t => t.categoria)?.categoria || val.categoria || 'Ferramentas Manuais';
-
-        if (currentTotal < val.total) {
-          const missing = val.total - currentTotal;
-          console.log(`[FerramentasTab] Restoring ${missing} missing tools for "${val.name}" under category "${knownCategory}"`);
-
-          for (let i = 0; i < missing; i++) {
-            toInsert.push({
-              obra_id: obraId,
-              nome: val.name,
-              codigo: null,
-              estado: 'disponivel',
-              status: 'DISPONIVEL',
-              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-              observacoes: `[CAT:${knownCategory}]`,
-            });
-          }
-        }
-      });
-
-      if (toInsert.length > 0) {
-        console.log(`[FerramentasTab] Restoring total of ${toInsert.length} available tools to database...`);
-        const CHUNK_SIZE = 100;
-        for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
-          await supabase.from('ferramentas').insert(toInsert.slice(i, i + CHUNK_SIZE));
-        }
-        queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
-        queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
-      }
-    };
-
-    restoreMissingAvailableTools();
-  }, [obraId, ferramentas, entradasFerramentas, queryClient]);
-  const totalMissingToolsCount = useMemo(() => {
-    let sum = 0;
-    missingToolsMap.forEach((v) => { sum += v.missing; });
-    return sum;
-  }, [missingToolsMap]);
-
-  const syncFerramentasFromTab = useMutation({
-    mutationFn: async ({ nomeTool, missingCount, categoriaTool }: { nomeTool?: string; missingCount?: number; categoriaTool?: string }) => {
-      let itemsToCreate: { nome: string; missing: number; categoria?: string }[] = [];
-      
-      if (nomeTool && missingCount && missingCount > 0) {
-        itemsToCreate.push({ nome: nomeTool.replace('[FERRAMENTA] ', '').trim(), missing: missingCount, categoria: categoriaTool });
-      } else {
-        missingToolsMap.forEach((val) => {
-          if (val.missing > 0) {
-            itemsToCreate.push({ nome: val.nome, missing: val.missing, categoria: val.categoria });
-          }
-        });
-      }
-
-      if (itemsToCreate.length === 0) {
-        toast.info('Todas as ferramentas para esta obra já estão cadastradas.');
-        return;
-      }
-
-      const allToolsToInsert: any[] = [];
-      itemsToCreate.forEach(item => {
-        for (let i = 0; i < item.missing; i++) {
-          allToolsToInsert.push({
-            obra_id: obraId,
-            nome: item.nome,
-            codigo: null,
-            estado: 'disponivel',
-            status: 'DISPONIVEL',
-            qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            observacoes: `[CAT:${item.categoria || 'Ferramentas Manuais'}] [LOC:]`,
-          });
-        }
-      });
-
-      const CHUNK_SIZE = 100;
-      for (let i = 0; i < allToolsToInsert.length; i += CHUNK_SIZE) {
-        const chunk = allToolsToInsert.slice(i, i + CHUNK_SIZE);
-        const { error } = await supabase.from('ferramentas').insert(chunk);
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-      queryClient.invalidateQueries({ queryKey: ['entradas-ferramentas', obraId] });
-      toast.success('Ferramentas geradas com sucesso!');
-    },
-  });
-
-  const setExactToolCount = useMutation({
-    mutationFn: async ({ nome, targetTotal, categoria }: { nome: string; targetTotal: number; categoria?: string }) => {
-      const cleanName = nome.replace('[FERRAMENTA] ', '').trim();
-      
-      const { data: existingTools, error: fetchErr } = await supabase
-        .from('ferramentas')
-        .select('*')
-        .eq('obra_id', obraId)
-        .ilike('nome', cleanName);
-
-      if (fetchErr) throw fetchErr;
-
-      const currentCount = existingTools?.length || 0;
-
-      if (targetTotal > currentCount) {
-        const missing = targetTotal - currentCount;
-        const toolsToInsert = Array.from({ length: missing }, () => ({
-          obra_id: obraId,
-          nome: cleanName,
-          codigo: null,
-          estado: 'disponivel',
-          status: 'DISPONIVEL',
-          qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-          observacoes: `[CAT:${categoria || 'Ferramentas Manuais'}] [LOC:]`,
-        }));
-
-        const CHUNK_SIZE = 100;
-        for (let i = 0; i < toolsToInsert.length; i += CHUNK_SIZE) {
-          const chunk = toolsToInsert.slice(i, i + CHUNK_SIZE);
-          const { error } = await supabase.from('ferramentas').insert(chunk);
-          if (error) throw error;
-        }
-      } else if (targetTotal < currentCount) {
-        const excessCount = currentCount - targetTotal;
-        const availableTools = (existingTools || []).filter((t: any) => t.estado === 'disponivel' || t.estado === 'comprado');
-        
-        if (availableTools.length < excessCount) {
-          throw new Error(`Não é possível reduzir para ${targetTotal} unidades pois existem ferramentas em uso ou manutenção.`);
-        }
-
-        const toDeleteIds = availableTools.slice(0, excessCount).map((t: any) => t.id);
-
-        const CHUNK_SIZE = 100;
-        for (let i = 0; i < toDeleteIds.length; i += CHUNK_SIZE) {
-          const chunk = toDeleteIds.slice(i, i + CHUNK_SIZE);
-          const { error } = await supabase.from('ferramentas').delete().in('id', chunk);
-          if (error) throw error;
-        }
-      }
-
-      // Update virtual product estoque_atual in produtos table
-      const { data: prods } = await supabase
-        .from('produtos')
-        .select('id')
-        .eq('obra_id', obraId)
-        .ilike('nome', `%${cleanName}%`);
-
-      if (prods && prods.length > 0) {
-        for (const p of prods) {
-          await supabase.from('produtos').update({ estoque_atual: targetTotal }).eq('id', p.id);
-        }
-      }
-    },
-    onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
-      queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
-      queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
-      queryClient.invalidateQueries({ queryKey: ['entradas-ferramentas', obraId] });
-      toast.success(`Quantidade de "${vars.nome}" ajustada para ${vars.targetTotal} unidades!`);
-      setAddUnitsDialog(null);
-    },
-    onError: (e: any) => toast.error(e.message)
   });
 
   useEffect(() => {
@@ -956,7 +701,6 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               <span className="text-[10px] font-bold uppercase tracking-wider text-center">Histórico</span>
            </Button>
         </div>
-
         <div className="flex flex-wrap items-center gap-2 mt-3 select-none">
           {totalBaixadas > 0 && (
             <button
@@ -1345,7 +1089,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             {groupTools[0] && (
               <ImageThumbnail src={groupTools[0].foto_url} alt={groupDetails?.name} type="ferramenta" size="sm" />
             )}
-            <div className="flex-1 min-w-0">
+            <div>
               <DialogTitle className="font-display font-bold text-lg">
                 {groupDetails?.name}
               </DialogTitle>
@@ -1353,22 +1097,6 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                 {groupTools.length} {groupTools.length === 1 ? 'unidade' : 'unidades'} neste grupo
               </p>
             </div>
-            {isAdmin && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-8 text-xs gap-1 border-white/10 hover:bg-white/5"
-                onClick={() => setAddUnitsDialog({
-                  open: true,
-                  nome: groupDetails?.name || '',
-                  quantidade: String(groupTools.length),
-                  categoria: groupDetails?.categoria || ''
-                })}
-              >
-                <Pencil className="h-3.5 w-3.5" />
-                Ajustar Total
-              </Button>
-            )}
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-1 mt-4">
             {groupTools.map((tool: any) => (
@@ -1657,56 +1385,8 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
                  </div>
                )}
             </div>
-          </SheetContent>
-       </Sheet>
-
-      {/* Dialog for adjusting total units of a tool group */}
-      <Dialog open={!!addUnitsDialog?.open} onOpenChange={(open) => !open && setAddUnitsDialog(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Ajustar Quantidade Total de Ferramentas</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <p className="text-xs text-muted-foreground">
-              Ajuste a quantidade total desejada para a ferramenta <strong>{addUnitsDialog?.nome}</strong>.
-            </p>
-            <div className="space-y-2">
-              <label className="text-xs font-semibold">Quantidade Total Desejada:</label>
-              <Input
-                type="number"
-                min="0"
-                value={addUnitsDialog?.quantidade || ''}
-                onChange={(e) => setAddUnitsDialog(prev => prev ? { ...prev, quantidade: e.target.value } : null)}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2 mt-4">
-            <Button variant="ghost" size="sm" onClick={() => setAddUnitsDialog(null)}>
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              disabled={setExactToolCount.isPending}
-              onClick={() => {
-                if (!addUnitsDialog) return;
-                const target = parseInt(addUnitsDialog.quantidade, 10);
-                if (isNaN(target) || target < 0) {
-                  toast.error('Informe uma quantidade válida');
-                  return;
-                }
-                setExactToolCount.mutate({
-                  nome: addUnitsDialog.nome,
-                  targetTotal: target,
-                  categoria: addUnitsDialog.categoria
-                });
-              }}
-            >
-              {setExactToolCount.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-              Salvar Ajuste
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+         </SheetContent>
+      </Sheet>
     </div>
   );
 }
