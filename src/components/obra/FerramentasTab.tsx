@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ const emptyForm = { nome: '', codigo: '', estado: 'disponivel', foto_url: '', ob
 export default function FerramentasTab({ obraId }: { obraId: string }) {
   const queryClient = useQueryClient();
   const { isAdmin } = useProfile();
+  const hasRestoredRef = useRef(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -179,9 +180,10 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
   // Auto-restore missing available tools for all tool entries registered in entradas
   useEffect(() => {
-    if (!obraId || !ferramentas || !entradasFerramentas || entradasFerramentas.length === 0) return;
+    if (!obraId || !ferramentas || !entradasFerramentas || entradasFerramentas.length === 0 || hasRestoredRef.current) return;
 
     const restoreMissingAvailableTools = async () => {
+      hasRestoredRef.current = true;
       const expectedMap = new Map<string, { name: string; total: number; categoria?: string }>();
 
       entradasFerramentas.forEach((e: any) => {
