@@ -1,18 +1,4 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Search, DollarSign, TrendingUp, BarChart3, Clock, Eye, Download, ArrowUpFromLine, ArrowDownToLine, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
-import SkeletonList from '@/components/SkeletonList';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { toast } from 'sonner';
-import { useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { getBuddyLogo } from '@/lib/pdf';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -273,65 +259,91 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
   const isLoadingGlobal = loadingProds || loadingEntradas || loadingSaidas || loadingFerramentas;
 
   // Process data in-memory for instant, robust, and clean calculations (using lightweight queries)
-  const productsWithCosts = produtosShort.map((prod: any) => {
-    const isTool = prod.nome?.startsWith('[FERRAMENTA]');
+  const productsWithCosts = useMemo(() => {
+    const entradasByProd = new Map<string, any[]>();
+    (entradasShort || []).forEach((e: any) => {
+      if (e.status_entrega === 'PENDENTE') return;
+      const arr = entradasByProd.get(e.produto_id) || [];
+      arr.push(e);
+      entradasByProd.set(e.produto_id, arr);
+    });
 
-    const prodEntradas = entradasShort.filter((e: any) => e.produto_id === prod.id && e.status_entrega !== 'PENDENTE');
-    const prodSaidas = saidasShort.filter((s: any) => s.produto_id === prod.id);
+    const saidasByProd = new Map<string, any[]>();
+    (saidasShort || []).forEach((s: any) => {
+      const arr = saidasByProd.get(s.produto_id) || [];
+      arr.push(s);
+      saidasByProd.set(s.produto_id, arr);
+    });
 
-    const costEntradas = prodEntradas.filter((e: any) => e.valor_unitario !== null && Number(e.valor_unitario) > 0);
+    const toolsByName = new Map<string, any[]>();
+    (ferramentasShort || []).forEach((f: any) => {
+      const key = (f.nome || '').toLowerCase().trim();
+      if (!key) return;
+      const arr = toolsByName.get(key) || [];
+      arr.push(f);
+      toolsByName.set(key, arr);
+    });
 
-    const latestCostEntry = costEntradas[0];
-    const ultimoCusto = latestCostEntry ? Number(latestCostEntry.valor_unitario) : 0;
-    const safeUltimoCusto = isNaN(ultimoCusto) ? 0 : ultimoCusto;
+    return (produtosShort || []).map((prod: any) => {
+      const isTool = prod.nome?.startsWith('[FERRAMENTA]');
 
-    const totalQtd = costEntradas.reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
-    const totalVal = costEntradas.reduce((acc, curr) => {
-      const q = Number(curr.quantidade) || 0;
-      const v = Number(curr.valor_unitario) || 0;
-      return acc + (q * v);
-    }, 0);
-    const custoMedio = totalQtd > 0 ? totalVal / totalQtd : 0;
-    const safeCustoMedio = isNaN(custoMedio) ? 0 : custoMedio;
+      const prodEntradas = entradasByProd.get(prod.id) || [];
+      const prodSaidas = saidasByProd.get(prod.id) || [];
 
-    const totalInvestido = totalVal;
+      const costEntradas = prodEntradas.filter((e: any) => e.valor_unitario !== null && Number(e.valor_unitario) > 0);
 
-    const totalPhysicalEntriesQtd = prodEntradas.reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
-    const totalPhysicalSaidasQtd = prodSaidas.reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
+      const latestCostEntry = costEntradas[0];
+      const ultimoCusto = latestCostEntry ? Number(latestCostEntry.valor_unitario) : 0;
+      const safeUltimoCusto = isNaN(ultimoCusto) ? 0 : ultimoCusto;
 
-    let estoque_atual = isTool ? 0 : Math.max(0, totalPhysicalEntriesQtd - totalPhysicalSaidasQtd);
-    let totalSaidasQtd = totalPhysicalSaidasQtd;
-    let totalSaidasValor = totalSaidasQtd * safeCustoMedio;
+      const totalQtd = costEntradas.reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
+      const totalVal = costEntradas.reduce((acc, curr) => {
+        const q = Number(curr.quantidade) || 0;
+        const v = Number(curr.valor_unitario) || 0;
+        return acc + (q * v);
+      }, 0);
+      const custoMedio = totalQtd > 0 ? totalVal / totalQtd : 0;
+      const safeCustoMedio = isNaN(custoMedio) ? 0 : custoMedio;
 
-    if (isTool) {
-      const toolName = prod.nome.replace('[FERRAMENTA] ', '').trim();
-      const prodTools = ferramentasShort.filter((f: any) => f.nome?.toLowerCase().trim() === toolName.toLowerCase().trim());
-      const activeTools = prodTools.filter((t: any) => t.estado !== 'baixa' && t.estado !== 'extraviada' && t.estado !== 'comprado');
-      estoque_atual = activeTools.length;
+      const totalInvestido = totalVal;
 
-      const lostOrDiscarded = prodTools.filter((t: any) => t.estado === 'baixa' || t.estado === 'extraviada');
-      const missingCount = Math.max(0, totalPhysicalEntriesQtd - prodTools.length);
+      const totalPhysicalEntriesQtd = prodEntradas.reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
+      const totalPhysicalSaidasQtd = prodSaidas.reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
 
-      totalSaidasQtd = lostOrDiscarded.length + missingCount;
-      totalSaidasValor = totalSaidasQtd * safeCustoMedio;
-    }
+      let estoque_atual = isTool ? 0 : Math.max(0, totalPhysicalEntriesQtd - totalPhysicalSaidasQtd);
+      let totalSaidasQtd = totalPhysicalSaidasQtd;
+      let totalSaidasValor = totalSaidasQtd * safeCustoMedio;
 
-    let valorEstoqueEstimado = estoque_atual * safeCustoMedio;
+      if (isTool) {
+        const toolName = prod.nome.replace('[FERRAMENTA] ', '').trim().toLowerCase();
+        const prodTools = toolsByName.get(toolName) || [];
+        const activeTools = prodTools.filter((t: any) => t.estado !== 'baixa' && t.estado !== 'extraviada' && t.estado !== 'comprado');
+        estoque_atual = activeTools.length;
 
-    return {
-      ...prod,
-      estoque_atual_db: Number(prod.estoque_atual) || 0,
-      estoque_atual,
-      ultimoCusto: safeUltimoCusto,
-      custoMedio: safeCustoMedio,
-      totalInvestido,
-      totalSaidasQtd,
-      totalSaidasValor,
-      valorEstoqueEstimado,
-      allEntradasCount: prodEntradas.length,
-      allSaidasCount: prodSaidas.length
-    };
-  });
+        const lostOrDiscarded = prodTools.filter((t: any) => t.estado === 'baixa' || t.estado === 'extraviada');
+        const missingCount = Math.max(0, totalPhysicalEntriesQtd - prodTools.length);
+
+        totalSaidasQtd = lostOrDiscarded.length + missingCount;
+        totalSaidasValor = totalSaidasQtd * safeCustoMedio;
+      }
+
+      let valorEstoqueEstimado = estoque_atual * safeCustoMedio;
+
+      return {
+        ...prod,
+        estoque_atual_db: Number(prod.estoque_atual) || 0,
+        estoque_atual,
+        ultimoCusto: safeUltimoCusto,
+        custoMedio: safeCustoMedio,
+        totalInvestido,
+        totalSaidasQtd,
+        totalSaidasValor,
+        valorEstoqueEstimado,
+        allEntradasCount: prodEntradas.length,
+        allSaidasCount: prodSaidas.length
+      };
+    });
+  }, [produtosShort, entradasShort, saidasShort, ferramentasShort]);
 
   // Automatically heal database stock discrepancies and clean up excess duplicate tools
   useEffect(() => {

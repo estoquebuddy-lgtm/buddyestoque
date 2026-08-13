@@ -136,30 +136,35 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
           .select('id, nome, estoque_atual')
           .eq('obra_id', obraId);
 
-        if (!allProds) return;
+        if (!allProds || allProds.length === 0) return;
+        const toolProds = allProds.filter((p: any) => p.nome?.startsWith('[FERRAMENTA]'));
+        if (toolProds.length === 0) return;
 
-        for (const p of allProds) {
-          if (!p.nome?.startsWith('[FERRAMENTA]')) continue;
-          const cleanName = p.nome.replace('[FERRAMENTA] ', '').trim();
+        const { data: entList } = await supabase
+          .from('entradas')
+          .select('produto_id, quantidade, status_entrega')
+          .eq('obra_id', obraId)
+          .or('status_entrega.is.null,status_entrega.eq.REALIZADO');
 
-          // ⚠️ IMPORTANTE: usamos .or() para incluir entradas com status_entrega NULL
-          // (lançamentos diretos pela aba Entradas) E as com status REALIZADO.
-          // .neq('status_entrega', 'PENDENTE') não funciona para NULL no PostgreSQL.
-          const { data: entList } = await supabase
-            .from('entradas')
-            .select('quantidade')
-            .eq('obra_id', obraId)
-            .eq('produto_id', p.id)
-            .or('status_entrega.is.null,status_entrega.eq.REALIZADO');
+        const sumsMap = new Map<string, number>();
+        (entList || []).forEach((e: any) => {
+          if (!e.produto_id) return;
+          const current = sumsMap.get(e.produto_id) || 0;
+          sumsMap.set(e.produto_id, current + (Number(e.quantidade) || 0));
+        });
 
-          const expectedStock = (entList || []).reduce((acc, curr) => acc + (Number(curr.quantidade) || 0), 0);
-
-          // Sync estoque_atual ONLY — never delete ferramentas automatically
-          if (expectedStock >= 0 && p.estoque_atual !== expectedStock) {
+        let updated = false;
+        for (const p of toolProds) {
+          const expectedStock = sumsMap.get(p.id) || 0;
+          if (p.estoque_atual !== expectedStock) {
             await supabase.from('produtos').update({ estoque_atual: expectedStock }).eq('id', p.id);
-            queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
-            queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
+            updated = true;
           }
+        }
+
+        if (updated) {
+          queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+          queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
         }
       } catch (err) {
         console.error("Auto-heal error in ProdutosTab:", err);

@@ -18,7 +18,8 @@ import RelatorioCliente from "./pages/RelatorioCliente";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 15, // 15 segundos
+      staleTime: 1000 * 60 * 5, // 5 minutos (evita requisições repetidas ao trocar de abas)
+      gcTime: 1000 * 60 * 10,
       refetchOnWindowFocus: false, // evita requisições ao focar na janela
     },
   },
@@ -106,7 +107,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <AuthProvider>
             <AppRoutes />
             <Toaster />
