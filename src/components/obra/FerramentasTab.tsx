@@ -135,7 +135,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
     queryFn: async () => {
       const { data } = await supabase
         .from('entradas')
-        .select('id, quantidade, observacao, status_entrega, produtos(nome)')
+        .select('id, quantidade, observacao, status_entrega, produtos(nome, categoria)')
         .eq('obra_id', obraId);
       return data || [];
     },
@@ -154,6 +154,9 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
       const key = rawName.toLowerCase();
       const current = map.get(key) || { nome: rawName, expected: 0, existing: 0, missing: 0 };
       current.expected += Number(e.quantidade || 0);
+      if (e.produtos?.categoria && e.produtos.categoria !== 'Ferramentas') {
+        current.categoria = e.produtos.categoria;
+      }
       map.set(key, current);
     });
 
@@ -173,12 +176,13 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
 
     return map;
   }, [entradasFerramentas, ferramentas]);
+
   // Auto-restore missing available tools for all tool entries registered in entradas
   useEffect(() => {
     if (!obraId || !ferramentas || !entradasFerramentas || entradasFerramentas.length === 0) return;
 
     const restoreMissingAvailableTools = async () => {
-      const expectedMap = new Map<string, { name: string; total: number }>();
+      const expectedMap = new Map<string, { name: string; total: number; categoria?: string }>();
 
       entradasFerramentas.forEach((e: any) => {
         const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
@@ -188,8 +192,11 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         if (!rawName) return;
 
         const key = rawName.toLowerCase();
-        const cur = expectedMap.get(key) || { name: rawName, total: 0 };
+        const cur = expectedMap.get(key) || { name: rawName, total: 0, categoria: e.produtos?.categoria };
         cur.total += Number(e.quantidade || 0);
+        if (e.produtos?.categoria && e.produtos.categoria !== 'Ferramentas') {
+          cur.categoria = e.produtos.categoria;
+        }
         expectedMap.set(key, cur);
       });
 
@@ -210,9 +217,12 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
         const existingTools = existingMap.get(key) || [];
         const currentTotal = existingTools.length;
 
+        // Detect category from existing tools or product category fallback
+        const knownCategory = existingTools.find(t => t.categoria)?.categoria || val.categoria || 'Ferramentas Manuais';
+
         if (currentTotal < val.total) {
           const missing = val.total - currentTotal;
-          console.log(`[FerramentasTab] Restoring ${missing} missing tools for "${val.name}" (Current: ${currentTotal}, Expected: ${val.total})`);
+          console.log(`[FerramentasTab] Restoring ${missing} missing tools for "${val.name}" under category "${knownCategory}"`);
 
           for (let i = 0; i < missing; i++) {
             toInsert.push({
@@ -222,7 +232,7 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               estado: 'disponivel',
               status: 'DISPONIVEL',
               qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-              observacoes: `[CAT:Ferramentas Manuais]`,
+              observacoes: `[CAT:${knownCategory}]`,
             });
           }
         }
