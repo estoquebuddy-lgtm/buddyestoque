@@ -68,6 +68,189 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
   const [scanRetirarTipo, setScanRetirarTipo] = useState<'uso' | 'manutencao'>('uso');
   const [manualCode, setManualCode] = useState('');
 
+  // Admin Audit & Sanitization State (Exclusivo Administrador)
+  const [auditModalOpen, setAuditModalOpen] = useState(false);
+  const [auditResults, setAuditResults] = useState<any[]>([]);
+  const [isAuditing, setIsAuditing] = useState(false);
+  const [isSanitizing, setIsSanitizing] = useState(false);
+
+  const runAudit = async () => {
+    if (!isAdmin || !obraId) return;
+    setIsAuditing(true);
+
+    try {
+      // 1. Fetch all entradas for this obra
+      const { data: entradas = [] } = await supabase
+        .from('entradas')
+        .select('id, quantidade, observacao, produtos(id, nome, categoria)')
+        .eq('obra_id', obraId);
+
+      // 2. Fetch all ferramentas for this obra
+      const { data: dbTools = [] } = await supabase
+        .from('ferramentas')
+        .select('id, nome, estado, observacoes')
+        .eq('obra_id', obraId);
+
+      // 3. Fetch all produtos for this obra
+      const { data: dbProdutos = [] } = await supabase
+        .from('produtos')
+        .select('id, nome, estoque_atual')
+        .eq('obra_id', obraId);
+
+      // Map expected quantities from Entradas
+      const expectedMap = new Map<string, { name: string; prodId: string | null; expectedQty: number; categoria?: string }>();
+
+      (entradas || []).forEach((e: any) => {
+        const isTool = e.observacao?.includes('[FERRAMENTA]') || e.produtos?.nome?.startsWith('[FERRAMENTA]');
+        if (!isTool) return;
+
+        let rawName = e.produtos?.nome?.replace(/\[FERRAMENTA\]\s*/g, '') || '';
+        if (!rawName) {
+          rawName = e.observacao?.replace(/\[FERRAMENTA\]/g, '').replace(/\[RATEIO:.*?\]/g, '').trim() || '';
+        }
+        rawName = rawName.trim();
+        if (!rawName) return;
+
+        const key = rawName.toLowerCase();
+        const cur = expectedMap.get(key) || { name: rawName, prodId: e.produtos?.id || null, expectedQty: 0, categoria: e.produtos?.categoria };
+        cur.expectedQty += Number(e.quantidade || 0);
+        if (e.produtos?.categoria && e.produtos.categoria !== 'Ferramentas') {
+          cur.categoria = e.produtos.categoria;
+        }
+        expectedMap.set(key, cur);
+      });
+
+      // Map existing db tools by normalized name
+      const existingMap = new Map<string, any[]>();
+      (dbTools || []).forEach((f: any) => {
+        const key = (f.nome || '').toLowerCase().trim();
+        if (!key) return;
+        const arr = existingMap.get(key) || [];
+        arr.push(f);
+        existingMap.set(key, arr);
+      });
+
+      // Combine into audit rows
+      const allKeys = new Set([...expectedMap.keys(), ...existingMap.keys()]);
+      const results: any[] = [];
+
+      allKeys.forEach(key => {
+        const exp = expectedMap.get(key);
+        const existingList = existingMap.get(key) || [];
+        const name = exp?.name || existingList[0]?.nome || key;
+
+        const expectedCount = exp?.expectedQty || 0;
+        const totalInDb = existingList.length;
+        const emUsoCount = existingList.filter(t => t.estado === 'em_uso').length;
+        const availList = existingList.filter(t => t.estado === 'disponivel' || t.estado === 'comprado');
+
+        const diff = totalInDb - expectedCount; // > 0 means excess, < 0 means missing
+
+        results.push({
+          key,
+          name,
+          expectedCount,
+          totalInDb,
+          emUsoCount,
+          availCount: availList.length,
+          diff,
+          availTools: availList,
+          prodId: exp?.prodId
+        });
+      });
+
+      results.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
+      setAuditResults(results);
+      setAuditModalOpen(true);
+    } catch (e: any) {
+      toast.error(`Erro ao executar auditoria: ${e.message}`);
+    } finally {
+      setIsAuditing(false);
+    }
+  };
+
+  const confirmSanitization = async () => {
+    if (!isAdmin || !obraId) return;
+    setIsSanitizing(true);
+
+    try {
+      let totalDeleted = 0;
+      let totalInserted = 0;
+
+      for (const item of auditResults) {
+        if (item.diff > 0) {
+          // Excess tools in DB: delete up to item.diff available tools
+          const toDelete = item.availTools.slice(0, item.diff).map((t: any) => t.id);
+          if (toDelete.length > 0) {
+            const CHUNK_SIZE = 50;
+            for (let i = 0; i < toDelete.length; i += CHUNK_SIZE) {
+              const chunk = toDelete.slice(i, i + CHUNK_SIZE);
+              await supabase.from('historico_ferramentas' as any).delete().in('ferramenta_id', chunk);
+              await supabase.from('movimentacoes_ferramentas' as any).delete().in('ferramenta_id', chunk);
+
+              const { error: delErr } = await supabase.from('ferramentas').delete().in('id', chunk);
+              if (delErr) {
+                console.error("Error deleting ferramentas chunk:", delErr);
+                throw new Error(`Falha ao remover ferramentas: ${delErr.message}`);
+              }
+            }
+            totalDeleted += toDelete.length;
+          }
+        } else if (item.diff < 0) {
+          // Missing tools in DB: create Math.abs(item.diff) available tools
+          const missingCount = Math.abs(item.diff);
+          const toInsert: any[] = [];
+          for (let i = 0; i < missingCount; i++) {
+            toInsert.push({
+              obra_id: obraId,
+              nome: item.name,
+              codigo: null,
+              estado: 'disponivel',
+              status: 'DISPONIVEL',
+              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              observacoes: `[CAT:Ferramentas Manuais]`,
+            });
+          }
+          const CHUNK_SIZE = 100;
+          for (let i = 0; i < toInsert.length; i += CHUNK_SIZE) {
+            const { error: insErr } = await supabase.from('ferramentas').insert(toInsert.slice(i, i + CHUNK_SIZE));
+            if (insErr) {
+              console.error("Error inserting missing tools:", insErr);
+              throw new Error(`Falha ao criar ferramentas: ${insErr.message}`);
+            }
+          }
+          totalInserted += missingCount;
+        }
+
+        // Sync estoque_atual in produtos table to match expectedCount
+        const { data: prods } = await supabase
+          .from('produtos')
+          .select('id, nome')
+          .eq('obra_id', obraId);
+
+        const targetProd = prods?.find((p: any) => p.nome.toLowerCase().includes(item.name.toLowerCase()));
+        if (targetProd?.id) {
+          const { error: updErr } = await supabase.from('produtos').update({ estoque_atual: item.expectedCount }).eq('id', targetProd.id);
+          if (updErr) {
+            console.error("Error updating produtos estoque_atual:", updErr);
+          }
+        }
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['ferramentas', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['produtos', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['produtos-short', obraId] });
+      queryClient.invalidateQueries({ queryKey: ['entradas', obraId] });
+      setAuditModalOpen(false);
+      toast.success(`Sanitização concluída com sucesso! ${totalDeleted} duplicidades removidas, ${totalInserted} unidades ajustadas.`);
+    } catch (e: any) {
+      console.error("Sanitizing error:", e);
+      toast.error(`Erro ao sanitizar estoque: ${e.message}`);
+    } finally {
+      setIsSanitizing(false);
+    }
+  };
+
   const { data: pessoas = [] } = useQuery({
     queryKey: ['pessoas', obraId],
     queryFn: async () => { const { data } = await supabase.from('pessoas').select('id, nome, status').eq('obra_id', obraId).order('nome'); return data || []; },
@@ -700,6 +883,20 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
               <History className="h-5 w-5 opacity-50" />
               <span className="text-[10px] font-bold uppercase tracking-wider text-center">Histórico</span>
            </Button>
+
+           {isAdmin && (
+             <Button
+               variant="outline"
+               className="h-auto py-4 md:py-5 bg-amber-500/10 border-amber-500/30 text-amber-400 md:flex-1 flex flex-col items-center justify-center gap-1 hover:bg-amber-500/20 border-none transition-all hover:scale-105"
+               onClick={runAudit}
+               disabled={isAuditing}
+             >
+               <Wrench className="h-5 w-5 text-amber-400" />
+               <span className="text-[10px] font-bold uppercase tracking-wider text-center">
+                 {isAuditing ? 'Auditando...' : 'Auditar Estoque (ADM)'}
+               </span>
+             </Button>
+           )}
         </div>
         <div className="flex flex-wrap items-center gap-2 mt-3 select-none">
           {totalBaixadas > 0 && (
@@ -1387,6 +1584,82 @@ export default function FerramentasTab({ obraId }: { obraId: string }) {
             </div>
          </SheetContent>
       </Sheet>
+
+      {/* Modal de Auditoria e Sanitização de Estoque (Exclusivo ADM) */}
+      <Dialog open={auditModalOpen} onOpenChange={setAuditModalOpen}>
+        <DialogContent className="max-w-2xl bg-[#0f172a] border border-slate-800 text-white">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-display font-bold text-white flex items-center gap-2">
+              <Wrench className="h-5 w-5 text-amber-400" />
+              Auditoria e Reconciliação de Ferramentas (Exclusivo Administrador)
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-3">
+            <p className="text-xs text-slate-300">
+              Esta ferramenta compara o total de compras/entradas com a contagem de registros na tabela de ferramentas e recalcula o saldo real de cada item.
+            </p>
+
+            <div className="max-h-[350px] overflow-y-auto space-y-2 pr-1">
+              {auditResults.map((item: any) => {
+                const isExcess = item.diff > 0;
+                const isMissing = item.diff < 0;
+                const isCorrect = item.diff === 0;
+
+                return (
+                  <div key={item.key} className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                    isExcess ? 'bg-amber-950/20 border-amber-500/30'
+                    : isMissing ? 'bg-blue-950/20 border-blue-500/30'
+                    : 'bg-slate-900 border-slate-800'
+                  }`}>
+                    <div>
+                      <p className="font-bold text-white text-sm">{item.name}</p>
+                      <div className="flex items-center gap-3 text-[11px] text-slate-400 mt-0.5">
+                        <span>Comprados (Entradas): <strong className="text-slate-200">{item.expectedCount}</strong></span>
+                        <span>No Banco: <strong className="text-slate-200">{item.totalInDb}</strong></span>
+                        <span>Em Uso: <strong className="text-warning">{item.emUsoCount}</strong></span>
+                      </div>
+                    </div>
+
+                    <div>
+                      {isExcess && (
+                        <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 font-mono font-bold">
+                          +{item.diff} Excedentes (Duplicadas)
+                        </Badge>
+                      )}
+                      {isMissing && (
+                        <Badge className="bg-blue-500/20 text-blue-400 border-blue-500/30 font-mono font-bold">
+                          {item.diff} Faltantes
+                        </Badge>
+                      )}
+                      {isCorrect && (
+                        <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-mono font-bold">
+                          Estoque Correto
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 mt-2 pt-3 border-t border-slate-800">
+            <Button variant="ghost" size="sm" onClick={() => setAuditModalOpen(false)} className="text-slate-400 hover:text-white">
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={confirmSanitization}
+              disabled={isSanitizing}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs gap-1.5 shadow-md shadow-amber-500/20"
+            >
+              <Wrench className="h-4 w-4" />
+              {isSanitizing ? 'Sanitizando Estoque...' : 'Confirmar Sanitização e Limpeza'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
