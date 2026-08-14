@@ -344,6 +344,7 @@ export type Database = {
           data_devolucao: string | null
           data_retirada: string | null
           estado: string
+          produto_id: string | null
           foto_url: string | null
           id: string
           nome: string

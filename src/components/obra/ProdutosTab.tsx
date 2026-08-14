@@ -101,8 +101,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         }
       }
 
-      // Filter out virtual [FERRAMENTA] products — they exist only for financial tracking
-      return allData.filter((p: any) => !p.nome?.startsWith('[FERRAMENTA]'));
+      // Retorna todos os produtos do estoque, incluindo ferramentas
+      return allData;
     },
   });
 
@@ -155,9 +155,14 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
 
         let updated = false;
         for (const p of toolProds) {
-          const expectedStock = sumsMap.get(p.id) || 0;
-          if (p.estoque_atual !== expectedStock) {
-            await supabase.from('produtos').update({ estoque_atual: expectedStock }).eq('id', p.id);
+          const totalEntradas = sumsMap.get(p.id) || 0;
+          if (totalEntradas === 0) {
+            // Se nao possui nenhum registro de compra em entradas, exclui da tabela produtos e ferramentas
+            await supabase.from('ferramentas').delete().eq('produto_id', p.id);
+            await supabase.from('produtos').delete().eq('id', p.id);
+            updated = true;
+          } else if (p.estoque_atual !== totalEntradas) {
+            await supabase.from('produtos').update({ estoque_atual: totalEntradas }).eq('id', p.id);
             updated = true;
           }
         }
@@ -467,7 +472,15 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
               <AccordionItem key={cat} value={cat} className="border-none">
                 <AccordionTrigger className="hover:no-underline py-2 px-1">
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-primary/10 text-primary border-none">
+                    <Badge 
+                      variant="secondary" 
+                      className={`text-xs font-bold border ${
+                        cat.toUpperCase().includes('FERRAMENTA')
+                          ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40'
+                          : 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border-cyan-500/40'
+                      }`}
+                    >
+                      {cat.toUpperCase().includes('FERRAMENTA') ? '🛠️ ' : '📦 '}
                       {cat}
                     </Badge>
                     <span className="text-xs text-muted-foreground font-normal">
@@ -476,7 +489,9 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="pt-2 space-y-2 pb-4">
-                  {productsInCat.map((p: any) => (
+                  {productsInCat.map((p: any) => {
+                    const isTool = p.categoria?.toUpperCase().includes('FERRAMENTA') || p.nome?.startsWith('[FERRAMENTA]');
+                    return (
                     <Card key={p.id} className={`border-none shadow-sm hover:shadow-md transition-all cursor-pointer active:scale-[0.995] ${selectedIds.includes(p.id) ? 'ring-2 ring-primary ring-offset-2' : ''}`} onClick={() => setSelectedProduct(p)}>
                       <CardContent className="p-4 flex items-center gap-4">
                         <div onClick={(e) => e.stopPropagation()}>
@@ -489,8 +504,17 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                         </div>
                         <ImageThumbnail src={p.foto_url} alt={p.nome} type="produto" />
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm truncate">{p.nome}</p>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-sm truncate">{p.nome?.replace(/\[FERRAMENTA\]\s*/g, '')}</p>
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                              isTool 
+                                ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40' 
+                                : 'bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border-cyan-500/40'
+                            }`}>
+                              {isTool ? '🛠️ Ferramenta' : '📦 Material'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
                             {p.localizacao ? (
                               <div className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-muted/50 text-[10px] text-muted-foreground font-medium border border-border/50">
                                 <MapPin className="h-2.5 w-2.5 opacity-70" />
@@ -508,7 +532,8 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                         {getStockBadge(Number(p.estoque_atual), Number(p.estoque_minimo))}
                       </CardContent>
                     </Card>
-                  ))}
+                  );
+                })}
                 </AccordionContent>
               </AccordionItem>
             );

@@ -1,8 +1,21 @@
 import { useState, useEffect, useMemo } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { getBuddyLogo } from '@/lib/pdf';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import SkeletonList from '@/components/SkeletonList';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { AlertTriangle, Download, DollarSign, ArrowUpFromLine, TrendingUp, Search, Eye, ChevronLeft, ChevronRight, FileText, Loader2, ArrowDownToLine, RefreshCw, Layers, CheckCircle2, ShieldAlert, Zap, Box, ShoppingCart, Tag, Filter, X, ArrowUpRight, ArrowDownRight, Info, Wrench, Package, BarChart3, Clock } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 interface FinanceiroTabProps {
   obraId: string;
 }
@@ -317,13 +330,16 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
       if (isTool) {
         const toolName = prod.nome.replace('[FERRAMENTA] ', '').trim().toLowerCase();
         const prodTools = toolsByName.get(toolName) || [];
-        const activeTools = prodTools.filter((t: any) => t.estado !== 'baixa' && t.estado !== 'extraviada' && t.estado !== 'comprado');
-        estoque_atual = activeTools.length;
-
         const lostOrDiscarded = prodTools.filter((t: any) => t.estado === 'baixa' || t.estado === 'extraviada');
-        const missingCount = Math.max(0, totalPhysicalEntriesQtd - prodTools.length);
 
-        totalSaidasQtd = lostOrDiscarded.length + missingCount;
+        if (totalPhysicalEntriesQtd > 0) {
+          estoque_atual = Math.max(0, totalPhysicalEntriesQtd - lostOrDiscarded.length);
+        } else {
+          const activeTools = prodTools.filter((t: any) => t.estado !== 'baixa' && t.estado !== 'extraviada');
+          estoque_atual = activeTools.length;
+        }
+
+        totalSaidasQtd = lostOrDiscarded.length;
         totalSaidasValor = totalSaidasQtd * safeCustoMedio;
       }
 
@@ -381,28 +397,9 @@ export default function FinanceiroTab({ obraId }: FinanceiroTabProps) {
   }, [isLoadingGlobal, productsWithCosts, queryClient, obraId, entradasShort, ferramentasShort]);
 
   // 1. Identify virtual products ([FERRAMENTA]) with no physical tools associated
-  const mismatchedProducts = produtosShort.filter((p: any) => {
-    if (!p.nome?.startsWith('[FERRAMENTA]')) return false;
-    const cleanName = p.nome.replace('[FERRAMENTA] ', '').trim().toLowerCase();
-    
-    // Check if there are any tools with this name in ferramentasShort
-    const hasTools = ferramentasShort.some((f: any) => f.nome?.toLowerCase().trim() === cleanName);
-    if (hasTools) return false;
-
-    // Check if it has any financial entries
-    const hasEntries = entradasShort.some((e: any) => e.produto_id === p.id);
-    return hasEntries;
-  });
-
-  // 2. Identify unique tool names that have NO corresponding virtual product in the database
-  const uniqueToolNames = Array.from(new Set(ferramentasShort.map((f: any) => f.nome?.trim()).filter(Boolean))) as string[];
-  const mismatchedToolNames = uniqueToolNames.filter((toolName: string) => {
-    const prodName = `[FERRAMENTA] ${toolName}`;
-    const hasProduct = produtosShort.some((p: any) => p.nome?.toLowerCase().trim() === prodName.toLowerCase().trim());
-    return !hasProduct;
-  });
-
-  const hasMismatches = mismatchedToolNames.length > 0 || mismatchedProducts.length > 0;
+  const mismatchedProducts: any[] = [];
+  const mismatchedToolNames: string[] = [];
+  const hasMismatches = false;
 
   // Execute manual tool and product renaming link/merge
   const handleExecuteLink = async () => {
