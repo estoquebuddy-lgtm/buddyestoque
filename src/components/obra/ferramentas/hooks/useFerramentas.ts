@@ -157,29 +157,23 @@ export function useFerramentas(obraId: string, filtros?: FiltrosFerramentas, pag
       }
     });
 
-    // 3. Mapeia as ferramentas físicas (etiquetas já geradas no banco) APENAS SE ELAS EXISTIREM NO ESTOQUE!
+    // 2. Mapeia as ferramentas físicas (etiquetas já geradas no banco) vinculando ao produto do Estoque
     (result?.items || []).forEach((f) => {
-      let cleanName = f.nome ? f.nome.replace(/\[FERRAMENTA\]\s*/g, '').trim() : '';
-      let key = normKey(cleanName);
+      let existing: FerramentaGroup | undefined = undefined;
 
+      // Match 1: Por produto_id exato
       if (f.produto_id) {
-        const prod = (produtosEstoque || []).find(p => p.id === f.produto_id);
-        if (prod) {
-          cleanName = prod.nome.replace(/\[FERRAMENTA\]\s*/g, '').trim();
-          key = normKey(cleanName);
-        }
+        existing = Array.from(map.values()).find(g => g.produtoId === f.produto_id);
       }
 
-      // Só vincula a etiqueta se o equipamento efetivamente existir no Estoque (produtosEstoque)!
-      let existing = map.get(key);
-      if (!existing && key) {
-        const matchedStockKey = Array.from(map.keys()).find(k => k === key || (k.length > 3 && (k.includes(key) || key.includes(k))));
-        if (matchedStockKey) {
-          existing = map.get(matchedStockKey);
-        }
+      // Match 2: Por chave exata do nome caso produto_id esteja nulo
+      if (!existing && f.nome) {
+        const cleanName = f.nome.replace(/\[FERRAMENTA\]\s*/g, '').trim();
+        const key = normKey(cleanName);
+        existing = map.get(key);
       }
 
-      // SE NÃO EXISTE NO ESTOQUE, IGNORA COMPLETAMENTE! (TODAS AS FERRAMENTAS DEVEM VIR DO ESTOQUE)
+      // Se não corresponde a nenhum produto oficial do estoque, ignora
       if (!existing) return;
 
       existing.toolsInDb.push(f);
@@ -192,10 +186,6 @@ export function useFerramentas(obraId: string, filtros?: FiltrosFerramentas, pag
         existing.extraviadaCount++;
       } else if (f.status === 'BAIXADA') {
         existing.baixadaCount++;
-      }
-
-      if (existing.toolsInDb.length > existing.totalComprado) {
-        existing.totalComprado = existing.toolsInDb.length;
       }
     });
 
