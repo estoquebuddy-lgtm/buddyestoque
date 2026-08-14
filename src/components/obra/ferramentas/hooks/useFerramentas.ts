@@ -26,10 +26,8 @@ export function useFerramentas(obraId: string, filtros?: FiltrosFerramentas, pag
         query = query.eq('produto_id', filtros.produto_id);
       }
 
-      // Paginacao e Ordenacao
-      const from = page * pageSize;
-      const to = from + pageSize - 1;
-      query = query.order('created_at', { ascending: false }).range(from, to);
+      // Ordenacao global sem cortar itens por pagina no backend para nao sumir etiquetas
+      query = query.order('created_at', { ascending: false });
 
       const { data, count, error } = await query;
       if (error) throw error;
@@ -226,53 +224,6 @@ export function useFerramentas(obraId: string, filtros?: FiltrosFerramentas, pag
 
     return groupsList;
   }, [entradas, produtosEstoque, result?.items, filtros?.busca]);
-
-  // Automação 100% transparente: Vincula e gera etiquetas automaticamente para qualquer produto do estoque
-  useEffect(() => {
-    if (!obraId || !produtosEstoque || produtosEstoque.length === 0) return;
-
-    const syncAuto = async () => {
-      let shouldRefetch = false;
-
-      for (const prod of produtosEstoque) {
-        const cat = prod.categoria?.toUpperCase() || '';
-        const isTool = prod.nome?.startsWith('[FERRAMENTA]') || 
-                       cat.includes('FERRAMENTA') || 
-                       cat.includes('EQUIPAMENTO') || 
-                       cat.includes('DISCO') || 
-                       cat.includes('EPI');
-        if (!isTool) continue;
-
-        const cleanName = prod.nome.replace(/\[FERRAMENTA\]\s*/g, '').trim();
-        const currentQty = Math.max(1, Number(prod.estoque_atual) || 1);
-
-        // Verifica quantas etiquetas já foram geradas para esse produto
-        const existingTools = (result?.items || []).filter(f => f.produto_id === prod.id || f.nome.toLowerCase() === cleanName.toLowerCase());
-
-        if (existingTools.length < currentQty) {
-          const needed = currentQty - existingTools.length;
-          const words = cleanName.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9\s]/g, "").split(/\s+/).filter(Boolean);
-          let pref = 'FERR';
-          if (words.length >= 2) pref = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
-          else if (words[0]?.length >= 3) pref = words[0].substring(0, 3).toUpperCase();
-
-          try {
-            await ferramentasService.individualizarProduto(prod.id, obraId, pref, needed, cleanName);
-            shouldRefetch = true;
-          } catch (e) {
-            console.warn("Erro ao gerar etiqueta automática do estoque:", e);
-          }
-        }
-      }
-
-      if (shouldRefetch) {
-        refetch();
-      }
-    };
-
-    const timer = setTimeout(syncAuto, 1500);
-    return () => clearTimeout(timer);
-  }, [obraId, produtosEstoque, result?.items]);
 
   return {
     ferramentas: result?.items || [],
