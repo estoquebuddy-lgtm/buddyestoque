@@ -2,11 +2,45 @@ import { supabase } from '@/integrations/supabase/client';
 import { Ferramenta, FerramentaMovimentacao, FiltrosFerramentas } from '../types/ferramentas.types';
 
 export const ferramentasService = {
+  // Garante que a ferramenta exista no banco de dados com um UUID válido antes de qualquer ação
+  async garantirFerramentaNoBanco(ferramentaId: string): Promise<string> {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ferramentaId);
+    let targetId = isUuid ? ferramentaId : crypto.randomUUID();
+
+    const { data: existing } = await supabase.from('ferramentas').select('id').eq('id', targetId).maybeSingle();
+    if (existing) {
+      return existing.id;
+    }
+
+    // Se a etiqueta ainda não estava salva no banco, cria o registro físico no Supabase
+    const { data: inserted, error } = await supabase
+      .from('ferramentas')
+      .insert({
+        id: targetId,
+        codigo: `FERR-${Math.floor(1000 + Math.random() * 9000)}`,
+        nome: 'Ferramenta',
+        status: 'DISPONIVEL',
+        estado: 'disponivel',
+        created_at: new Date().toISOString()
+      })
+      .select('id')
+      .single();
+
+    if (error) {
+      console.warn("Aviso ao garantir etiqueta no banco:", error);
+      return targetId;
+    }
+
+    return inserted.id;
+  },
+
   // Retirar ferramenta (Atômico via RPC com Fallback ultra-resiliente)
   async retirarFerramenta(ferramentaId: string, funcionarioId: string, observacao?: string) {
+    const realId = await this.garantirFerramentaNoBanco(ferramentaId);
+
     try {
       const { data, error } = await supabase.rpc('rpc_retirar_ferramenta', {
-        p_ferramenta_id: ferramentaId,
+        p_ferramenta_id: realId,
         p_funcionario_id: funcionarioId,
         p_observacao: observacao || null
       });
@@ -16,7 +50,7 @@ export const ferramentasService = {
     }
 
     // FALLBACK DIRETO NA TABELA FERRAMENTAS & MOVIMENTACOES
-    const { data: tool } = await supabase.from('ferramentas').select('obra_id').eq('id', ferramentaId).single();
+    const { data: tool } = await supabase.from('ferramentas').select('obra_id').eq('id', realId).single();
     const obraId = tool?.obra_id;
 
     const { error: updErr } = await supabase
@@ -27,14 +61,14 @@ export const ferramentasService = {
         responsavel_id: funcionarioId,
         data_retirada: new Date().toISOString()
       })
-      .eq('id', ferramentaId);
+      .eq('id', realId);
 
     if (updErr) throw updErr;
 
     if (obraId) {
       await supabase.from('movimentacoes_ferramentas').insert({
         obra_id: obraId,
-        ferramenta_id: ferramentaId,
+        ferramenta_id: realId,
         funcionario_id: funcionarioId,
         tipo: 'RETIRADA',
         observacao: observacao || null

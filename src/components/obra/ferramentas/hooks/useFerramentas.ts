@@ -211,7 +211,7 @@ export function useFerramentas(obraId: string, filtros?: FiltrosFerramentas, pag
         for (let i = 1; i <= faltam; i++) {
           const num = (group.toolsInDb.length + i).toString().padStart(2, '0');
           group.toolsInDb.push({
-            id: `virtual-${group.produtoId || group.name}-${num}`,
+            id: crypto.randomUUID(),
             codigo: `${pref}-${num}`,
             nome: group.name,
             status: 'DISPONIVEL',
