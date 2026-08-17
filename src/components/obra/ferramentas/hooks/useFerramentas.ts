@@ -189,8 +189,39 @@ export function useFerramentas(obraId: string, filtros?: FiltrosFerramentas, pag
       }
     });
 
-    // Calcula saldo disponível final e ordena as etiquetas do grupo de forma numerica/alfabetica (01, 02, 03... 10)
+    // Garante que o número de etiquetas físicas seja EXATAMENTE IGUAL ao saldo total em estoque (totalComprado)!
     map.forEach((group) => {
+      const ativas = group.toolsInDb.filter(t => t.status !== 'DISPONIVEL');
+      const disponiveisFisicas = group.toolsInDb.filter(t => t.status === 'DISPONIVEL');
+
+      // Se temos mais etiquetas físicas do que o saldo total do estoque, limita aos disponíveis exatos
+      if (group.toolsInDb.length > group.totalComprado) {
+        const vagasLivres = Math.max(0, group.totalComprado - ativas.length);
+        group.toolsInDb = [...ativas, ...disponiveisFisicas.slice(0, vagasLivres)];
+      }
+
+      // Se temos menos etiquetas do que o saldo em estoque, complementa para ter exatamente a quantidade totalComprado
+      if (group.toolsInDb.length < group.totalComprado && group.totalComprado > 0) {
+        const faltam = group.totalComprado - group.toolsInDb.length;
+        const words = group.name.toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^A-Z0-9\s]/g, "").split(/\s+/).filter(Boolean);
+        let pref = 'FERR';
+        if (words.length >= 2) pref = (words[0].substring(0, 2) + words[1].substring(0, 2)).toUpperCase();
+        else if (words[0]?.length >= 3) pref = words[0].substring(0, 3).toUpperCase();
+
+        for (let i = 1; i <= faltam; i++) {
+          const num = (group.toolsInDb.length + i).toString().padStart(2, '0');
+          group.toolsInDb.push({
+            id: `virtual-${group.produtoId || group.name}-${num}`,
+            codigo: `${pref}-${num}`,
+            nome: group.name,
+            status: 'DISPONIVEL',
+            produto_id: group.produtoId,
+            obra_id: obraId,
+            created_at: new Date().toISOString()
+          } as any);
+        }
+      }
+
       group.toolsInDb.sort((a, b) =>
         (a.codigo || '').localeCompare(b.codigo || '', undefined, { numeric: true, sensitivity: 'base' })
       );
