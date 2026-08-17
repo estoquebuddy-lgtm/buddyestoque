@@ -111,11 +111,13 @@ export function MovimentacaoModal({
 
     setIsSubmitting(true);
     try {
+      const activeTool = targetTool || ferramenta;
       await onConfirm({
-        ferramentaId: targetTool?.id || ferramenta.id,
+        ferramentaId: activeTool?.id,
         funcionarioId: config.needsFuncionario ? funcionarioId : undefined,
-        observacao: observacao.trim() || undefined
-      });
+        observacao: observacao.trim() || undefined,
+        tagData: activeTool
+      } as any);
       onOpenChange(false);
     } finally {
       setIsSubmitting(false);

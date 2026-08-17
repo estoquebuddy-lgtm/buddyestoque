@@ -113,7 +113,8 @@ export default function FerramentasTab({ obraId }: Props) {
         await retirarMutation.mutateAsync({
           ferramentaId: payload.ferramentaId,
           funcionarioId: payload.funcionarioId,
-          observacao: payload.observacao
+          observacao: payload.observacao,
+          tagData: (payload as any).tagData
         });
         break;
 

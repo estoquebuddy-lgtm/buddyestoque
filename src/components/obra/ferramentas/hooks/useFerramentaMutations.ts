@@ -14,8 +14,8 @@ export function useFerramentaMutations(obraId: string) {
 
   // Retirar
   const retirarMutation = useMutation({
-    mutationFn: async ({ ferramentaId, funcionarioId, observacao }: { ferramentaId: string; funcionarioId: string; observacao?: string }) => {
-      return ferramentasService.retirarFerramenta(ferramentaId, funcionarioId, observacao);
+    mutationFn: async ({ ferramentaId, funcionarioId, observacao, tagData }: { ferramentaId: string; funcionarioId: string; observacao?: string; tagData?: any }) => {
+      return ferramentasService.retirarFerramenta(ferramentaId, funcionarioId, observacao, tagData);
     },
     onSuccess: () => {
       invalidateAll();
