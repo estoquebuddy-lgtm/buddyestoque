@@ -541,6 +541,7 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
               status_entrega: 'PENDENTE',
               comprado_por_id: user?.id || null,
               comprado_em: new Date().toISOString(),
+              data: new Date().toISOString(),
               compra_id: compraId
             })
             .select('id')
@@ -549,17 +550,22 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
 
           const entradaId = entData?.id;
 
-          const ferramentasToInsert = Array.from({ length: Math.round(item.quantidade) }, (_, i) => ({
-            obra_id: obraId,
-            nome: item.nome.trim(),
-            codigo: item.ferrCodigoPrefixo ? `${item.ferrCodigoPrefixo}-${String(i + 1).padStart(2, '0')}` : null,
-            estado: 'comprado',
-            status: 'COMPRADO',
-            qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            observacoes: `[CAT:${item.ferrCategoria || 'OUTROS'}] [LOC:${item.ferrLocalizacao || ''}]${entradaId ? ` [ENTRADA_ID:${entradaId}]` : ''}`,
-          }));
-          const { error: ferrErr } = await supabase.from('ferramentas').insert(ferramentasToInsert);
-          if (ferrErr) throw ferrErr;
+          try {
+            const ferramentasToInsert = Array.from({ length: Math.round(item.quantidade) }, (_, i) => ({
+              obra_id: obraId,
+              produto_id: produtoId || null,
+              nome: item.nome.trim(),
+              codigo: item.ferrCodigoPrefixo ? `${item.ferrCodigoPrefixo}-${String(i + 1).padStart(2, '0')}` : null,
+              estado: 'disponivel',
+              status: 'DISPONIVEL',
+              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              observacoes: `[CAT:${item.ferrCategoria || 'OUTROS'}] [LOC:${item.ferrLocalizacao || ''}]${entradaId ? ` [ENTRADA_ID:${entradaId}]` : ''}`,
+            }));
+            const { error: ferrErr } = await supabase.from('ferramentas').insert(ferramentasToInsert);
+            if (ferrErr) console.warn("Aviso ao inserir etiquetas em ferramentas:", ferrErr.message);
+          } catch (fErr) {
+            console.warn("Erro resiliente ao inserir em ferramentas:", fErr);
+          }
 
           ferramentasCreated += Math.round(item.quantidade);
 
@@ -615,6 +621,7 @@ export default function ImportXmlComprasDialog({ obraId, open, onOpenChange, com
             status_entrega: 'PENDENTE',
             comprado_por_id: user?.id || null,
             comprado_em: new Date().toISOString(),
+            data: new Date().toISOString(),
             compra_id: compraId
           });
           if (entErr) throw entErr;

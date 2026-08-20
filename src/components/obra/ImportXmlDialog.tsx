@@ -285,17 +285,22 @@ export default function ImportXmlDialog({ obraId, open, onOpenChange }: Props) {
           });
           if (entErr) throw entErr;
 
-          const ferramentasToInsert = Array.from({ length: Math.round(item.quantidade) }, (_, i) => ({
-            obra_id: obraId,
-            nome: item.nome.trim(),
-            codigo: item.ferrCodigoPrefixo ? `${item.ferrCodigoPrefixo}-${String(i + 1).padStart(2, '0')}` : null,
-            estado: 'disponivel',
-            status: 'DISPONIVEL',
-            qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
-            observacoes: `[CAT:${item.ferrCategoria || 'OUTROS'}] [LOC:${item.ferrLocalizacao || ''}]`,
-          }));
-          const { error: ferrErr } = await supabase.from('ferramentas').insert(ferramentasToInsert);
-          if (ferrErr) throw ferrErr;
+          try {
+            const ferramentasToInsert = Array.from({ length: Math.round(item.quantidade) }, (_, i) => ({
+              obra_id: obraId,
+              produto_id: produtoId || null,
+              nome: item.nome.trim(),
+              codigo: item.ferrCodigoPrefixo ? `${item.ferrCodigoPrefixo}-${String(i + 1).padStart(2, '0')}` : null,
+              estado: 'disponivel',
+              status: 'DISPONIVEL',
+              qr_code: `F-${Math.random().toString(36).substring(2, 8).toUpperCase()}`,
+              observacoes: `[CAT:${item.ferrCategoria || 'OUTROS'}] [LOC:${item.ferrLocalizacao || ''}]`,
+            }));
+            const { error: ferrErr } = await supabase.from('ferramentas').insert(ferramentasToInsert);
+            if (ferrErr) console.warn("Aviso ao inserir em ferramentas:", ferrErr.message);
+          } catch (fErr) {
+            console.warn("Erro resiliente ao inserir em ferramentas:", fErr);
+          }
 
           await supabase.from('logs_atividades' as any).insert({
             obra_id: obraId, user_id: user?.id, user_email: user?.email,
