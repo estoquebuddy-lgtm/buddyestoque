@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine, MapPin } from 'lucide-react';
+import { Pencil, Trash2, ArrowDownToLine, ArrowUpFromLine, MapPin, FolderPlus, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import ImageThumbnail from '@/components/ImageThumbnail';
 import ImageUpload from '@/components/ImageUpload';
@@ -23,6 +23,7 @@ import * as XLSX from 'xlsx';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useProfile } from '@/hooks/useProfile';
 import { getBuddyLogo } from '@/lib/pdf';
+import { useMemo } from 'react';
 
 const CONSTRUCAO_CATEGORIES = [
   'Hidráulica',
@@ -68,6 +69,11 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [filterSemLocalizacao, setFilterSemLocalizacao] = useState(false);
   const [filterOcultarZerados, setFilterOcultarZerados] = useState(false);
+
+  // Categorias personalizadas criadas dinamicamente
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [newCatDialogOpen, setNewCatDialogOpen] = useState(false);
+  const [newCatInput, setNewCatInput] = useState('');
   const [accordionValue, setAccordionValue] = useState<string[]>([]);
 
   useEffect(() => {
@@ -305,6 +311,25 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     setDialogOpen(true);
   };
 
+  // Categorias calculadas dinamicamente (padrão + existentes nos produtos + personalizadas criadas)
+  const allCategories = useMemo(() => {
+    const fromProds = (produtos || []).map((p: any) => p.categoria).filter(Boolean);
+    const set = new Set([...CONSTRUCAO_CATEGORIES, ...fromProds, ...customCategories]);
+    return Array.from(set);
+  }, [produtos, customCategories]);
+
+  const handleAddCategory = () => {
+    const trimmed = newCatInput.trim();
+    if (!trimmed) return;
+    if (!allCategories.includes(trimmed)) {
+      setCustomCategories(prev => [...prev, trimmed]);
+    }
+    setForm(f => ({ ...f, categoria: trimmed }));
+    setNewCatInput('');
+    setNewCatDialogOpen(false);
+    toast.success(`Categoria "${trimmed}" criada!`);
+  };
+
   const filtered = produtos.filter((p: any) => {
     const searchTerms = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
     const matchSearch = searchTerms.every(term => 
@@ -321,7 +346,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
     if (accordionValue.length > 0) {
       setAccordionValue([]);
     } else {
-      setAccordionValue([...CONSTRUCAO_CATEGORIES, 'Não Categorizado']);
+      setAccordionValue([...allCategories, 'Não Categorizado']);
     }
   };
 
@@ -413,6 +438,10 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
               Excluir ({selectedIds.length})
             </Button>
           )}
+          <Button variant="outline" size="sm" onClick={() => setNewCatDialogOpen(true)} className="h-9 font-semibold text-xs border-primary/30 hover:border-primary">
+            <FolderPlus className="h-4 w-4 mr-1.5 text-primary" />
+            + Categoria
+          </Button>
           <Button variant="outline" size="sm" onClick={handleExportPDF} className="h-9">
             <FileText className="h-4 w-4 mr-1.5 text-destructive" />
             PDF
@@ -461,7 +490,7 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         <p className="text-center py-16 text-muted-foreground">{(search || filterSemLocalizacao || filterOcultarZerados) ? 'Nenhum produto encontrado com os filtros aplicados.' : 'Nenhum produto cadastrado'}</p>
       ) : (
         <Accordion type="multiple" value={accordionValue} onValueChange={setAccordionValue} className="space-y-3">
-          {[...CONSTRUCAO_CATEGORIES, 'Não Categorizado'].map((cat) => {
+          {[...allCategories, 'Não Categorizado'].map((cat) => {
             const productsInCat = filtered.filter(p => 
               (cat === 'Não Categorizado' ? !p.categoria : p.categoria === cat)
             );
@@ -669,13 +698,31 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
             </div>
 
             <div className="space-y-1">
-              <label className="text-xs text-muted-foreground ml-1">Categoria *</label>
-              <Select value={form.categoria} onValueChange={v => setForm(f => ({ ...f, categoria: v }))}>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-muted-foreground ml-1">Categoria *</label>
+                <button
+                  type="button"
+                  onClick={() => setNewCatDialogOpen(true)}
+                  className="text-xs text-primary font-bold hover:underline flex items-center gap-1"
+                >
+                  <Plus className="h-3 w-3" /> Nova Categoria
+                </button>
+              </div>
+              <Select value={form.categoria} onValueChange={v => {
+                if (v === '__CREATE_NEW__') {
+                  setNewCatDialogOpen(true);
+                } else {
+                  setForm(f => ({ ...f, categoria: v }));
+                }
+              }}>
                 <SelectTrigger className="h-12">
                   <SelectValue placeholder="Selecione uma categoria" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CONSTRUCAO_CATEGORIES.map(cat => (
+                  <SelectItem value="__CREATE_NEW__" className="text-primary font-bold">
+                    + Criar Nova Categoria...
+                  </SelectItem>
+                  {allCategories.map(cat => (
                     <SelectItem key={cat} value={cat}>{cat}</SelectItem>
                   ))}
                 </SelectContent>
@@ -708,12 +755,10 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                   </Select>
                   {!['un', 'kg', 'L', 'm', 'm²', 'm³', 'cx', 'pc', 'sc'].includes(form.unidade) && (
                     <Input 
-                      placeholder="Qual?" 
+                      placeholder="Ex: rolo, galão" 
                       value={form.unidade} 
-                      onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))} 
-                      className="h-12 w-24 shrink-0" 
-                      required
-                      autoFocus
+                      onChange={e => setForm(f => ({ ...f, unidade: e.target.value }))}
+                      className="h-12 w-28"
                     />
                   )}
                 </div>
@@ -723,8 +768,6 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
                 <Input placeholder="Alerta de falta (ex: 5)" type="number" min="0" value={form.estoque_minimo} onChange={e => setForm(f => ({ ...f, estoque_minimo: e.target.value }))} className="h-12" />
               </div>
             </div>
-
-
 
             <div className="space-y-1">
               <label className="text-xs text-muted-foreground ml-1">Fornecedor Principal (Opcional)</label>
@@ -756,6 +799,36 @@ export default function ProdutosTab({ obraId, fabOpen, onFabClose }: Props) {
         onConfirm={() => bulkRemove.mutate()} 
         loading={bulkRemove.isPending} 
       />
+
+      {/* Dialog para Criar Nova Categoria */}
+      <Dialog open={newCatDialogOpen} onOpenChange={setNewCatDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg">
+              <FolderPlus className="h-5 w-5 text-primary" />
+              Criar Nova Categoria
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <label className="text-xs text-muted-foreground font-semibold">Nome da Categoria *</label>
+              <Input
+                placeholder="Ex: Impermeabilização, Gesso & Drywall, etc."
+                value={newCatInput}
+                onChange={e => setNewCatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleAddCategory(); }}
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setNewCatDialogOpen(false)}>Cancelar</Button>
+              <Button size="sm" onClick={handleAddCategory} disabled={!newCatInput.trim()}>
+                Criar Categoria
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
