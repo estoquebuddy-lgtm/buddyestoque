@@ -13,7 +13,8 @@ import {
   Plus, Search, Download, FileSpreadsheet, Mail, Edit, Trash2,
   FileUp, Loader2, BookOpen, ShoppingCart, DollarSign,
   FileText, CheckCircle2, AlertTriangle, Clock, Archive, ReceiptText, Boxes,
-  Link2, SlidersHorizontal, Settings, TrendingUp, BarChart3
+  Link2, SlidersHorizontal, Settings, TrendingUp, BarChart3,
+  Share2, Copy, Check, ExternalLink, Calendar
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -25,6 +26,7 @@ import * as pdfjs from 'pdfjs-dist';
 import GerarLivroFiscalDialog from './GerarLivroFiscalDialog';
 import { getBuddyLogo } from '@/lib/pdf';
 import ImportXmlComprasDialog from './ImportXmlComprasDialog';
+import { generateMonthList } from '@/pages/RelatorioCliente';
 import { 
   ResponsiveContainer, 
   BarChart as ReBarChart, 
@@ -341,6 +343,31 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
   const [isLivroOpen, setIsLivroOpen] = useState(false);
   const [isColarOpen, setIsColarOpen] = useState(false);
   const [xmlOpen, setXmlOpen] = useState(false);
+  const [isClientLinkModalOpen, setIsClientLinkModalOpen] = useState(false);
+  const [clientStartDate, setClientStartDate] = useState(() => localStorage.getItem(`cliente_data_inicio_${obraId}`) || '');
+  const [clientEndDate, setClientEndDate] = useState(() => localStorage.getItem(`cliente_data_fim_${obraId}`) || '');
+  const [isClientCronogramaOpen, setIsClientCronogramaOpen] = useState(false);
+  const [clientLinkCopied, setClientLinkCopied] = useState(false);
+  const [clientCronogramaConfig, setClientCronogramaConfig] = useState<{
+    dataInicio: string;
+    dataFim: string;
+    valores: Record<string, number>;
+  }>(() => {
+    const saved = localStorage.getItem(`cronograma_config_${obraId}`);
+    if (saved) {
+      try { return JSON.parse(saved); } catch (e) { /* ignore */ }
+    }
+    const legacySaved = localStorage.getItem(`cronograma_previsto_${obraId}`);
+    let legacyVal: Record<string, number> = {};
+    if (legacySaved) {
+      try { legacyVal = JSON.parse(legacySaved); } catch (e) {}
+    }
+    return {
+      dataInicio: '2026-01',
+      dataFim: '2027-12',
+      valores: legacyVal
+    };
+  });
   const [isEditFornecedorOpen, setIsEditFornecedorOpen] = useState(false);
   const [editFornecedorForm, setEditFornecedorForm] = useState<{ oldNome: string; newNome: string; newCnpj: string } | null>(null);
   const [isAddFornecedorOpen, setIsAddFornecedorOpen] = useState(false);
@@ -456,7 +483,7 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
     qtd_parcelas: 1,
     parcelas: [{ parcela: '1/1', data_envio: '', valor_solicitado: '', valor_pago: '', valor_estornado: '', data_pagamento: '', estornado: false }],
     ccSplits: [] as CostCenterSplit[],
-    ccRateioMode: 'pct' as 'pct' | 'valor',
+    ccRateioMode: 'valor' as 'pct' | 'valor',
   });
   const [form, setForm] = useState(emptyForm());
 
@@ -1758,6 +1785,14 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
           <Button size="sm" variant="outline" onClick={exportPdf}>
             <Download className="h-4 w-4 mr-1.5"/>PDF
           </Button>
+          <Button
+            size="sm"
+            onClick={() => setIsClientLinkModalOpen(true)}
+            className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold text-xs h-9 px-3.5 rounded-xl flex items-center gap-1.5 shadow-md shadow-amber-500/20 active:scale-95 transition-all"
+          >
+            <Share2 className="h-4 w-4" />
+            <span>Link do Cliente</span>
+          </Button>
         </div>
       </div>
 
@@ -2103,10 +2138,12 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                                       const match = label.match(/^(\d+)\.\s*(.*)/);
                                       const code = match ? match[1].padStart(2, '0') : String(s.ccId).padStart(2, '0');
                                       const name = match ? match[2] : label;
+                                      const baseVal = Number(c.valor_pago || c.valor_solicitado || 0);
+                                      const splitVal = baseVal * (s.pct / 100);
                                       return (
-                                        <div key={s.ccId} className="flex items-center justify-between gap-1 text-[9px] text-white/80 bg-white/5 px-1 rounded border border-white/5">
-                                          <span className="truncate max-w-[100px] font-bold" title={label}>{code}. {name}</span>
-                                          <span className="font-mono font-bold text-primary shrink-0">{s.pct}%</span>
+                                        <div key={s.ccId} className="flex items-center justify-between gap-1.5 text-[9px] text-white/90 bg-white/5 px-1.5 py-0.5 rounded border border-white/5" title={`${code}. ${name}: ${fmt(splitVal)}`}>
+                                          <span className="truncate max-w-[95px] font-bold">{code}. {name}</span>
+                                          <span className="font-mono font-bold text-emerald-400 shrink-0">{fmt(splitVal)}</span>
                                         </div>
                                       );
                                     })}
@@ -3117,38 +3154,59 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                     );
                   })}
                   
-                  <div className="flex items-center justify-between pt-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
-                        const rem = Math.max(100 - sum, 0);
-                        const usedCcIds = form.ccSplits.map(x => x.ccId);
-                        const nextCc = CENTROS_CUSTO.find(cc => !usedCcIds.includes(cc.value))?.value || 1;
-                        setForm(f => ({
-                          ...f,
-                          ccSplits: [...f.ccSplits, { ccId: nextCc, pct: rem }]
-                        }));
-                      }}
-                      className="h-7 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-lg"
-                    >
-                      ➕ Adicionar Centro de Custo
-                    </Button>
+                  <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (form.ccSplits.length === 0) return;
+                          const count = form.ccSplits.length;
+                          const eachPct = 100 / count;
+                          setForm(f => ({
+                            ...f,
+                            ccSplits: f.ccSplits.map(s => ({ ...s, pct: eachPct }))
+                          }));
+                        }}
+                        className="h-7 text-[10px] font-bold text-slate-300 hover:bg-white/10 rounded-lg"
+                      >
+                        ⚖️ Dividir Igualmente
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+                          const rem = Math.max(100 - sum, 0);
+                          const usedCcIds = form.ccSplits.map(x => x.ccId);
+                          const nextCc = CENTROS_CUSTO.find(cc => !usedCcIds.includes(cc.value))?.value || 1;
+                          setForm(f => ({
+                            ...f,
+                            ccSplits: [...f.ccSplits, { ccId: nextCc, pct: rem }]
+                          }));
+                        }}
+                        className="h-7 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-lg"
+                      >
+                        ➕ Adicionar Centro de Custo
+                      </Button>
+                    </div>
                     
                     {(() => {
+                      const totalVal = form.parcelas.reduce((s, p) => s + (parseFloat(p.valor_pago || p.valor_solicitado) || 0), 0) || 0;
+                      const totalSplitVal = form.ccSplits.reduce((s, x) => s + (totalVal * (x.pct / 100)), 0);
                       const totalPct = form.ccSplits.reduce((s, x) => s + x.pct, 0);
-                      const isComplete = Math.abs(totalPct - 100) < 0.01;
+                      const isComplete = Math.abs(totalPct - 100) < 0.05 || (totalVal > 0 && Math.abs(totalSplitVal - totalVal) < 0.05);
                       return (
                         <div className="flex items-center gap-1.5 text-[11px] font-bold font-mono">
                           <span className="text-white/45">Total:</span>
                           <span className={isComplete ? 'text-emerald-400' : 'text-red-400 animate-pulse'}>
-                            {totalPct}%
+                            {fmt(totalSplitVal)} {totalVal > 0 ? `/ ${fmt(totalVal)}` : ''}
                           </span>
-                          {!isComplete && (
+                          {!isComplete && totalVal > 0 && (
                             <span className="text-[9px] font-sans font-normal text-red-300">
-                              (deve somar 100%)
+                              (dif: {fmt(Math.abs(totalVal - totalSplitVal))})
                             </span>
                           )}
                         </div>
@@ -3406,27 +3464,237 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
                 autoComplete="off"
               />
             </div>
-            <div className="space-y-1">
-              <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Centro de Custo</Label>
-              <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
-                const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(val));
-                setForm(f => ({
-                  ...f,
-                  centro_custo: val,
-                  cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento'
-                }));
-              }}>
-                <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
-                  <SelectValue placeholder="Selecione um Centro de Custo" />
-                </SelectTrigger>
-                <SelectContent className="max-h-[300px] bg-[#0e1629] border-white/10 text-white">
-                  {CENTROS_CUSTO.map(cc => (
-                    <SelectItem key={cc.value} value={cc.value.toString()} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
-                      {cc.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="col-span-2 space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-[9px] uppercase tracking-wider text-white/40 font-bold">Centro de Custo</Label>
+                <div className="flex items-center gap-1">
+                  {form.ccSplits && form.ccSplits.length > 0 && (
+                    <div className="flex items-center bg-[#0e1629] rounded-lg p-0.5 border border-white/10 mr-1">
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, ccRateioMode: 'valor' }))}
+                        className={`px-2 py-0.5 text-[9px] font-bold rounded ${form.ccRateioMode === 'valor' ? 'bg-primary text-white' : 'text-white/50 hover:text-white'}`}
+                      >
+                        Valor (R$)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, ccRateioMode: 'pct' }))}
+                        className={`px-2 py-0.5 text-[9px] font-bold rounded ${form.ccRateioMode === 'pct' ? 'bg-primary text-white' : 'text-white/50 hover:text-white'}`}
+                      >
+                        %
+                      </button>
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      if (form.ccSplits && form.ccSplits.length > 0) {
+                        const ccVal = form.ccSplits[0]?.ccId.toString() || '';
+                        const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(ccVal));
+                        setForm(f => ({
+                          ...f,
+                          centro_custo: ccVal,
+                          cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento',
+                          ccSplits: [],
+                          ccRateioMode: 'valor'
+                        }));
+                      } else {
+                        const initialCc = form.centro_custo ? parseInt(form.centro_custo) : 1;
+                        setForm(f => ({
+                          ...f,
+                          ccSplits: [{ ccId: initialCc, pct: 100 }],
+                          ccRateioMode: 'valor'
+                        }));
+                      }
+                    }}
+                    className="h-7 text-[10px] font-bold bg-white/5 border-white/10 hover:bg-white/10 rounded-lg text-white"
+                  >
+                    {form.ccSplits && form.ccSplits.length > 0 ? '❌ Cancelar Rateio' : '🥞 Dividir (Rateio)'}
+                  </Button>
+                </div>
+              </div>
+
+              {!(form.ccSplits && form.ccSplits.length > 0) ? (
+                <Select value={form.centro_custo === '0' ? '31' : form.centro_custo} onValueChange={val => {
+                  const selectedCc = CENTROS_CUSTO.find(c => c.value === parseInt(val));
+                  setForm(f => ({
+                    ...f,
+                    centro_custo: val,
+                    cc_desc: selectedCc ? selectedCc.label.replace(/^\d+\.\s*/, '') : 'Não previsto em orçamento'
+                  }));
+                }}>
+                  <SelectTrigger className="text-sm bg-[#0e1629] border-white/10 text-white placeholder:text-white/30 focus-visible:ring-primary rounded-xl h-10">
+                    <SelectValue placeholder="Selecione um Centro de Custo" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px] bg-[#0e1629] border-white/10 text-white">
+                    {CENTROS_CUSTO.map(cc => (
+                      <SelectItem key={cc.value} value={cc.value.toString()} className="text-white focus:bg-white/10 focus:text-white cursor-pointer">
+                        {cc.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="space-y-2">
+                  {form.ccSplits.map((split, idx) => {
+                    const totalVal = (form.parcelas[0]?.valor_pago ? parseFloat(form.parcelas[0].valor_pago) : parseFloat(form.parcelas[0]?.valor_solicitado)) || 0;
+                    const splitAmount = totalVal * (split.pct / 100);
+                    const isValorMode = form.ccRateioMode === 'valor';
+
+                    return (
+                      <div key={idx} className="flex items-center gap-2 bg-[#0e1629] p-2 rounded-xl border border-white/5">
+                        <div className="flex-1 min-w-0">
+                          <Select 
+                            value={split.ccId.toString()} 
+                            onValueChange={val => {
+                              const newSplits = [...form.ccSplits];
+                              newSplits[idx].ccId = parseInt(val);
+                              setForm(f => ({ ...f, ccSplits: newSplits }));
+                            }}
+                          >
+                            <SelectTrigger className="text-xs bg-[#0a1020] border-white/5 text-white h-9">
+                              <SelectValue placeholder="Centro de Custo" />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-[250px] bg-[#0e1629] border-white/10 text-white">
+                              {CENTROS_CUSTO.map(cc => (
+                                <SelectItem key={cc.value} value={cc.value.toString()} className="text-white cursor-pointer text-xs">
+                                  {cc.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {isValorMode ? (
+                          <div className="w-28 shrink-0 relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40">R$</span>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="0,00"
+                              value={splitAmount > 0 ? splitAmount.toFixed(2) : ''}
+                              onChange={e => {
+                                const valInput = parseFloat(e.target.value) || 0;
+                                const newPct = totalVal > 0 ? (valInput / totalVal) * 100 : 0;
+                                const newSplits = [...form.ccSplits];
+                                newSplits[idx].pct = newPct;
+                                setForm(f => ({ ...f, ccSplits: newSplits }));
+                              }}
+                              className="text-xs bg-[#0a1020] border-white/5 text-white pl-7 h-9 font-mono font-bold text-emerald-400"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-20 shrink-0 relative">
+                            <Input
+                              type="number"
+                              min="0"
+                              max="100"
+                              placeholder="%"
+                              value={split.pct || ''}
+                              onChange={e => {
+                                const pctVal = parseFloat(e.target.value) || 0;
+                                const newSplits = [...form.ccSplits];
+                                newSplits[idx].pct = pctVal;
+                                setForm(f => ({ ...f, ccSplits: newSplits }));
+                              }}
+                              className="text-xs bg-[#0a1020] border-white/5 text-white pr-6 h-9 font-mono"
+                            />
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-white/40">%</span>
+                          </div>
+                        )}
+                        <div className="w-24 shrink-0 text-right pr-2">
+                          {isValorMode ? (
+                            <>
+                              <p className="text-[8px] text-white/40 uppercase font-bold tracking-wider leading-none">Porcentagem</p>
+                              <p className="text-xs text-primary font-mono font-bold">{split.pct.toFixed(2)}%</p>
+                            </>
+                          ) : (
+                            <>
+                              <p className="text-[8px] text-white/40 uppercase font-bold tracking-wider leading-none">Valor Rateado</p>
+                              <p className="text-xs text-emerald-400 font-mono font-bold">{fmt(splitAmount)}</p>
+                            </>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newSplits = form.ccSplits.filter((_, i) => i !== idx);
+                            setForm(f => ({ ...f, ccSplits: newSplits }));
+                          }}
+                          className="h-8 w-8 p-0 text-red-400 hover:bg-red-500/10 hover:text-red-300 rounded-lg"
+                        >
+                          ❌
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  
+                  <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          if (form.ccSplits.length === 0) return;
+                          const count = form.ccSplits.length;
+                          const eachPct = 100 / count;
+                          setForm(f => ({
+                            ...f,
+                            ccSplits: f.ccSplits.map(s => ({ ...s, pct: eachPct }))
+                          }));
+                        }}
+                        className="h-7 text-[10px] font-bold text-slate-300 hover:bg-white/10 rounded-lg"
+                      >
+                        ⚖️ Dividir Igualmente
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const sum = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+                          const rem = Math.max(100 - sum, 0);
+                          const usedCcIds = form.ccSplits.map(x => x.ccId);
+                          const nextCc = CENTROS_CUSTO.find(cc => !usedCcIds.includes(cc.value))?.value || 1;
+                          setForm(f => ({
+                            ...f,
+                            ccSplits: [...f.ccSplits, { ccId: nextCc, pct: rem }]
+                          }));
+                        }}
+                        className="h-7 text-[10px] font-bold text-primary hover:bg-primary/10 rounded-lg"
+                      >
+                        ➕ Adicionar Centro de Custo
+                      </Button>
+                    </div>
+                    
+                    {(() => {
+                      const totalVal = (form.parcelas[0]?.valor_pago ? parseFloat(form.parcelas[0].valor_pago) : parseFloat(form.parcelas[0]?.valor_solicitado)) || 0;
+                      const totalSplitVal = form.ccSplits.reduce((s, x) => s + (totalVal * (x.pct / 100)), 0);
+                      const totalPct = form.ccSplits.reduce((s, x) => s + x.pct, 0);
+                      const isComplete = Math.abs(totalPct - 100) < 0.05 || (totalVal > 0 && Math.abs(totalSplitVal - totalVal) < 0.05);
+                      return (
+                        <div className="flex items-center gap-1.5 text-[11px] font-bold font-mono">
+                          <span className="text-white/45">Total:</span>
+                          <span className={isComplete ? 'text-emerald-400' : 'text-red-400 animate-pulse'}>
+                            {fmt(totalSplitVal)} {totalVal > 0 ? `/ ${fmt(totalVal)}` : ''}
+                          </span>
+                          {!isComplete && totalVal > 0 && (
+                            <span className="text-[9px] font-sans font-normal text-red-300">
+                              (dif: {fmt(Math.abs(totalVal - totalSplitVal))})
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
             {/* Estorno parcial – edit form */}
             <div className="space-y-1">
@@ -4384,6 +4652,248 @@ export default function ComprasTab({ obraId }: ComprasTabProps) {
               Cadastrar
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════ MODAL: Link de Visualização do Cliente ══════ */}
+      <Dialog open={isClientLinkModalOpen} onOpenChange={setIsClientLinkModalOpen}>
+        <DialogContent className="bg-[#0f172a] border border-slate-800 text-white max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-display font-bold text-white flex items-center gap-2">
+              <Share2 className="h-5 w-5 text-amber-400" />
+              Link de Visualização do Cliente
+            </DialogTitle>
+            <p className="text-xs text-slate-400">
+              Gere um link público de leitura para o cliente com período e cronograma configurados.
+            </p>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* Período de Visualização */}
+            <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <Calendar className="h-4 w-4 text-amber-400" />
+                  Período de Visualização do Cliente
+                </span>
+                {(clientStartDate || clientEndDate) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClientStartDate('');
+                      setClientEndDate('');
+                      localStorage.removeItem(`cliente_data_inicio_${obraId}`);
+                      localStorage.removeItem(`cliente_data_fim_${obraId}`);
+                    }}
+                    className="text-[10px] text-red-400 hover:underline font-semibold"
+                  >
+                    Limpar Período
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 leading-snug">
+                Defina o período para o cliente visualizar apenas os lançamentos dentro desta faixa. Lançamentos sem data de envio ou pagamento não aparecerão.
+              </p>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400">Data Inicial:</label>
+                  <Input
+                    type="date"
+                    value={clientStartDate}
+                    onChange={(e) => {
+                      setClientStartDate(e.target.value);
+                      localStorage.setItem(`cliente_data_inicio_${obraId}`, e.target.value);
+                    }}
+                    className="bg-slate-950 border-slate-700 text-white text-xs h-9 rounded-lg"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-slate-400">Data Final:</label>
+                  <Input
+                    type="date"
+                    value={clientEndDate}
+                    onChange={(e) => {
+                      setClientEndDate(e.target.value);
+                      localStorage.setItem(`cliente_data_fim_${obraId}`, e.target.value);
+                    }}
+                    className="bg-slate-950 border-slate-700 text-white text-xs h-9 rounded-lg"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Ajustar Cronograma Pré-Link */}
+            <div className="p-3.5 bg-slate-900 rounded-xl border border-slate-800 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold text-white flex items-center gap-1.5">
+                  <TrendingUp className="h-4 w-4 text-emerald-400" />
+                  Cronograma Físico-Financeiro
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Ajuste as datas de início e término e as metas mensais de gastos da obra antes de enviar.
+                </p>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setIsClientCronogramaOpen(true)}
+                className="h-8 text-xs bg-white/5 border-white/10 hover:bg-white/10 text-amber-300 font-bold shrink-0"
+              >
+                Ajustar Cronograma
+              </Button>
+            </div>
+
+            {/* Link Gerado */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-slate-300">Link Público de Acesso Gerado:</label>
+              {(() => {
+                let link = `${window.location.origin}/relatorio-cliente?obraId=${obraId}`;
+                if (clientStartDate) link += `&dtInicio=${clientStartDate}`;
+                if (clientEndDate) link += `&dtFim=${clientEndDate}`;
+                return (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      readOnly
+                      value={link}
+                      className="bg-slate-900 border-slate-700 text-amber-400 text-xs h-10 font-mono"
+                    />
+                    <Button
+                      onClick={() => {
+                        navigator.clipboard.writeText(link);
+                        setClientLinkCopied(true);
+                        toast.success('Link do cliente copiado com sucesso!');
+                        setTimeout(() => setClientLinkCopied(false), 3000);
+                      }}
+                      className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold h-10 px-3 shrink-0"
+                    >
+                      {clientLinkCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+
+          <DialogFooter className="flex items-center justify-between sm:justify-between gap-2 mt-2 pt-2 border-t border-slate-800">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsClientLinkModalOpen(false)}
+              className="text-slate-400 hover:text-white"
+            >
+              Fechar
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                let link = `/relatorio-cliente?obraId=${obraId}`;
+                if (clientStartDate) link += `&dtInicio=${clientStartDate}`;
+                if (clientEndDate) link += `&dtFim=${clientEndDate}`;
+                window.open(link, '_blank');
+              }}
+              className="bg-white/10 hover:bg-white/20 text-white font-bold text-xs gap-1.5"
+            >
+              <ExternalLink className="h-4 w-4 text-amber-400" />
+              Abrir Visualização
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ══════ MODAL: Ajustar Cronograma Multi-Ano ══════ */}
+      <Dialog open={isClientCronogramaOpen} onOpenChange={setIsClientCronogramaOpen}>
+        <DialogContent className="bg-[#0f172a] border border-slate-800 text-white max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-amber-400" />
+              Previsão do Cronograma Físico-Financeiro (Multi-Ano)
+            </DialogTitle>
+            <p className="text-xs text-slate-400">
+              Configure as datas de início e término e as metas mensais previstas para acompanhamento do cliente.
+            </p>
+          </DialogHeader>
+
+          {/* Configuração de Período Multi-Ano */}
+          <div className="grid grid-cols-2 gap-3 p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Início do Cronograma (Mês/Ano):</label>
+              <Input
+                type="month"
+                value={clientCronogramaConfig.dataInicio}
+                onChange={(e) => setClientCronogramaConfig(prev => ({ ...prev, dataInicio: e.target.value }))}
+                className="bg-slate-950 border-slate-700 text-white text-xs h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Término do Cronograma (Mês/Ano):</label>
+              <Input
+                type="month"
+                value={clientCronogramaConfig.dataFim}
+                onChange={(e) => setClientCronogramaConfig(prev => ({ ...prev, dataFim: e.target.value }))}
+                className="bg-slate-950 border-slate-700 text-white text-xs h-9"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2 py-2">
+            <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+              Metas Mensais Previstas (R$):
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[50vh] overflow-y-auto pr-1">
+              {generateMonthList(clientCronogramaConfig.dataInicio, clientCronogramaConfig.dataFim).map(m => {
+                const curVal = clientCronogramaConfig.valores[m.key] ?? (clientCronogramaConfig.valores[m.label.split('/')[0]] ?? 0);
+                return (
+                  <div key={m.key} className="space-y-1 bg-slate-900/50 p-2 rounded-lg border border-white/5">
+                    <label className="text-[11px] font-bold text-amber-400">{m.label} ({m.key}):</label>
+                    <Input
+                      type="number"
+                      value={curVal || ''}
+                      placeholder="0,00"
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setClientCronogramaConfig(prev => ({
+                          ...prev,
+                          valores: {
+                            ...prev.valores,
+                            [m.key]: val
+                          }
+                        }));
+                      }}
+                      className="bg-slate-950 border-slate-700 text-white text-xs h-8"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 mt-4 pt-2 border-t border-slate-800">
+            <span className="text-xs text-slate-400 font-mono">
+              Total Previsto: {fmt(Object.values(clientCronogramaConfig.valores).reduce((a, b) => a + Number(b || 0), 0))}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsClientCronogramaOpen(false)}
+                className="bg-white/5 text-white border-white/10"
+              >
+                Fechar
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  localStorage.setItem(`cronograma_config_${obraId}`, JSON.stringify(clientCronogramaConfig));
+                  localStorage.setItem(`cronograma_previsto_${obraId}`, JSON.stringify(clientCronogramaConfig.valores));
+                  setIsClientCronogramaOpen(false);
+                  toast.success('Cronograma pré-salvo com sucesso para visualização do cliente!');
+                }}
+                className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
+              >
+                Salvar Cronograma
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

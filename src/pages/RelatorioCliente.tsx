@@ -83,12 +83,12 @@ export const DEFAULT_BUDGETS: Record<number, number> = {
   22: 881365.72,
   23: 268893.76,
   24: 3864176.79,
-  25: 412579.52,
-  26: 154000.00,
-  27: 128500.00,
-  28: 185000.00,
-  29: 890000.00,
-  30: 450000.00,
+  25: 968549.64,
+  26: 456882.47,
+  27: 198324.46,
+  28: 33600.00,
+  29: 9224467.15,
+  30: 4826146.15,
   31: 0.00
 };
 
@@ -128,6 +128,33 @@ export function parseRateio(obs: string | null) {
 
 const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316', '#64748b'];
 
+export function generateMonthList(startYM?: string, endYM?: string) {
+  const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  const start = startYM && /^\d{4}-\d{2}$/.test(startYM) ? startYM : '2026-01';
+  const end = endYM && /^\d{4}-\d{2}$/.test(endYM) ? endYM : '2027-12';
+  
+  const [startY, startM] = start.split('-').map(Number);
+  const [endY, endM] = end.split('-').map(Number);
+  
+  const list: { key: string; label: string; year: number; month: number }[] = [];
+  let y = startY || 2026;
+  let m = startM || 1;
+  const targetY = endY || 2027;
+  const targetM = endM || 12;
+  
+  while (y < targetY || (y === targetY && m <= targetM)) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    const label = `${monthNames[m - 1]}/${String(y).slice(2)}`;
+    list.push({ key, label, year: y, month: m });
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return list;
+}
+
 export default function RelatorioCliente() {
   const [searchParams] = useSearchParams();
   const params = useParams<{ obraId?: string }>();
@@ -139,9 +166,10 @@ export default function RelatorioCliente() {
   const [search, setSearch] = useState('');
   const [selectedCentroCusto, setSelectedCentroCusto] = useState<string>('all');
   const [selectedNfFilter, setSelectedNfFilter] = useState<'all' | 'ambos' | 'integral' | 'pendente' | 'diferenca'>('all');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [startDate, setStartDate] = useState(() => searchParams.get('dtInicio') || '');
+  const [endDate, setEndDate] = useState(() => searchParams.get('dtFim') || '');
   const [chartMode, setChartMode] = useState<'real' | 'orcado'>('real'); // Real (inclui CC 31) vs Orçado (apenas orçamento)
+  const [chartViewModel, setChartViewModel] = useState<'mensal' | 'acumulativo'>('mensal');
   const [copied, setCopied] = useState(false);
   const [cronogramaModalOpen, setCronogramaModalOpen] = useState(false);
 
@@ -159,16 +187,25 @@ export default function RelatorioCliente() {
     return DEFAULT_BUDGETS;
   }, [obraId]);
 
-  // Load monthly forecast schedule (cronograma físico-financeiro)
-  const [cronogramaPrevisto, setCronogramaPrevisto] = useState<Record<string, number>>(() => {
-    const saved = localStorage.getItem(`cronograma_previsto_${obraId}`);
+  // Load monthly forecast schedule (cronograma físico-financeiro com suporte a multi-ano)
+  const [cronogramaConfig, setCronogramaConfig] = useState<{
+    dataInicio: string;
+    dataFim: string;
+    valores: Record<string, number>;
+  }>(() => {
+    const saved = localStorage.getItem(`cronograma_config_${obraId}`);
     if (saved) {
       try { return JSON.parse(saved); } catch (e) { /* ignore */ }
     }
+    const legacySaved = localStorage.getItem(`cronograma_previsto_${obraId}`);
+    let legacyVal: Record<string, number> = {};
+    if (legacySaved) {
+      try { legacyVal = JSON.parse(legacySaved); } catch (e) {}
+    }
     return {
-      'Jan': 150000, 'Fev': 280000, 'Mar': 450000, 'Abr': 600000, 
-      'Mai': 750000, 'Jun': 900000, 'Jul': 850000, 'Ago': 700000, 
-      'Set': 500000, 'Out': 350000, 'Nov': 200000, 'Dez': 100000
+      dataInicio: '2026-01',
+      dataFim: '2027-12',
+      valores: legacyVal
     };
   });
 
@@ -216,6 +253,9 @@ export default function RelatorioCliente() {
   const filteredCompras = useMemo(() => {
     let r = [...compras];
 
+    // REGRA OBRIGATÓRIA: Lançamentos sem data de envio ou pagamento não devem aparecer na visualização do cliente
+    r = r.filter((c: any) => Boolean(c.data_envio || c.data_pagamento));
+
     // Filter by NF status
     if (selectedNfFilter !== 'all') {
       r = r.filter((c: any) => {
@@ -251,14 +291,16 @@ export default function RelatorioCliente() {
       r = r.filter((c: any) => {
         const env = c.data_envio ? c.data_envio.substring(0, 10) : '';
         const pag = c.data_pagamento ? c.data_pagamento.substring(0, 10) : '';
-        return (env && env >= startDate) || (pag && pag >= startDate);
+        const ref = pag || env;
+        return ref >= startDate;
       });
     }
     if (endDate) {
       r = r.filter((c: any) => {
         const env = c.data_envio ? c.data_envio.substring(0, 10) : '';
         const pag = c.data_pagamento ? c.data_pagamento.substring(0, 10) : '';
-        return (env && env <= endDate) || (pag && pag <= endDate);
+        const ref = pag || env;
+        return ref <= endDate;
       });
     }
 
@@ -426,36 +468,62 @@ export default function RelatorioCliente() {
 
   // ─── Monthly Evolution Chart (Gasto Líquido vs Cronograma Previsto) ───
   const monthlyEvolutionData = useMemo(() => {
+    const monthList = generateMonthList(cronogramaConfig.dataInicio, cronogramaConfig.dataFim);
     const monthsMap = new Map<string, number>();
-    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    monthList.forEach(m => monthsMap.set(m.key, 0));
 
-    monthNames.forEach(m => monthsMap.set(m, 0));
+    const validCompras = compras.filter((c: any) => Boolean(c.data_envio || c.data_pagamento));
 
-    compras.forEach((c: any) => {
+    validCompras.forEach((c: any) => {
       if (c.estornado) return;
       const dateStr = c.data_pagamento || c.data_envio;
       if (!dateStr) return;
-      const dt = new Date(dateStr);
-      if (isNaN(dt.getTime())) return;
+      const key = dateStr.substring(0, 7); // 'YYYY-MM'
 
       const ccVal = (!c.centro_custo || c.centro_custo === 0) ? 31 : c.centro_custo;
-      if (chartMode === 'orcado' && ccVal === 31) return; // Exclude CC 31 in Orcado mode
+      if (chartMode === 'orcado' && ccVal === 31) return; // Exclui CC 31 no modo orçado
 
-      const monthName = monthNames[dt.getMonth()];
-      const pago = Number(c.valor_pago || 0) - Number(c.valor_estornado || 0);
-      monthsMap.set(monthName, (monthsMap.get(monthName) || 0) + Math.max(0, pago));
+      const pago = Math.max(0, Number(c.valor_pago || 0) - Number(c.valor_estornado || 0));
+      monthsMap.set(key, (monthsMap.get(key) || 0) + pago);
     });
 
-    return monthNames.map(m => ({
-      mes: m,
-      gastoReal: monthsMap.get(m) || 0,
-      previstoCronograma: cronogramaPrevisto[m] || 0
-    }));
-  }, [compras, chartMode, cronogramaPrevisto]);
+    const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    const rawList = monthList.map(m => {
+      const mName = monthNames[m.month - 1];
+      const prev = cronogramaConfig.valores[m.key] ?? (cronogramaConfig.valores[mName] ?? 0);
+      return {
+        key: m.key,
+        mes: m.label,
+        gastoReal: monthsMap.get(m.key) || 0,
+        previstoCronograma: prev
+      };
+    });
+
+    if (chartViewModel === 'mensal') {
+      return rawList;
+    }
+
+    // Modelo Acumulativo (S-Curve)
+    let cumReal = 0;
+    let cumPrev = 0;
+    return rawList.map(item => {
+      cumReal += item.gastoReal;
+      cumPrev += item.previstoCronograma;
+      return {
+        key: item.key,
+        mes: item.mes,
+        gastoReal: cumReal,
+        previstoCronograma: cumPrev
+      };
+    });
+  }, [compras, chartMode, cronogramaConfig, chartViewModel]);
 
   // Copy Link Handler
   const handleCopyLink = () => {
-    const link = `${window.location.origin}/relatorio-cliente?obraId=${obraId}`;
+    let link = `${window.location.origin}/relatorio-cliente?obraId=${obraId}`;
+    if (startDate) link += `&dtInicio=${startDate}`;
+    if (endDate) link += `&dtFim=${endDate}`;
     navigator.clipboard.writeText(link);
     setCopied(true);
     toast.success('Link do Cliente copiado para a área de transferência!');
@@ -463,29 +531,41 @@ export default function RelatorioCliente() {
   };
 
   // Export PDF Handler
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
-      const doc = new jsPDF('portrait', 'pt', 'a4');
-      const logo = getBuddyLogo();
-      if (logo) {
-        doc.addImage(logo, 'PNG', 40, 30, 100, 30);
+      const doc = new jsPDF('landscape', 'pt', 'a4');
+      
+      // Safe logo loading with async/await
+      try {
+        const logo = await getBuddyLogo();
+        if (logo) {
+          doc.addImage(logo, 'PNG', 40, 25, 90, 27);
+        }
+      } catch (err) {
+        console.warn('Logo could not be loaded for PDF', err);
       }
 
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
+      doc.setFontSize(15);
       doc.setTextColor(14, 22, 41);
-      doc.text('RELATÓRIO DE LANÇAMENTOS DO CLIENTE', 150, 50);
+      doc.text('RELATÓRIO DE LANÇAMENTOS DO CLIENTE', 140, 38);
 
-      doc.setFontSize(9);
+      doc.setFontSize(8.5);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(100, 116, 139);
-      doc.text('Setor de Compras - Buddy Boutique Construtora', 150, 65);
-      doc.text(`Obra: ${obra?.nome || 'Empreendimento'} | Data: ${new Date().toLocaleDateString('pt-BR')}`, 150, 78);
+      doc.text('Setor de Compras - Buddy Boutique Construtora', 140, 50);
+
+      let periodText = 'Todos os períodos com data';
+      if (startDate && endDate) periodText = `Período: ${new Date(startDate + 'T12:00:00').toLocaleDateString('pt-BR')} até ${new Date(endDate + 'T12:00:00').toLocaleDateString('pt-BR')}`;
+      else if (startDate) periodText = `A partir de: ${new Date(startDate + 'T12:00:00').toLocaleDateString('pt-BR')}`;
+      else if (endDate) periodText = `Até: ${new Date(endDate + 'T12:00:00').toLocaleDateString('pt-BR')}`;
+
+      doc.text(`Obra: ${obra?.nome || 'Empreendimento'}  |  ${periodText}  |  Emissão: ${new Date().toLocaleDateString('pt-BR')}`, 140, 62);
 
       // KPI Table Summary
       autoTable(doc, {
-        startY: 95,
-        head: [['Orçamento Total', 'Total Realizado', 'Saldo Geral', 'Não Previsto (CC 31)', 'Total Real Gasto']],
+        startY: 75,
+        head: [['Orçamento Total Previsto', 'Total Realizado', 'Saldo Geral', 'Não Previsto (CC 31)', 'Total Real Gasto']],
         body: [[
           formatCurrency(metrics.totalOrcado),
           formatCurrency(metrics.totalRealizado),
@@ -495,10 +575,61 @@ export default function RelatorioCliente() {
         ]],
         theme: 'grid',
         headStyles: { fillColor: [14, 22, 41], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-        styles: { fontSize: 8, cellPadding: 5 }
+        styles: { fontSize: 8, cellPadding: 4, halign: 'center' }
       });
 
-      // Cost Center Breakdown
+      // Lançamentos Table
+      const lancamentosRows = filteredCompras.map((c: any) => {
+        const dEnvio = c.data_envio ? new Date(c.data_envio).toLocaleDateString('pt-BR') : '-';
+        const dPgto = c.data_pagamento ? new Date(c.data_pagamento).toLocaleDateString('pt-BR') : '-';
+        const solVal = formatCurrency(c.valor_solicitado);
+        const pagoVal = c.estornado ? `[EST.] ${formatCurrency(c.valor_pago)}` : formatCurrency(c.valor_pago);
+        const splits = parseRateio(c.obs);
+        let ccText = ccLabel(c.centro_custo);
+        if (splits.length > 0) {
+          ccText = splits.map(s => {
+            const splitVal = (c.valor_pago || c.valor_solicitado || 0) * (s.pct / 100);
+            return `${ccLabel(s.ccId)}: ${formatCurrency(splitVal)}`;
+          }).join('; ');
+        }
+        return [
+          dEnvio,
+          c.email_titulo || '-',
+          c.fornecedor_nome || '-',
+          solVal,
+          pagoVal,
+          dPgto,
+          ccText,
+          cleanObs(c.obs) || '-'
+        ];
+      });
+
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 12,
+        head: [['Data Envio', 'E-mail / Título', 'Fornecedor', 'Solicitado', 'Pago', 'Data Pgto', 'Centro de Custo', 'Observação']],
+        body: lancamentosRows,
+        theme: 'striped',
+        headStyles: { fillColor: [14, 22, 41], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+        styles: { fontSize: 6.5, cellPadding: 3, overflow: 'linebreak' },
+        columnStyles: {
+          0: { cellWidth: 52, halign: 'center' },
+          1: { cellWidth: 160 },
+          2: { cellWidth: 100 },
+          3: { cellWidth: 65, halign: 'right' },
+          4: { cellWidth: 65, halign: 'right' },
+          5: { cellWidth: 52, halign: 'center' },
+          6: { cellWidth: 130 },
+          7: { cellWidth: 140 }
+        }
+      });
+
+      // Cost Center Breakdown on new page
+      doc.addPage();
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(14, 22, 41);
+      doc.text('RESUMO POR CENTRO DE CUSTO (ORÇADO vs REALIZADO)', 40, 35);
+
       const ccRows = CENTROS_CUSTO.map(cc => {
         const budget = ccBudgets[cc.value] ?? 0;
         const spent = metrics.ccRealizedMap.get(cc.value) || 0;
@@ -512,17 +643,23 @@ export default function RelatorioCliente() {
       });
 
       autoTable(doc, {
-        startY: (doc as any).lastAutoTable.finalY + 15,
+        startY: 48,
         head: [['Centro de Custo', 'Orçado (R$)', 'Realizado (R$)', 'Saldo (R$)']],
         body: ccRows,
         theme: 'striped',
         headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
-        styles: { fontSize: 7, cellPadding: 4 }
+        styles: { fontSize: 7.5, cellPadding: 3.5 },
+        columnStyles: {
+          1: { halign: 'right' },
+          2: { halign: 'right' },
+          3: { halign: 'right' }
+        }
       });
 
-      doc.save(`relatorio_cliente_${obra?.nome || 'obra'}.pdf`);
+      doc.save(`relatorio_cliente_${(obra?.nome || 'obra').toLowerCase().replace(/\s+/g, '_')}.pdf`);
       toast.success('Relatório em PDF gerado com sucesso!');
     } catch (e: any) {
+      console.error(e);
       toast.error(`Erro ao gerar PDF: ${e.message}`);
     }
   };
@@ -765,25 +902,54 @@ export default function RelatorioCliente() {
             </CardContent>
           </Card>
 
-          {/* Chart 2: Evolução de Gasto Mensal vs Cronograma Físico-Financeiro */}
+          {/* Chart 2: Evolução de Gasto Mensal ou Acumulativo vs Cronograma Físico-Financeiro */}
           <Card className="bg-[#0f172a] border border-slate-800 shadow-xl rounded-2xl">
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardHeader className="pb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <CardTitle className="text-sm font-bold text-white flex items-center gap-2">
                   <TrendingUp className="h-4 w-4 text-emerald-400" />
-                  Evolução Mensal (Gasto Real vs Cronograma)
+                  {chartViewModel === 'mensal' ? 'Evolução Mensal' : 'Gasto Acumulativo'} (Gasto Real vs Cronograma)
                 </CardTitle>
-                <p className="text-xs text-slate-400 mt-0.5">Gasto Líquido Real por mês vs Previsão Físico-Financeira</p>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {chartViewModel === 'mensal' 
+                    ? 'Gasto Líquido Real por mês vs Previsão Físico-Financeira' 
+                    : 'Avanço financeiro cumulativo acumulado ao longo da obra'}
+                </p>
               </div>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCronogramaModalOpen(true)}
-                className="h-7 text-[11px] bg-white/5 border-white/10 hover:bg-white/10 text-slate-300"
-              >
-                Ajustar Cronograma
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex items-center gap-1 bg-[#090d16] p-1 rounded-xl border border-slate-800">
+                  <Button
+                    size="sm"
+                    variant={chartViewModel === 'mensal' ? 'default' : 'ghost'}
+                    onClick={() => setChartViewModel('mensal')}
+                    className={`h-7 px-2.5 text-[11px] font-bold rounded-lg ${
+                      chartViewModel === 'mensal' ? 'bg-emerald-500 text-slate-950 hover:bg-emerald-600' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Evolução Mensal
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={chartViewModel === 'acumulativo' ? 'default' : 'ghost'}
+                    onClick={() => setChartViewModel('acumulativo')}
+                    className={`h-7 px-2.5 text-[11px] font-bold rounded-lg ${
+                      chartViewModel === 'acumulativo' ? 'bg-amber-500 text-slate-950 hover:bg-amber-600' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Acumulativo
+                  </Button>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCronogramaModalOpen(true)}
+                  className="h-7 text-[11px] bg-white/5 border-white/10 hover:bg-white/10 text-slate-300"
+                >
+                  Ajustar Cronograma
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="pt-4">
               <div className="h-[300px] w-full">
@@ -801,7 +967,11 @@ export default function RelatorioCliente() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                     <XAxis dataKey="mes" stroke="#94a3b8" fontSize={11} />
-                    <YAxis stroke="#94a3b8" fontSize={10} tickFormatter={(val) => `R$ ${(val / 1000).toFixed(0)}k`} />
+                    <YAxis 
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      tickFormatter={(val) => val >= 1000000 ? `R$ ${(val / 1000000).toFixed(1)}M` : `R$ ${(val / 1000).toFixed(0)}k`} 
+                    />
                     <Tooltip 
                       formatter={(value: any) => [formatCurrency(Number(value)), '']}
                       contentStyle={{ backgroundColor: '#090d16', borderColor: '#334155', borderRadius: '12px', color: '#fff' }}
@@ -1052,19 +1222,19 @@ export default function RelatorioCliente() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="bg-slate-900/80 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider">
-                    <th className="p-3.5">Data Envio</th>
-                    <th className="p-3.5">Valor Solicitado</th>
-                    <th className="p-3.5">E-mail / Título</th>
-                    <th className="p-3.5">Tipo</th>
-                    <th className="p-3.5">Fornecedor / CNPJ</th>
-                    <th className="p-3.5">Valor Pago</th>
-                    <th className="p-3.5">Data Pagamento</th>
-                    <th className="p-3.5">Centro de Custo</th>
-                    <th className="p-3.5">Observação</th>
+                  <tr className="bg-slate-900/90 border-b border-slate-800 text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+                    <th className="p-3 text-center whitespace-nowrap">Data Envio</th>
+                    <th className="p-3 min-w-[220px]">E-mail / Título</th>
+                    <th className="p-3 whitespace-nowrap">Tipo</th>
+                    <th className="p-3 min-w-[140px]">Fornecedor / CNPJ</th>
+                    <th className="p-3 text-right whitespace-nowrap">Valor Solicitado</th>
+                    <th className="p-3 text-right whitespace-nowrap">Valor Pago</th>
+                    <th className="p-3 text-center whitespace-nowrap">Data Pagamento</th>
+                    <th className="p-3 min-w-[160px]">Centro de Custo</th>
+                    <th className="p-3 min-w-[180px]">Observação</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/60">
+                <tbody className="divide-y divide-slate-800/60 text-xs">
                   {filteredCompras.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="text-center py-12 text-slate-400">
@@ -1076,40 +1246,64 @@ export default function RelatorioCliente() {
                       const isEst = c.estornado;
                       return (
                         <tr key={c.id} className={`hover:bg-slate-800/40 transition-colors ${isEst ? 'opacity-50 bg-red-950/10' : ''}`}>
-                          <td className="p-3.5 font-medium text-slate-300 whitespace-nowrap">
+                          <td className="p-3 font-mono text-[11px] text-slate-300 whitespace-nowrap text-center">
                             {c.data_envio ? new Date(c.data_envio).toLocaleDateString('pt-BR') : '-'}
                           </td>
-                          <td className="p-3.5 font-bold text-slate-200 whitespace-nowrap">
-                            {formatCurrency(c.valor_solicitado)}
-                          </td>
-                          <td className="p-3.5 font-semibold text-white max-w-[200px] truncate" title={c.email_titulo}>
+                          <td className="p-3 font-semibold text-white min-w-[220px] max-w-[340px] break-words leading-snug">
                             {c.email_titulo || '-'}
                           </td>
-                          <td className="p-3.5 whitespace-nowrap">
+                          <td className="p-3 whitespace-nowrap">
                             <Badge className="bg-slate-800 text-slate-300 border-slate-700 text-[10px]">
                               {c.tipo_solicitacao || 'Materiais'}
                             </Badge>
                           </td>
-                          <td className="p-3.5 max-w-[180px]">
-                            <p className="font-semibold text-slate-200 truncate" title={c.fornecedor_nome}>{c.fornecedor_nome || '-'}</p>
+                          <td className="p-3 min-w-[140px] max-w-[200px]">
+                            <p className="font-semibold text-slate-200 break-words">{c.fornecedor_nome || '-'}</p>
                             {c.fornecedor_cnpj && <p className="text-[10px] font-mono text-slate-400">{c.fornecedor_cnpj}</p>}
                           </td>
-                          <td className="p-3.5 font-bold text-emerald-400 whitespace-nowrap">
+                          <td className="p-3 font-bold text-slate-200 whitespace-nowrap text-right">
+                            {formatCurrency(c.valor_solicitado)}
+                          </td>
+                          <td className="p-3 font-bold text-emerald-400 whitespace-nowrap text-right">
                             {isEst ? (
                               <span className="line-through text-red-400">{formatCurrency(c.valor_pago)}</span>
                             ) : (
                               formatCurrency(c.valor_pago)
                             )}
                           </td>
-                          <td className="p-3.5 font-medium text-slate-300 whitespace-nowrap">
+                          <td className="p-3 font-mono text-[11px] text-slate-300 whitespace-nowrap text-center">
                             {c.data_pagamento ? new Date(c.data_pagamento).toLocaleDateString('pt-BR') : '-'}
                           </td>
-                          <td className="p-3.5 max-w-[180px]">
-                            <p className="font-medium text-slate-300 truncate" title={ccLabel(c.centro_custo)}>
-                              {ccLabel(c.centro_custo)}
-                            </p>
+                          <td className="p-3 min-w-[160px] max-w-[250px] text-[11px] leading-tight">
+                            {(() => {
+                              const splits = parseRateio(c.obs);
+                              if (splits.length > 0) {
+                                return (
+                                  <div className="space-y-1">
+                                    {splits.map(s => {
+                                      const label = ccLabel(s.ccId);
+                                      const match = label.match(/^(\d+)\.\s*(.*)/);
+                                      const code = match ? match[1].padStart(2, '0') : String(s.ccId).padStart(2, '0');
+                                      const name = match ? match[2] : label;
+                                      const splitAmount = (c.valor_pago || c.valor_solicitado || 0) * (s.pct / 100);
+                                      return (
+                                        <div key={s.ccId} className="bg-slate-900/90 p-1 rounded border border-white/5 flex flex-col">
+                                          <span className="font-semibold text-slate-200 text-[10px] break-words">{code}. {name}</span>
+                                          <span className="font-mono text-emerald-400 font-bold text-[10px]">{formatCurrency(splitAmount)}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <p className="font-medium text-slate-200 text-[11px] leading-snug break-words">
+                                  {ccLabel(c.centro_custo)}
+                                </p>
+                              );
+                            })()}
                           </td>
-                          <td className="p-3.5 text-slate-400 max-w-[220px] truncate" title={cleanObs(c.obs)}>
+                          <td className="p-3 text-[11px] text-slate-400 min-w-[180px] max-w-[280px] break-words leading-snug">
                             {cleanObs(c.obs) || '-'}
                           </td>
                         </tr>
@@ -1126,54 +1320,97 @@ export default function RelatorioCliente() {
 
       {/* ════════════════ MODAL DE EDICÃO DO CRONOGRAMA ════════════════ */}
       <Dialog open={cronogramaModalOpen} onOpenChange={setCronogramaModalOpen}>
-        <DialogContent className="bg-[#0f172a] border border-slate-800 text-white max-w-lg">
+        <DialogContent className="bg-[#0f172a] border border-slate-800 text-white max-w-2xl">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-white flex items-center gap-2">
               <Calendar className="h-5 w-5 text-amber-400" />
               Previsão do Cronograma Físico-Financeiro
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-400">
-              Ajuste as metas de gastos mensais previstos para acompanhamento do cliente.
+              Defina o período (início e término) e a previsão de gastos para cada mês ao longo da obra.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-2 gap-3 py-3 max-h-[60vh] overflow-y-auto pr-1">
-            {['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'].map(m => (
-              <div key={m} className="space-y-1">
-                <label className="text-xs font-semibold text-slate-300">{m}:</label>
-                <Input
-                  type="number"
-                  value={cronogramaPrevisto[m] || 0}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value) || 0;
-                    setCronogramaPrevisto(prev => ({ ...prev, [m]: val }));
-                  }}
-                  className="bg-slate-900 border-slate-700 text-white text-xs h-9"
-                />
-              </div>
-            ))}
+          {/* Configuração de Período Multi-Ano */}
+          <div className="grid grid-cols-2 gap-3 p-3 bg-slate-900/80 rounded-xl border border-slate-800">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Início do Cronograma (Mês/Ano):</label>
+              <Input
+                type="month"
+                value={cronogramaConfig.dataInicio}
+                onChange={(e) => setCronogramaConfig(prev => ({ ...prev, dataInicio: e.target.value }))}
+                className="bg-slate-950 border-slate-700 text-white text-xs h-9"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-300">Término do Cronograma (Mês/Ano):</label>
+              <Input
+                type="month"
+                value={cronogramaConfig.dataFim}
+                onChange={(e) => setCronogramaConfig(prev => ({ ...prev, dataFim: e.target.value }))}
+                className="bg-slate-950 border-slate-700 text-white text-xs h-9"
+              />
+            </div>
           </div>
 
-          <div className="flex justify-end gap-2 mt-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCronogramaModalOpen(false)}
-              className="bg-white/5 text-white border-white/10"
-            >
-              Fechar
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => {
-                localStorage.setItem(`cronograma_previsto_${obraId}`, JSON.stringify(cronogramaPrevisto));
-                setCronogramaModalOpen(false);
-                toast.success('Metas do cronograma físico-financeiro atualizadas!');
-              }}
-              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
-            >
-              Salvar Alterações
-            </Button>
+          <div className="space-y-2 py-2">
+            <p className="text-[11px] font-bold text-slate-300 uppercase tracking-wider">
+              Metas Mensais Previstas (R$):
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[50vh] overflow-y-auto pr-1">
+              {generateMonthList(cronogramaConfig.dataInicio, cronogramaConfig.dataFim).map(m => {
+                const curVal = cronogramaConfig.valores[m.key] ?? (cronogramaConfig.valores[m.label.split('/')[0]] ?? 0);
+                return (
+                  <div key={m.key} className="space-y-1 bg-slate-900/50 p-2 rounded-lg border border-white/5">
+                    <label className="text-[11px] font-bold text-amber-400">{m.label} ({m.key}):</label>
+                    <Input
+                      type="number"
+                      value={curVal || ''}
+                      placeholder="0,00"
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setCronogramaConfig(prev => ({
+                          ...prev,
+                          valores: {
+                            ...prev.valores,
+                            [m.key]: val
+                          }
+                        }));
+                      }}
+                      className="bg-slate-950 border-slate-700 text-white text-xs h-8"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-2 mt-4 pt-2 border-t border-slate-800">
+            <span className="text-xs text-slate-400 font-mono">
+              Total Previsto: {formatCurrency(Object.values(cronogramaConfig.valores).reduce((a, b) => a + Number(b || 0), 0))}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCronogramaModalOpen(false)}
+                className="bg-white/5 text-white border-white/10"
+              >
+                Fechar
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => {
+                  localStorage.setItem(`cronograma_config_${obraId}`, JSON.stringify(cronogramaConfig));
+                  localStorage.setItem(`cronograma_previsto_${obraId}`, JSON.stringify(cronogramaConfig.valores));
+                  setCronogramaModalOpen(false);
+                  toast.success('Cronograma físico-financeiro multi-ano salvo com sucesso!');
+                }}
+                className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold"
+              >
+                Salvar Alterações
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
